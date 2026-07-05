@@ -4,6 +4,8 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 它作为一个管理系统**模板交付，而非框架**：下游项目复制本仓库、各自演化，并通过 `git remote add template` 把修复挑拣（cherry-pick）回来。由此带来的、会改变你工作方式的后果：保持 channel 包不引入业务代码（保证 diff 可移植）；**不要**抽取共享 Go 库、拆分微服务，或添加 semver/向后兼容垫片——没有任何外部依赖此代码，所以 settings 结构体的变更可以合理地把旧行零读（zero-read）。驱动注册表**就是**插件系统（编译期，`database/sql` 风格）。
 
+**第三方库原则：应上尽上，差异过大不硬上。** 成熟前沿的库/最佳实践优先于手搓——省维护精力、保持逻辑清晰、把精力留给业务；但与需求实在有差异时不硬套。两个方向都要留下理据：采用了写清为什么（如 `coreos/go-oidc` 之于 OIDC），否决了也写清评估过什么、为何不值（如微信扫码手写 3 次调用——否决 silenceper/PowerWeChat；local 存储 handler ~120 行标准库——否决 gocloud.dev，SignedURL 之外 serve 的活它一行不省）。判据是**净收益**：库替你扛掉的怪癖/协议面，要大于它带来的依赖面。
+
 ## 命令（在仓库根目录执行）
 
 - `proto install` —— 从 `.prototools` 安装 go/node/pnpm/moon；proto 激活会把它们放上 PATH（即使非交互式 shell 也是），无需 `export`。
