@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/nyaruka/phonenumbers"
 
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	"github.com/imbytecat/moonbase/server/internal/mail"
+	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
@@ -26,12 +29,13 @@ const siteAssetURLTTL = time.Hour
 // infrastructure channels live in SystemService behind system.*.
 type SettingsService struct {
 	settings *settings.Store
+	repo     repository.Querier
 	objects  storage.ObjectStore
 	logger   *slog.Logger
 }
 
-func NewSettingsService(store *settings.Store, objects storage.ObjectStore, logger *slog.Logger) *SettingsService {
-	return &SettingsService{settings: store, objects: objects, logger: logger}
+func NewSettingsService(store *settings.Store, repo repository.Querier, objects storage.ObjectStore, logger *slog.Logger) *SettingsService {
+	return &SettingsService{settings: store, repo: repo, objects: objects, logger: logger}
 }
 
 var _ settingsv1connect.SettingsServiceHandler = (*SettingsService)(nil)
@@ -76,13 +80,21 @@ func (s *SettingsService) UpdateSettings(
 		}
 	}
 	if in := req.Msg.GetSite(); in != nil {
+		logoFileID, err := s.validateSiteAssetFile(ctx, in.GetLogoFileId())
+		if err != nil {
+			return nil, err
+		}
+		faviconFileID, err := s.validateSiteAssetFile(ctx, in.GetFaviconFileId())
+		if err != nil {
+			return nil, err
+		}
 		if err := s.settings.SetSite(ctx, settings.Site{
-			Name:        strings.TrimSpace(in.GetName()),
-			Description: strings.TrimSpace(in.GetDescription()),
-			LogoKey:     in.GetLogoKey(),
-			FaviconKey:  in.GetFaviconKey(),
-			Copyright:   strings.TrimSpace(in.GetCopyright()),
-			IcpBeian:    strings.TrimSpace(in.GetIcpBeian()),
+			Name:          strings.TrimSpace(in.GetName()),
+			Description:   strings.TrimSpace(in.GetDescription()),
+			LogoFileID:    logoFileID,
+			FaviconFileID: faviconFileID,
+			Copyright:     strings.TrimSpace(in.GetCopyright()),
+			IcpBeian:      strings.TrimSpace(in.GetIcpBeian()),
 		}); err != nil {
 			return nil, s.internal(ctx, "save site settings", err)
 		}
@@ -117,18 +129,52 @@ func (s *SettingsService) GetSiteInfo(
 		Description: siteCfg.Description,
 		Copyright:   siteCfg.Copyright,
 		IcpBeian:    siteCfg.IcpBeian,
-	}
-	if siteCfg.LogoKey != "" {
-		if u, err := s.objects.ResolveURL(ctx, storage.PurposeSiteAssets, siteCfg.LogoKey, siteAssetURLTTL); err == nil {
-			out.LogoUrl = u
-		}
-	}
-	if siteCfg.FaviconKey != "" {
-		if u, err := s.objects.ResolveURL(ctx, storage.PurposeSiteAssets, siteCfg.FaviconKey, siteAssetURLTTL); err == nil {
-			out.FaviconUrl = u
-		}
+		LogoUrl:     s.resolveSiteAssetURL(ctx, siteCfg.LogoFileID),
+		FaviconUrl:  s.resolveSiteAssetURL(ctx, siteCfg.FaviconFileID),
 	}
 	return connect.NewResponse(out), nil
+}
+
+// resolveSiteAssetURL turns a brand asset file id into a fetchable URL, best
+// effort — a missing file or storage hiccup just means no asset URL.
+func (s *SettingsService) resolveSiteAssetURL(ctx context.Context, fileID string) string {
+	parsed, err := uuid.Parse(fileID)
+	if err != nil {
+		return ""
+	}
+	file, err := s.repo.GetFile(ctx, parsed)
+	if err != nil {
+		return ""
+	}
+	u, err := s.objects.ResolveURL(ctx, storage.PurposeSiteAssets, file.ObjectKey, siteAssetURLTTL)
+	if err != nil {
+		return ""
+	}
+	return u
+}
+
+// validateSiteAssetFile rejects a brand asset id that is not an uploaded site
+// asset, so settings can never point at an arbitrary or missing file. Empty
+// passes through, clearing that slot.
+func (s *SettingsService) validateSiteAssetFile(ctx context.Context, fileID string) (string, error) {
+	if fileID == "" {
+		return "", nil
+	}
+	parsed, err := uuid.Parse(fileID)
+	if err != nil {
+		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("invalid asset file id"))
+	}
+	file, err := s.repo.GetFile(ctx, parsed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("unknown asset file"))
+	}
+	if err != nil {
+		return "", s.internal(ctx, "get asset file", err)
+	}
+	if file.Purpose != storage.PurposeSiteAssets {
+		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("file is not a site asset"))
+	}
+	return fileID, nil
 }
 
 // validateAuthSettings rejects policies the register flow could not honor
@@ -193,12 +239,12 @@ func toProtoAuthSettings(a settings.Auth) *settingsv1.AuthSettings {
 
 func toProtoSiteSettings(v settings.Site) *settingsv1.SiteSettings {
 	return &settingsv1.SiteSettings{
-		Name:        v.Name,
-		Description: v.Description,
-		LogoKey:     v.LogoKey,
-		FaviconKey:  v.FaviconKey,
-		Copyright:   v.Copyright,
-		IcpBeian:    v.IcpBeian,
+		Name:          v.Name,
+		Description:   v.Description,
+		LogoFileId:    v.LogoFileID,
+		FaviconFileId: v.FaviconFileID,
+		Copyright:     v.Copyright,
+		IcpBeian:      v.IcpBeian,
 	}
 }
 

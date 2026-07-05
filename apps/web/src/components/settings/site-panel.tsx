@@ -19,7 +19,7 @@ export function SitePanel({
 }: {
   site: SiteSettings | undefined
   saving: boolean
-  onSave: (site: SiteFormValues & { logoKey: string; faviconKey: string }) => void
+  onSave: (site: SiteFormValues & { logoFileId: string; faviconFileId: string }) => void
 }) {
   const [form] = Form.useForm<SiteFormValues>()
 
@@ -37,8 +37,8 @@ export function SitePanel({
       onFinish={(values) =>
         onSave({
           ...values,
-          logoKey: site?.logoKey ?? '',
-          faviconKey: site?.faviconKey ?? '',
+          logoFileId: site?.logoFileId ?? '',
+          faviconFileId: site?.faviconFileId ?? '',
         })
       }
     >
@@ -56,26 +56,42 @@ export function SitePanel({
           kind="logo"
           label={m.settingsPage_siteLogo()}
           hint={m.settingsPage_siteLogoHint()}
-          currentKey={site?.logoKey ?? ''}
+          currentFileId={site?.logoFileId ?? ''}
           accept="image/png,image/jpeg,image/webp,image/svg+xml"
-          onUploaded={(key) =>
-            onSave({ ...form.getFieldsValue(), logoKey: key, faviconKey: site?.faviconKey ?? '' })
+          onUploaded={(fileId) =>
+            onSave({
+              ...form.getFieldsValue(),
+              logoFileId: fileId,
+              faviconFileId: site?.faviconFileId ?? '',
+            })
           }
           onClear={() =>
-            onSave({ ...form.getFieldsValue(), logoKey: '', faviconKey: site?.faviconKey ?? '' })
+            onSave({
+              ...form.getFieldsValue(),
+              logoFileId: '',
+              faviconFileId: site?.faviconFileId ?? '',
+            })
           }
         />
         <BrandAssetField
           kind="favicon"
           label={m.settingsPage_siteFavicon()}
           hint={m.settingsPage_siteFaviconHint()}
-          currentKey={site?.faviconKey ?? ''}
+          currentFileId={site?.faviconFileId ?? ''}
           accept="image/png,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"
-          onUploaded={(key) =>
-            onSave({ ...form.getFieldsValue(), faviconKey: key, logoKey: site?.logoKey ?? '' })
+          onUploaded={(fileId) =>
+            onSave({
+              ...form.getFieldsValue(),
+              faviconFileId: fileId,
+              logoFileId: site?.logoFileId ?? '',
+            })
           }
           onClear={() =>
-            onSave({ ...form.getFieldsValue(), faviconKey: '', logoKey: site?.logoKey ?? '' })
+            onSave({
+              ...form.getFieldsValue(),
+              faviconFileId: '',
+              logoFileId: site?.logoFileId ?? '',
+            })
           }
         />
       </div>
@@ -100,7 +116,7 @@ function BrandAssetField({
   kind,
   label,
   hint,
-  currentKey,
+  currentFileId,
   accept,
   onUploaded,
   onClear,
@@ -108,9 +124,9 @@ function BrandAssetField({
   kind: 'logo' | 'favicon'
   label: string
   hint: string
-  currentKey: string
+  currentFileId: string
   accept: string
-  onUploaded: (objectKey: string) => void
+  onUploaded: (fileId: string) => void
   onClear: () => void
 }) {
   const { message } = App.useApp()
@@ -124,7 +140,7 @@ function BrandAssetField({
         contentLength: BigInt(file.size),
       })
       await uploadToPresignedUrl(presigned.uploadUrl, file)
-      onUploaded(presigned.objectKey)
+      onUploaded(presigned.fileId)
     } catch (err) {
       message.error(humanizeError(err))
     }
@@ -143,10 +159,10 @@ function BrandAssetField({
           }}
         >
           <Button loading={presignMutation.isPending}>
-            {currentKey ? m.settingsPage_replaceAsset() : m.settingsPage_uploadAsset()}
+            {currentFileId ? m.settingsPage_replaceAsset() : m.settingsPage_uploadAsset()}
           </Button>
         </Upload>
-        {currentKey ? (
+        {currentFileId ? (
           <Button type="text" danger onClick={onClear}>
             {m.settingsPage_clearAsset()}
           </Button>

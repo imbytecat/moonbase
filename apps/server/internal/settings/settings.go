@@ -14,7 +14,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
@@ -65,14 +67,15 @@ func (a Auth) EffectiveSignupIdentifiers() []string {
 }
 
 // Site is the business-facing site identity: name, branding assets and the
-// legal footer. Logo/favicon are object keys in site-assets storage.
+// legal footer. Logo/favicon are file ledger references (file ids); the files
+// stay alive via matching file_attachments rows (owner_type "site").
 type Site struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	LogoKey     string `json:"logoKey"`
-	FaviconKey  string `json:"faviconKey"`
-	Copyright   string `json:"copyright"`
-	IcpBeian    string `json:"icpBeian"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	LogoFileID    string `json:"logoFileId"`
+	FaviconFileID string `json:"faviconFileId"`
+	Copyright     string `json:"copyright"`
+	IcpBeian      string `json:"icpBeian"`
 }
 
 // identifiable lets Channel look profiles up by id without knowing the
@@ -199,8 +202,29 @@ func (s *Store) Site(ctx context.Context) (Site, error) {
 	return v, err
 }
 
+// SetSite persists the site identity and transfers the logo/favicon
+// attachments to the referenced files in one atomic statement, so a replaced
+// brand asset's old file goes unattached for the sweep (ADR-0003).
 func (s *Store) SetSite(ctx context.Context, v Site) error {
-	return s.set(ctx, keySite, v)
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("encode site settings: %w", err)
+	}
+	return s.repo.SetSiteWithAssets(ctx, repository.SetSiteWithAssetsParams{
+		Site:          raw,
+		LogoFileID:    fileIDParam(v.LogoFileID),
+		FaviconFileID: fileIDParam(v.FaviconFileID),
+	})
+}
+
+// fileIDParam turns a file-id string into a nullable uuid: empty or malformed
+// becomes NULL, clearing that brand slot's attachment.
+func fileIDParam(id string) pgtype.UUID {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: parsed, Valid: true}
 }
 
 func (s *Store) Storage(ctx context.Context) (Storage, error) {

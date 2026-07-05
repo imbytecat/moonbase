@@ -46,10 +46,10 @@ message SiteSettings {
   string name = 1 [(buf.validate.field).string.max_len = 64];
   // Short tagline under the name on auth pages.
   string description = 2 [(buf.validate.field).string.max_len = 200];
-  // Object keys in site-assets storage (uploaded via storage.v1
-  // PresignSiteAssetUpload); empty = no custom asset.
-  string logo_key = 3 [(buf.validate.field).string.max_len = 512];
-  string favicon_key = 4 [(buf.validate.field).string.max_len = 512];
+  // File ids (from storage.v1 PresignSiteAssetUpload) referencing the branding
+  // assets in the file ledger; empty = no custom asset.
+  string logo_file_id = 3 [(buf.validate.field).string.max_len = 36];
+  string favicon_file_id = 4 [(buf.validate.field).string.max_len = 36];
   // Footer line, e.g. "© 2026 Acme Inc.". Empty hides it.
   string copyright = 5 [(buf.validate.field).string.max_len = 200];
   // ICP filing number rendered in the footer (mainland-China deployments);

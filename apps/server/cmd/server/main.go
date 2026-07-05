@@ -19,6 +19,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/logging"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/server"
+	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/tracing"
 	"github.com/imbytecat/moonbase/server/internal/workflow"
 )
@@ -72,6 +73,12 @@ func run() error {
 	}
 
 	if err := auth.Seed(ctx, repository.New(pool), logger, cfg.Auth.AdminUsername, cfg.Auth.AdminPassword); err != nil {
+		return err
+	}
+
+	// Carry any pre-ledger site branding onto file references; idempotent, so
+	// it is safe on every startup (ADR-0003 存量回填).
+	if err := settings.BackfillSiteAssets(ctx, pool, logger); err != nil {
 		return err
 	}
 
