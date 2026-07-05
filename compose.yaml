@@ -1,0 +1,76 @@
+# Local dev database. `docker compose up -d` gives you the exact DB the
+# defaults expect (postgres:postgres@localhost:5432/app) — no config needed.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - '5432:5432'
+    # postgres:18 images moved the data dir; mount the parent, not …/data.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d app']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Optional S3-compatible storage for the Settings page demo — SeaweedFS
+  # (Apache-2.0, actively maintained) stands in for the now-archived MinIO. S3
+  # API at http://localhost:8333, file browser at http://localhost:8888. In the
+  # app settings use endpoint localhost:8333, region us-east-1, SSL off, bucket
+  # "app" (created below), keys seaweedadmin/seaweedadmin (see configs below).
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: 'server -dir=/data -s3 -s3.config=/etc/seaweedfs/s3.json'
+    ports:
+      - '8333:8333'
+      - '8888:8888'
+      - '9333:9333'
+    volumes:
+      - seaweeddata:/data
+    configs:
+      - source: seaweedfs-s3
+        target: /etc/seaweedfs/s3.json
+
+  # One-shot: create the "app" bucket once SeaweedFS answers (retry loop — the S3
+  # gateway needs a moment after the master boots). weed shell talks to the filer
+  # directly, so it needs no S3 credentials.
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:latest
+    depends_on:
+      - seaweedfs
+    restart: 'no'
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'for i in $$(seq 1 30); do echo "s3.bucket.create -name app" | weed shell -master=seaweedfs:9333 && exit 0; sleep 2; done; echo "seaweedfs not ready" >&2; exit 1'
+
+  # Local SMTP catcher for the Email channel: SMTP on :1025 (encryption
+  # "none"), web inbox at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
+volumes:
+  pgdata:
+  seaweeddata:
+
+configs:
+  seaweedfs-s3:
+    content: |
+      {
+        "identities": [
+          {
+            "name": "app",
+            "credentials": [
+              { "accessKey": "seaweedadmin", "secretKey": "seaweedadmin" }
+            ],
+            "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+          }
+        ]
+      }

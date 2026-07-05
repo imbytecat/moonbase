@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+// Package payment.v1 is the payment-order surface: the durable state machine
+// behind the payment channel (system.v1 PaymentProfile configures the
+// connections). Orders are created against a purpose-bound profile with a
+// per-order payment method (QR scan, mobile-web redirect, or in-app JSAPI),
+// paid through the provider's hosted flow, reconciled by async notification
+// or active sync, and refunded in full. Amounts are integer cents — never
+// floats.
+package payment.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// One payment order (a row of the payment_orders table). status is the
+// server-owned state machine: created → paid → refunding → refunded, or
+// created → closed. provider fields fill in as the provider reports back.
+message PaymentOrder {
+  string id = 1;
+  // Merchant-side order number sent to the provider; unique per order.
+  string out_trade_no = 2;
+  string purpose = 3;
+  string profile_id = 4;
+  // Profile display name snapshotted at create time — deleting the profile
+  // never rewrites history.
+  string profile_name = 5;
+  string provider = 6;
+  // Official product id chosen for this order: an Alipay API method
+  // (precreate / page_pay / wap_pay / create / app_pay) or a WeChat trade_type
+  // (native / h5 / jsapi).
+  string method = 7;
+  string subject = 8;
+  // Integer cents.
+  int64 amount = 9;
+  string currency = 10;
+  string status = 11;
+  // Provider-side transaction id, set once paid.
+  string provider_trade_no = 12;
+  // Provider-side payer identifier (openid / buyer id), set once paid.
+  string payer_id = 13;
+  // The payment credential the client renders, shaped by credential_kind.
+  string credential = 14;
+  // How to consume credential: "qr" (render as a QR code), "redirect" (open
+  // the URL) or "params" (hand the JSON to a provider SDK).
+  string credential_kind = 18;
+  google.protobuf.Timestamp paid_at = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// Payment options are the profiles bound to a purpose — the checkout offers
+// every bound profile and the payer picks one.
+message ListPaymentOptionsRequest {
+  string purpose = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message PaymentOption {
+  string profile_id = 1;
+  string name = 2;
+  string provider = 3;
+  // Official product ids this profile signed for (Alipay product_code / WeChat
+  // trade_type), in display order; the checkout offers exactly these.
+  repeated string methods = 4;
+}
+
+message ListPaymentOptionsResponse {
+  repeated PaymentOption options = 1;
+}
+
+// A payment order is created against one of the purpose's bound profiles,
+// with a per-order method that must be one of the products that profile
+// signed for (validated server-side against the driver catalog). Required
+// per-method inputs (e.g. payer_id for JSAPI-shaped products) are enforced
+// there too, so the wire rule only checks the method is a known product id.
+message CreatePaymentOrderRequest {
+  string purpose = 1 [(buf.validate.field).string.min_len = 1];
+  // One of the purpose's bound profiles; anything else is rejected.
+  string profile_id = 2 [(buf.validate.field).string.min_len = 1];
+  string subject = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  // Integer cents.
+  int64 amount = 4 [(buf.validate.field).int64 = {
+    gte: 1
+    lte: 10000000000
+  }];
+  // Official product id: Alipay API method or WeChat trade_type.
+  string method = 5 [(buf.validate.field).string = {
+    in: [
+      "precreate",
+      "page_pay",
+      "wap_pay",
+      "create",
+      "app_pay",
+      "native",
+      "h5",
+      "jsapi",
+      "app"
+    ]
+  }];
+  // Provider-side payer identifier; required by JSAPI-shaped products only.
+  string payer_id = 6 [(buf.validate.field).string.max_len = 128];
+  // Where the provider sends the payer back after a redirect product; optional.
+  string return_url = 7 [(buf.validate.field).string.max_len = 512];
+}
+
+message CreatePaymentOrderResponse {
+  PaymentOrder order = 1;
+}
+
+message GetPaymentOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetPaymentOrderResponse {
+  PaymentOrder order = 1;
+}
+
+// Queries the provider for the order's current state and reconciles the
+// local row — the poll target while a checkout QR is on screen, and the
+// manual fallback when an async notification was missed.
+message SyncPaymentOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message SyncPaymentOrderResponse {
+  PaymentOrder order = 1;
+}
+
+message ListPaymentOrdersRequest {
+  // Zero-based page; page_size caps at 100.
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Optional filters; empty = no filter.
+  string status = 3 [(buf.validate.field).string = {
+    in: [
+      "",
+      "created",
+      "paid",
+      "closed",
+      "refunding",
+      "refunded"
+    ]
+  }];
+  string provider = 4 [(buf.validate.field).string.max_len = 32];
+}
+
+message ListPaymentOrdersResponse {
+  repeated PaymentOrder orders = 1;
+  int64 total = 2;
+}
+
+// Refunds the full amount back to the payer. Alipay refunds settle
+// synchronously (→ refunded); WeChat refunds settle asynchronously
+// (→ refunding, then refunded on notification or sync).
+message RefundPaymentOrderRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string reason = 2 [(buf.validate.field).string.max_len = 128];
+}
+
+message RefundPaymentOrderResponse {
+  PaymentOrder order = 1;
+}
+
+service PaymentService {
+  rpc ListPaymentOptions(ListPaymentOptionsRequest) returns (ListPaymentOptionsResponse) {}
+  rpc CreatePaymentOrder(CreatePaymentOrderRequest) returns (CreatePaymentOrderResponse) {}
+  rpc GetPaymentOrder(GetPaymentOrderRequest) returns (GetPaymentOrderResponse) {}
+  rpc SyncPaymentOrder(SyncPaymentOrderRequest) returns (SyncPaymentOrderResponse) {}
+  rpc ListPaymentOrders(ListPaymentOrdersRequest) returns (ListPaymentOrdersResponse) {}
+  rpc RefundPaymentOrder(RefundPaymentOrderRequest) returns (RefundPaymentOrderResponse) {}
+}

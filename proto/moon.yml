@@ -1,0 +1,79 @@
+$schema: '../.moon/cache/schemas/project.json'
+
+# The proto contract project. buf is the toolchain here; it runs the same way as
+# every other pinned tool in this repo — `go run <pkg>@<ver>` (no install). buf's
+# config (buf.yaml/buf.gen.yaml) lives at the workspace root, so every task runs
+# from there via runFromWorkspaceRoot. No `language:` is set on purpose, so this
+# project inherits neither the Go nor the TypeScript task presets.
+layer: 'library'
+
+tasks:
+  # buf generate — the single codegen step: Go stubs -> apps/server/internal/gen,
+  # TS client -> packages/api-client/src/gen. Cacheable on proto/config inputs,
+  # exactly like server:generate (sqlc). server/web build tasks depend on this.
+  generate:
+    command: 'go'
+    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'generate']
+    options:
+      runFromWorkspaceRoot: true
+    inputs:
+      - '**/*.proto'
+      - '/buf.yaml'
+      - '/buf.gen.yaml'
+      - '/buf.lock'
+    outputs:
+      - '/apps/server/internal/gen'
+      - '/apps/server/internal/systemcodec'
+      - '/packages/api-client/src/gen'
+
+  # Read-only gate (composite): buf lint + format check. Named `check` so
+  # `moon run :check` and `moon ci` pick it up like every other project.
+  check:
+    command: 'go'
+    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'lint']
+    deps: ['~:format-check']
+    options:
+      runFromWorkspaceRoot: true
+    inputs:
+      - '**/*.proto'
+      - '/buf.yaml'
+
+  format-check:
+    command: 'go'
+    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'format', '--diff', '--exit-code']
+    options:
+      runFromWorkspaceRoot: true
+    inputs:
+      - '**/*.proto'
+
+  # Convenience writer (not a CI gate): `moon run proto:format`.
+  format:
+    command: 'go'
+    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'format', '--write']
+    options:
+      runFromWorkspaceRoot: true
+      cache: false
+      runInCI: false
+
+  # Repo-wide auto-fix alias so `moon run :fix` covers proto too.
+  fix:
+    command: 'noop'
+    deps: ['~:format']
+    options:
+      cache: false
+      runInCI: false
+
+  # Breaking-change detection against the pushed baseline. origin/main (not
+  # main) because CI clones have no local main branch. Runs on PRs in CI.
+  breaking:
+    command: 'go'
+    args:
+      - 'run'
+      - 'github.com/bufbuild/buf/cmd/buf@v1.71.0'
+      - 'breaking'
+      - '--against'
+      - '.git#branch=origin/main'
+    options:
+      runFromWorkspaceRoot: true
+      cache: false
+      runInCI: false

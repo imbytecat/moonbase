@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Version-pinned tools run via `go run <module>[/cmd/<bin>]@<version>` (sqlc, goose, air, buf, golangci-lint, protoc plugins)",
+      "managerFilePatterns": [
+        "/(^|/)moon\\.yml$/",
+        "/^\\.moon/tasks/.+\\.ya?ml$/",
+        "/(^|/)buf\\.gen\\.yaml$/"
+      ],
+      "matchStrings": [
+        "['\"](?<packageName>[a-z][\\w.\\-]*\\.[a-z]{2,}(?:/[\\w.\\-]+)+?)(?:/cmd/[\\w.\\-]+)?@(?<currentValue>v\\d[^'\"]*)['\"]"
+      ],
+      "datasourceTemplate": "go"
+    }
+  ]
+}

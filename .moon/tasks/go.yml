@@ -1,0 +1,63 @@
+$schema: '../cache/schemas/tasks.json'
+
+# Global tasks inherited by every Go project (just `server` now) via the
+# `inheritedBy.language` condition. A project's moon.yml may add a same-named
+# task to extend these — args/deps/env/inputs merge (append by default).
+inheritedBy:
+  language: 'go'
+
+tasks:
+  # Composite static gate (golangci-lint v2): linters + govet. Pinned and run
+  # via `go run` (no install, like sqlc/goose); reads root .golangci.yml. Note:
+  # v2 keeps formatting in a separate `golangci-lint fmt` command.
+  check:
+    command: 'go'
+    args:
+      - 'run'
+      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
+      - 'run'
+    inputs:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '/.golangci.yml'
+
+  # Auto-fix counterpart of `check`: format (golangci-lint fmt) then apply
+  # linter autofixes (run --fix). `moon run :fix` fixes the whole repo; the
+  # pre-commit hook runs it on staged projects before the read-only gate.
+  fix:
+    command: 'go'
+    args:
+      - 'run'
+      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
+      - 'run'
+      - '--fix'
+    deps: ['~:fmt']
+    options:
+      cache: false
+      runInCI: false
+
+  fmt:
+    command: 'go'
+    args:
+      - 'run'
+      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
+      - 'fmt'
+    options:
+      cache: false
+      runInCI: false
+
+  test:
+    command: 'go'
+    args: ['test', './...']
+    inputs:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+
+  tidy:
+    command: 'go'
+    args: ['mod', 'tidy']
+    options:
+      cache: false
+      runInCI: false

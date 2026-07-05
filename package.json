@@ -1,0 +1,22 @@
+{
+  "name": "moonbase",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "release": "moon run server:release",
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@bufbuild/protoc-gen-es": "catalog:",
+    "@commitlint/cli": "21.2.0",
+    "@commitlint/config-conventional": "21.2.0",
+    "@connectrpc/protoc-gen-connect-query": "catalog:",
+    "yaml": "2.9.0"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}

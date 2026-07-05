@@ -1,0 +1,33 @@
+# Hot reload for the Go API (apps/server). Canonical entry is `moon run
+# server:dev`, which launches air via `go run github.com/air-verse/air@<v>`
+# (pinned in moon.yml — like sqlc/goose, no installed binary). CGO_ENABLED=0 and
+# other env come from moon.yml's `env:`, inherited by air's child processes.
+#
+# Watches .go and .sql. Before each build, `pre_cmd` runs `moon run
+# server:generate` (sqlc): moon's cache makes it ~instant when SQL is unchanged
+# and regenerates internal/repository the moment db/**/*.sql changes — so
+# editing a query or migration auto-updates the generated Go, then rebuilds and
+# restarts. internal/repository is therefore excluded from the watch (it's the
+# pre_cmd's output, not a trigger), avoiding a second rebuild loop.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  pre_cmd = ["moon run server:generate"]
+  cmd = "go build -o ./tmp/server ./cmd/server"
+  entrypoint = ["./tmp/server"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["tmp", "bin", "internal/repository", "internal/web/dist"]
+  exclude_regex = ["_test\\.go"]
+  stop_on_error = true
+  delay = 500
+
+# Windows needs the .exe suffix or the built binary won't run ("CMD will not
+# recognize non-.exe file"); air only auto-adds .exe to its *default* cmd/bin,
+# not custom ones, so override per-OS here (needs air >= v1.65.0).
+[build.windows]
+  cmd = "go build -o ./tmp/server.exe ./cmd/server"
+  entrypoint = ["./tmp/server.exe"]
+
+[misc]
+  clean_on_exit = true

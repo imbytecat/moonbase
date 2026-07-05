@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+// Package settings.v1 is the BUSINESS settings surface: product-behavior
+// toggles editable by business admins (settings.read / settings.write).
+// Infrastructure channels (S3, CAPTCHA, SMTP, SMS) are deliberately NOT here —
+// they live in system.v1 behind the separate system.* permissions, because
+// they carry secrets and are operated by a different persona.
+package settings.v1;
+
+import "buf/validate/validate.proto";
+
+message AuthSettings {
+  bool registration_enabled = 1;
+  // Phone-number region policy for binding / SMS login. Empty list = no
+  // restriction; otherwise ISO 3166-1 alpha-2 codes (e.g. ["CN"] for
+  // mainland-China-only, or ["CN", "HK", "MO", "TW"]).
+  repeated string allowed_phone_regions = 2;
+  // Identifiers the public register form collects. Subset of
+  // ["username", "email", "phone"]; empty means ["username"] (the only
+  // identifier that works with zero channels configured). Channel-backed
+  // identifiers are always code-verified at signup, so "email" requires a
+  // usable email channel and "phone" a usable SMS channel — UpdateSettings
+  // rejects them otherwise.
+  repeated string signup_identifiers = 3 [(buf.validate.field).repeated = {
+    unique: true
+    items: {
+      string: {
+        in: [
+          "username",
+          "email",
+          "phone"
+        ]
+      }
+    }
+  }];
+  reserved 4;
+  reserved "verify_email_at_signup";
+}
+
+// Site identity: name, branding and legal footer. Rendered on the login page,
+// the browser tab and the app shell — the public subset is served logged-out
+// via GetSiteInfo.
+message SiteSettings {
+  // Site name shown in the sidebar, login card and document title.
+  // Empty falls back to the built-in product name.
+  string name = 1 [(buf.validate.field).string.max_len = 64];
+  // Short tagline under the name on auth pages.
+  string description = 2 [(buf.validate.field).string.max_len = 200];
+  // Object keys in site-assets storage (uploaded via storage.v1
+  // PresignSiteAssetUpload); empty = no custom asset.
+  string logo_key = 3 [(buf.validate.field).string.max_len = 512];
+  string favicon_key = 4 [(buf.validate.field).string.max_len = 512];
+  // Footer line, e.g. "© 2026 Acme Inc.". Empty hides it.
+  string copyright = 5 [(buf.validate.field).string.max_len = 200];
+  // ICP filing number rendered in the footer (mainland-China deployments);
+  // empty hides it.
+  string icp_beian = 6 [(buf.validate.field).string.max_len = 64];
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  AuthSettings auth = 1;
+  SiteSettings site = 2;
+}
+
+message UpdateSettingsRequest {
+  optional AuthSettings auth = 1;
+  optional SiteSettings site = 2;
+}
+
+message UpdateSettingsResponse {
+  AuthSettings auth = 1;
+  SiteSettings site = 2;
+}
+
+// GetSiteInfo is PUBLIC: login/register pages and the document head need the
+// site identity before any session exists. Asset keys are resolved to
+// ready-to-use URLs server-side.
+message GetSiteInfoRequest {}
+
+message GetSiteInfoResponse {
+  string name = 1;
+  string description = 2;
+  // Resolved URLs (public base URL or presigned GET); empty = no custom asset.
+  string logo_url = 3;
+  string favicon_url = 4;
+  string copyright = 5;
+  string icp_beian = 6;
+}
+
+service SettingsService {
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse) {}
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) {}
+  rpc GetSiteInfo(GetSiteInfoRequest) returns (GetSiteInfoResponse) {}
+}

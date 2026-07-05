@@ -1,0 +1,17 @@
+# Global ignores for the whole workspace.
+# Project-specific build artifacts & generated code live in each project's own
+# .gitignore: apps/server/.gitignore, apps/web/.gitignore.
+
+# Node
+node_modules/
+
+# moon (repo-root workspace only)
+/.moon/cache/
+/.moon/docker/
+/.moon/hooks/
+
+# Agent/tooling state
+/.omo/
+
+# Logs
+*.log

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// Package auth.v1 owns the RBAC permission enum — the single source of truth
+// shared by the Go authz layer and every client (web, mobile), so a permission
+// typo is a compile error on both ends instead of a silent mis-grant.
+package auth.v1;
+
+// Permission is the code-defined capability catalog, kept 1:1 with what RPCs
+// enforce. Each value's wire/DB key is its name lower-cased with the last
+// underscore turned into a dot (PERMISSION_USER_READ -> "user.read"); a
+// guardrail test keeps the enum in lockstep with the Go auth.Catalog.
+// PERMISSION_ALL is the admin wildcard, stored as "*" and never granted to
+// ordinary roles.
+enum Permission {
+  PERMISSION_UNSPECIFIED = 0;
+  PERMISSION_ALL = 1;
+  PERMISSION_REPORT_READ = 2;
+  PERMISSION_USER_READ = 3;
+  PERMISSION_USER_WRITE = 4;
+  PERMISSION_ROLE_READ = 5;
+  PERMISSION_ROLE_WRITE = 6;
+  PERMISSION_SETTINGS_READ = 7;
+  PERMISSION_SETTINGS_WRITE = 8;
+  PERMISSION_SYSTEM_READ = 9;
+  PERMISSION_SYSTEM_WRITE = 10;
+  PERMISSION_WORKFLOW_READ = 11;
+  PERMISSION_WORKFLOW_WRITE = 12;
+  PERMISSION_AUDIT_READ = 13;
+  PERMISSION_PAYMENT_READ = 14;
+  PERMISSION_PAYMENT_WRITE = 15;
+}

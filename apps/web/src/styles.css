@@ -1,0 +1,57 @@
+/*
+ * Tailwind CSS v4 + Ant Design v6 coexistence.
+ *
+ * The layer order below is the key: antd sits AFTER Tailwind's `base` (reset),
+ * so antd components override the reset, but BEFORE `utilities`, so Tailwind
+ * utility classes still win over antd defaults. Pair this with
+ * `<StyleProvider layer>` (see providers/app-providers.tsx).
+ */
+@layer theme, base, antd, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * Class-based dark mode: the theme provider toggles `.dark` on <html> in sync
+ * with antd's darkAlgorithm, so `dark:` utilities and antd tokens agree.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/*
+ * Reserve the scrollbar track even while overlays (Drawer/Modal) lock body
+ * scroll — otherwise the scrollbar vanishing shifts the page ~15px and the
+ * whole layout judders on every open/close.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+}
+
+/*
+ * Router navigations run inside document.startViewTransition (see main.tsx).
+ * Keep the cross-fade quick so the app feels snappy, and drop it entirely for
+ * users who asked for reduced motion.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}

@@ -1,0 +1,50 @@
+version: v2
+
+# Wipe each plugin's out dir before regenerating so a deleted/renamed proto can
+# never leave a stale generated file behind (determinism > incremental speed).
+clean: true
+
+# Managed mode sets go_package for us — no `option go_package` needed in .proto.
+# The prefix + proto package path (todo.v1) => .../server/internal/gen/todo/v1.
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/imbytecat/moonbase/server/internal/gen
+    # protovalidate's validate.proto declares no go_package. Point its module at
+    # the BSR-generated Go module that protovalidate-go already depends on, so the
+    # import in our generated code resolves transitively — we never generate
+    # buf/validate ourselves (buf only generates the local proto/ module).
+    - file_option: go_package_prefix
+      module: buf.build/bufbuild/protovalidate
+      value: buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go
+
+plugins:
+  # --- Go (server) --- run via `go run <pkg>@<ver>`, pinned, no install —
+  # identical to how sqlc/goose/air/golangci-lint are run across this repo.
+  - local: ['go', 'run', 'google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11']
+    out: apps/server/internal/gen
+    opt: paths=source_relative
+  - local: ['go', 'run', 'connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0']
+    out: apps/server/internal/gen
+    opt: paths=source_relative
+
+  # --- TypeScript (shared client @moonbase/api-client) --- protobuf-es v2 base types
+  # + connect-query hooks. Versions pinned in packages/api-client/package.json;
+  # pnpm exec resolves the workspace-installed plugin binaries (cross-platform).
+  - local: ['pnpm', 'exec', 'protoc-gen-es']
+    out: packages/api-client/src/gen
+    include_imports: true
+    opt:
+      - target=ts
+  - local: ['pnpm', 'exec', 'protoc-gen-connect-query']
+    out: packages/api-client/src/gen
+    opt:
+      - target=ts
+
+  # --- settings codec (server) --- repo-local plugin: for every
+  # (moonbase.v1.profile) message it emits the storage struct + the write-only
+  # -secret Mask/FromProto/Merge codec into internal/systemcodec. Run from
+  # apps/server so `go run ./cmd/...` resolves inside that module.
+  - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-settings']
+    out: apps/server/internal/systemcodec

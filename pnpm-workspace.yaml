@@ -1,0 +1,24 @@
+# pnpm workspace definition (moved out of package.json's `workspaces`).
+# apps/server has no package.json (it's Go) and is simply skipped.
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Shared dependency versions referenced as `catalog:` in each package.json.
+# Keep this MINIMAL — only deps shared across ≥2 packages or that must stay
+# aligned. Single-use deps (react/antd… in web; commitlint/yaml in root) stay
+# direct in their own package.json. catalogMode is left at the default `manual`
+# on purpose: `prefer`/`strict` auto-route every `pnpm add` into the catalog and
+# would bloat it past "shared only".
+catalog:
+  '@biomejs/biome': 2.5.1
+
+  # Buf / ConnectRPC / protobuf-es: the code GENERATOR and its RUNTIME must be
+  # the SAME version (Buf: "keep plugin and runtime versions in sync"). Pinned
+  # exact and single-sourced here so root/web/api-client can never drift apart.
+  '@bufbuild/protobuf': 2.12.1 # runtime (web, api-client)
+  '@bufbuild/protoc-gen-es': 2.12.1 # generator (root) — must match @bufbuild/protobuf
+  '@connectrpc/connect': 2.1.2 # runtime (web, api-client)
+  '@connectrpc/connect-web': 2.1.2 # transport (web) — tracks @connectrpc/connect
+  '@connectrpc/connect-query': 2.2.0 # runtime (web, api-client)
+  '@connectrpc/protoc-gen-connect-query': 2.2.0 # generator (root) — must match connect-query

@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "golang.go",
+    "bufbuild.vscode-buf",
+    "biomejs.biome",
+    "bradlc.vscode-tailwindcss",
+    "redhat.vscode-yaml",
+    "moonrepo.moon-console",
+    "vitest.explorer",
+    "ms-azuretools.vscode-docker"
+  ]
+}

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+// Package workflow.v1 exposes durable-workflow observability and control:
+// list runs, inspect per-step execution traces (rendered as a DAG in the
+// admin UI), cancel/resume, and trigger the built-in demo. Runs execute
+// inside the server process; state lives in Postgres, so this surface is
+// pure read/control — it never defines workflows.
+package workflow.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// One workflow run (a row of the durable checkpoint table).
+message WorkflowRun {
+  string id = 1;
+  // Registered workflow function name.
+  string name = 2;
+  // PENDING | ENQUEUED | SUCCESS | ERROR | CANCELLED | ...
+  string status = 3;
+  // JSON-encoded input/output snapshots (best-effort, for display).
+  string input = 4;
+  string output = 5;
+  string error = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  google.protobuf.Timestamp completed_at = 9;
+  int32 attempts = 10;
+  // Set when this run was spawned by another workflow (child edge in the DAG).
+  string parent_workflow_id = 11;
+}
+
+// One executed step inside a run.
+message WorkflowStep {
+  int32 step_id = 1;
+  string step_name = 2;
+  string output = 3;
+  string error = 4;
+  // Set when the step spawned a child workflow.
+  string child_workflow_id = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+}
+
+message ListWorkflowRunsRequest {
+  int32 limit = 1 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+}
+
+message ListWorkflowRunsResponse {
+  repeated WorkflowRun runs = 1;
+}
+
+message GetWorkflowRunRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetWorkflowRunResponse {
+  WorkflowRun run = 1;
+  repeated WorkflowStep steps = 2;
+}
+
+message CancelWorkflowRunRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message CancelWorkflowRunResponse {}
+
+// Resumes a cancelled/failed run from its last completed step.
+message ResumeWorkflowRunRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ResumeWorkflowRunResponse {}
+
+// Starts the built-in demo workflow (three steps + a durable sleep) so the
+// template has something observable out of the box.
+message TriggerDemoWorkflowRequest {
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message TriggerDemoWorkflowResponse {
+  string id = 1;
+}
+
+service WorkflowService {
+  rpc ListWorkflowRuns(ListWorkflowRunsRequest) returns (ListWorkflowRunsResponse) {}
+  rpc GetWorkflowRun(GetWorkflowRunRequest) returns (GetWorkflowRunResponse) {}
+  rpc CancelWorkflowRun(CancelWorkflowRunRequest) returns (CancelWorkflowRunResponse) {}
+  rpc ResumeWorkflowRun(ResumeWorkflowRunRequest) returns (ResumeWorkflowRunResponse) {}
+  rpc TriggerDemoWorkflow(TriggerDemoWorkflowRequest) returns (TriggerDemoWorkflowResponse) {}
+}

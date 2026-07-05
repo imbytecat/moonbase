@@ -1,0 +1,15 @@
+# Build artifacts: bin/ = moon run server:build|release, tmp/ = air dev hot-reload
+/bin/
+/tmp/
+# Stray plugin binary from `go build ./cmd/protoc-gen-settings` (buf runs it via `go run`)
+/protoc-gen-settings
+
+# Generated code (regenerate, never commit):
+#   internal/gen        -> buf/protoc (moon run proto:generate) — connect-go stubs
+#   internal/systemcodec -> protoc-gen-settings (moon run proto:generate) — profile structs + codecs
+#   internal/repository -> sqlc (moon run server:generate)
+#   internal/web/dist   -> web:build SPA, embedded via -tags embed (lands in server tree)
+/internal/gen/
+/internal/systemcodec/
+/internal/repository/
+/internal/web/dist/

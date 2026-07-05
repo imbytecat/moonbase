@@ -1,0 +1,121 @@
+$schema: '../../.moon/cache/schemas/project.json'
+
+layer: 'application'
+stack: 'backend'
+language: 'go'
+dependsOn: ['proto']
+
+# CGO off → pure-Go static builds that work everywhere (incl. Windows, where
+# goose's modernc sqlite needs no C compiler). goose reads the connection from
+# GOOSE_DBSTRING below — change it (or export it) to point at another database.
+env:
+  CGO_ENABLED: '0'
+  GOOSE_DRIVER: 'postgres'
+  GOOSE_DBSTRING: 'postgres://postgres:postgres@localhost:5432/app?sslmode=disable'
+
+tasks:
+  # sqlc is version-pinned and run via `go run` — no separate install needed.
+  generate:
+    command: 'go'
+    args: ['run', 'github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1', 'generate']
+    inputs:
+      - 'sqlc.yaml'
+      - 'db/**/*.sql'
+    outputs:
+      - 'internal/repository'
+
+  # Hot reload via air, pinned + run via `go run` (like sqlc/goose — no install).
+  # Config: apps/server/.air.toml. air watches .go and .sql; its pre_cmd re-runs
+  # `server:generate` (sqlc, moon-cached) before each rebuild, so editing a query
+  # or migration auto-updates the generated Go. CGO_ENABLED=0 (env: above) is
+  # inherited by air's `go build` child. The ~:generate dep seeds the first build.
+  dev:
+    command: 'go'
+    args: ['run', 'github.com/air-verse/air@v1.65.3']
+    deps: ['proto:generate', '~:generate']
+    preset: 'server'
+
+  build:
+    command: 'go'
+    args: ['build', '-o', 'bin/server', './cmd/server']
+    deps: ['proto:generate', '~:generate']
+    inputs:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+    outputs:
+      - 'bin/server'
+
+  # Deployable single binary with the SPA embedded. `web:build` is a task dep
+  # (not a project dependsOn), so `moon run server:release` builds web first —
+  # ordered and cached — while the project graph stays free of app→app edges.
+  release:
+    command: 'go'
+    args: ['build', '-tags', 'embed', '-o', 'bin/server', './cmd/server']
+    deps: ['proto:generate', '~:generate', 'web:build']
+    inputs:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/web/dist/**/*'
+    outputs:
+      - 'bin/server'
+    # Excluded from `moon ci`: this is a deploy/build step, not a CI gate.
+    options:
+      runInCI: false
+
+  # Inherits `go test ./...` (+ vet/lint/tidy) from .moon/tasks/go.yml; only adds
+  # the codegen dep so generated repository code exists before tests run.
+  test:
+    deps: ['proto:generate', '~:generate']
+
+  # Inherits golangci-lint from .moon/tasks/go.yml; adds the codegen deps so a
+  # fresh clone can lint (generated gen/ + repository/ code must exist first).
+  check:
+    deps: ['proto:generate', '~:generate']
+
+  fix:
+    deps: ['proto:generate', '~:generate']
+
+  # Reachable-vulnerability scan (govulncheck): checks the module graph against
+  # the Go vuln DB and reports only vulns actually reachable from this code.
+  # Pinned + run via `go run` like the other tools. Kept out of the `moon ci`
+  # gate (runInCI: false) because it's network-dependent and slower — CI runs it
+  # as a dedicated step; `cache: false` since the vuln DB changes on its own.
+  vuln:
+    command: 'go'
+    args: ['run', 'golang.org/x/vuln/cmd/govulncheck@v1.5.0', './...']
+    deps: ['proto:generate', '~:generate']
+    options:
+      cache: false
+      runInCI: false
+
+  # goose is version-pinned and run via `go run`; reads $GOOSE_DRIVER + $GOOSE_DBSTRING.
+  migrate-up:
+    command: 'go'
+    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'up']
+    options:
+      cache: false
+      runInCI: false
+
+  migrate-down:
+    command: 'go'
+    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'down']
+    options:
+      cache: false
+      runInCI: false
+
+  migrate-status:
+    command: 'go'
+    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'status']
+    options:
+      cache: false
+      runInCI: false
+
+  # Usage: moon run server:migrate-new -- <name> sql
+  migrate-new:
+    command: 'go'
+    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'create']
+    options:
+      cache: false
+      runInCI: false

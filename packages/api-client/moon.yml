@@ -1,0 +1,10 @@
+$schema: '../../.moon/cache/schemas/project.json'
+
+# Shared TypeScript API client generated from proto/ (protobuf-es + connect-query).
+# No tasks of its own: `check` (Biome) is inherited from .moon/tasks/typescript.yml.
+# Its generated src/gen is produced by `proto:generate` and git-ignored, so Biome
+# (useIgnoreFile) skips it and only the hand-written src/index.ts is gated.
+layer: 'library'
+stack: 'frontend'
+language: 'typescript'
+dependsOn: ['proto']

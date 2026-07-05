@@ -1,0 +1,76 @@
+$schema: '../../.moon/cache/schemas/project.json'
+
+layer: 'application'
+stack: 'frontend'
+language: 'typescript'
+dependsOn: ['proto']
+
+# Tasks run through pnpm (provided by proto) via package.json scripts.
+tasks:
+  dev:
+    command: 'pnpm'
+    args: ['run', 'dev']
+    deps: ['proto:generate']
+    preset: 'server'
+
+  # Generates src/routeTree.gen.ts from src/routes (Vite plugin also does this).
+  gen:
+    command: 'pnpm'
+    args: ['run', 'gen:routes']
+    inputs:
+      - 'src/routes/**/*'
+      - 'tsr.config.json'
+    outputs:
+      - 'src/routeTree.gen.ts'
+
+  # Compiles messages/*.json into typed functions at src/paraglide (Vite
+  # plugin also does this on dev/build; this covers typecheck/test in CI).
+  gen-i18n:
+    command: 'pnpm'
+    args: ['run', 'gen:i18n']
+    inputs:
+      - 'messages/**/*'
+      - 'project.inlang/**/*'
+    outputs:
+      - 'src/paraglide'
+
+  build:
+    command: 'pnpm'
+    args: ['run', 'build']
+    deps: ['proto:generate', '~:gen']
+    inputs:
+      - 'src/**/*'
+      - 'messages/**/*'
+      - 'project.inlang/**/*'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'tsr.config.json'
+      - 'package.json'
+    outputs:
+      - '/apps/server/internal/web/dist'
+
+  preview:
+    command: 'pnpm'
+    args: ['run', 'preview']
+    preset: 'server'
+
+  typecheck:
+    command: 'pnpm'
+    args: ['run', 'typecheck']
+    deps: ['proto:generate', '~:gen', '~:gen-i18n']
+    inputs:
+      - 'src/**/*'
+      - 'messages/**/*'
+      - 'tsconfig.json'
+      - 'tsr.config.json'
+
+  test:
+    command: 'pnpm'
+    args: ['run', 'test']
+    deps: ['proto:generate', '~:gen-i18n']
+    inputs:
+      - 'src/**/*'
+      - 'messages/**/*'
+      - 'vitest.config.ts'
+      - 'package.json'

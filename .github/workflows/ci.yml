@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    # Ephemeral database for the Go integration tests. In GitHub Actions the
+    # service is published on localhost via the port mapping below.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MOONBASE_DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/app?sslmode=disable'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so `moon ci` can diff affected projects
+
+      # Installs proto + the toolchain pinned in .prototools (go, node, pnpm, moon) and
+      # caches ~/.proto.
+      - uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+          cache: false
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fails a PR that breaks the published proto contract (baseline: main).
+      - if: github.event_name == 'pull_request'
+        run: moon run proto:breaking
+
+      # Runs build/test/check for every affected project. dev/migrate-*/release
+      # are skipped (local presets / runInCI:false).
+      - run: moon ci
+
+      # Reachable-vulnerability scan (govulncheck). A dedicated step because it's
+      # network-dependent and excluded from the `moon ci` task graph.
+      - run: moon run server:vuln

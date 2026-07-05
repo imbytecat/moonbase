@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// Package report.v1 is the analytics surface of the admin template. It
+// aggregates REAL system data (users, sessions, third-party identities,
+// roles, workflow runs) into dashboard-ready shapes, demonstrating the full
+// proto → Go aggregation SQL → typed TS client flow on data every deployment
+// actually has — no fake business domain to delete later.
+package report.v1;
+
+import "buf/validate/validate.proto";
+
+// MetricPoint is one day of a time series. The date is an ISO calendar date
+// (YYYY-MM-DD) — a daily bucket, not an instant, so Timestamp would be wrong.
+message MetricPoint {
+  string date = 1;
+  int64 count = 2;
+}
+
+// NamedCount is one slice of a categorical breakdown (pie/bar charts).
+message NamedCount {
+  string label = 1;
+  int64 count = 2;
+}
+
+message GetDashboardReportRequest {
+  // Trailing window for the time-series charts, in days.
+  int32 days = 1 [
+    (buf.validate.field).int32.gte = 1,
+    (buf.validate.field).int32.lte = 365
+  ];
+}
+
+message GetDashboardReportResponse {
+  // Headline stats.
+  int64 total_users = 1;
+  int64 active_users = 2;
+  // Users created inside the requested window.
+  int64 new_users = 3;
+  // Sessions that have not expired yet.
+  int64 active_sessions = 4;
+
+  // Daily time series over the requested window (sparse: days with zero
+  // activity are omitted; clients fill gaps when charting).
+  repeated MetricPoint user_signups = 5;
+  repeated MetricPoint logins = 6;
+
+  // Categorical breakdowns.
+  repeated NamedCount workflow_runs_by_status = 7;
+  repeated NamedCount identities_by_provider = 8;
+  repeated NamedCount users_by_role = 9;
+}
+
+// ReportService serves read-only aggregates for the dashboard. Guarded by
+// report.read; heavy lifting happens in SQL, never by streaming rows to the
+// client.
+service ReportService {
+  rpc GetDashboardReport(GetDashboardReportRequest) returns (GetDashboardReportResponse) {}
+}

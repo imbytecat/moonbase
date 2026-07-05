@@ -1,0 +1,557 @@
+syntax = "proto3";
+
+// Package auth.v1 is the session-facing auth surface: login/logout, the
+// current user's profile, and self-service registration. Admin-side user
+// management lives in user.v1; RBAC roles in role.v1.
+package auth.v1;
+
+import "auth/v1/permission.proto";
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// CurrentUser is the caller's own identity, shaped for the frontend shell:
+// permissions drive menu filtering and per-button gating.
+message CurrentUser {
+  string id = 1;
+  // Optional identifier; empty when the account has none.
+  string email = 2;
+  string name = 3;
+  // Short-lived presigned GET URL for the avatar; empty when unset or when
+  // file storage is not configured.
+  string avatar_url = 4;
+  repeated Permission permissions = 5;
+  bool email_verified = 6;
+  // Bound phone number; empty when not bound.
+  string phone = 7;
+  // Unique login handle; empty when the account has none.
+  string username = 8;
+  // True when a confirmed TOTP factor guards this account.
+  bool totp_enabled = 9;
+  // BCP-47 language preference (e.g. "zh-CN"); empty = browser default.
+  string locale = 10;
+}
+
+message LoginRequest {
+  // Username, email or phone number — the server routes by shape: contains
+  // "@" = email; starts with "+" or all digits = phone; otherwise username.
+  // Password login works with any identifier the account has.
+  string identifier = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 254
+  }];
+  // Login accepts any non-empty password: strength is enforced at registration
+  // and change-password, not here, so a short seeded/legacy password (e.g. the
+  // default admin account) can still sign in.
+  string password = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  // CAPTCHA response token, required when GetAuthConfig reports a captcha.
+  // Turnstile: the widget token. Geetest v4: the JSON output of the widget.
+  string captcha_token = 3 [(buf.validate.field).string.max_len = 4096];
+}
+
+message LoginResponse {
+  CurrentUser user = 1;
+  // The opaque session token, also set as an httpOnly cookie. Browser clients
+  // MUST ignore this field (the cookie is the secure transport); native apps
+  // store it in the platform keystore and send it back as
+  // "Authorization: Bearer <token>".
+  string session_token = 2;
+  // When true, the password was correct but the account requires a TOTP
+  // code: no session was created, present mfa_ticket to LoginWithTotp.
+  bool mfa_required = 3;
+  string mfa_ticket = 4;
+}
+
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+message GetMeRequest {}
+
+message GetMeResponse {
+  CurrentUser user = 1;
+}
+
+// Which identifiers the form must collect is driven by GetAuthConfig's
+// signup_identifiers; the server enforces the same policy (fields outside the
+// policy are rejected, required ones must be present and unique).
+// Channel-backed identifiers always prove ownership: phone with phone_code
+// (SendPhoneRegisterCode), email with email_code (SendEmailRegisterCode).
+message RegisterRequest {
+  string username = 1 [(buf.validate.field) = {
+    string: {pattern: "^[a-zA-Z][a-zA-Z0-9._-]{2,31}$"}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string email = 2 [(buf.validate.field) = {
+    string: {email: true}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string password = 4 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+  string captcha_token = 5 [(buf.validate.field).string.max_len = 4096];
+  string phone = 6 [(buf.validate.field) = {
+    string: {
+      min_len: 5
+      max_len: 20
+    }
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string phone_code = 7 [(buf.validate.field) = {
+    string: {len: 6}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string email_code = 8 [(buf.validate.field) = {
+    string: {len: 6}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+}
+
+message RegisterResponse {
+  CurrentUser user = 1;
+}
+
+// GetAuthConfig is public: the login page uses it to decide whether to show
+// the register link and which CAPTCHA widget to render. Only public values
+// are exposed here (site keys are public by design; secrets never leave
+// system settings).
+message GetAuthConfigRequest {}
+
+message GetAuthConfigResponse {
+  bool registration_enabled = 1;
+  // "", "turnstile", "geetest" or "altcha"; empty means no captcha required.
+  // "altcha" needs no site key — the widget fetches its challenge from
+  // /api/captcha/altcha/challenge.
+  string captcha_provider = 2;
+  string captcha_site_key = 3;
+  // Capability flags: which channel-backed flows the UI should offer
+  // (forgot password / email verification need email; SMS login needs sms).
+  bool email_enabled = 4;
+  bool sms_enabled = 5;
+  // Region policy for phone inputs: empty = any country; ["CN"] locks the
+  // phone widget to mainland China (no country dropdown).
+  repeated string allowed_phone_regions = 6;
+  // Identifiers the register form collects, subset of
+  // ["username", "email", "phone"]; never empty when registration is enabled.
+  // Email and phone are always code-verified at signup.
+  repeated string signup_identifiers = 7;
+  reserved 8;
+  reserved "verify_email_at_signup";
+  // Third-party login options ready to offer (enabled + config complete).
+  // The login page renders one button per entry pointing at
+  // /api/oauth/{key}/authorize.
+  repeated OauthProviderOption oauth_providers = 9;
+}
+
+// One third-party login option: key addresses the flow URL and identity
+// records, name is the button label, provider picks the button icon/style
+// ("oidc" or "wechat").
+message OauthProviderOption {
+  string key = 1;
+  string name = 2;
+  string provider = 3;
+}
+
+message UpdateProfileRequest {
+  optional string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Object key returned by storage.v1 PresignAvatarUpload after the client
+  // uploads directly to S3. Empty string clears the avatar.
+  optional string avatar_key = 2 [(buf.validate.field).string.max_len = 512];
+  // BCP-47 language tag; empty string clears back to browser default.
+  optional string locale = 3 [(buf.validate.field).string.max_len = 35];
+}
+
+message UpdateProfileResponse {
+  CurrentUser user = 1;
+}
+
+// Cross-field rules use protovalidate CEL: shape checks stay per-field, but
+// invariants across fields are declared on the message and enforced by the
+// same server-side interceptor.
+message ChangePasswordRequest {
+  option (buf.validate.message).cel = {
+    id: "change_password.new_differs"
+    message: "new password must differ from the current password"
+    expression: "this.new_password != this.current_password"
+  };
+
+  string current_password = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+// Changing the password revokes every other session of the user.
+message ChangePasswordResponse {}
+
+// --- Email verification (requires the email channel) ---
+
+// Sends a verification link to the CURRENT user's email.
+message SendVerificationEmailRequest {}
+
+message SendVerificationEmailResponse {}
+
+// Public: the /verify-email landing page posts the URL token here.
+message VerifyEmailRequest {
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
+}
+
+message VerifyEmailResponse {}
+
+// --- Password reset (public, requires the email channel) ---
+
+// Always answers ok — whether the email exists is never revealed.
+message RequestPasswordResetRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+  string captcha_token = 2 [(buf.validate.field).string.max_len = 4096];
+}
+
+message RequestPasswordResetResponse {}
+
+// Consumes the emailed token; on success every session of the user is revoked.
+message ResetPasswordRequest {
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message ResetPasswordResponse {}
+
+// --- Phone binding + SMS login (requires the sms channel) ---
+
+// Sends a 6-digit code to bind this phone to the CURRENT user.
+message SendPhoneBindCodeRequest {
+  string phone_number = 1 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 20
+  }];
+}
+
+message SendPhoneBindCodeResponse {}
+
+message BindPhoneRequest {
+  string phone_number = 1 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 20
+  }];
+  string code = 2 [(buf.validate.field).string = {len: 6}];
+}
+
+message BindPhoneResponse {
+  CurrentUser user = 1;
+}
+
+// Public: sends a login code. Always answers ok (no phone enumeration);
+// a code is only actually sent to phones bound to an account.
+message SendSmsLoginCodeRequest {
+  string phone_number = 1 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 20
+  }];
+  string captcha_token = 2 [(buf.validate.field).string.max_len = 4096];
+}
+
+message SendSmsLoginCodeResponse {}
+
+// Public: exchanges phone + code for a session (same cookie/token dual
+// transport as password login).
+message LoginWithSmsRequest {
+  string phone_number = 1 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 20
+  }];
+  string code = 2 [(buf.validate.field).string = {len: 6}];
+}
+
+message LoginWithSmsResponse {
+  CurrentUser user = 1;
+  string session_token = 2;
+}
+
+// --- Signup ownership codes (public) + email binding ---
+
+// Public: sends a register code to a phone that is NOT yet bound to any
+// account. Answers already_exists for taken phones — the register form must
+// tell the user to log in instead (no enumeration concern: signup forms
+// legitimately reveal taken identifiers, same as a unique-violation on submit).
+message SendPhoneRegisterCodeRequest {
+  string phone_number = 1 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 20
+  }];
+  string captcha_token = 2 [(buf.validate.field).string.max_len = 4096];
+}
+
+message SendPhoneRegisterCodeResponse {}
+
+// Public: same contract as SendPhoneRegisterCode but for email, used when
+// the signup policy collects email.
+message SendEmailRegisterCodeRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+  string captcha_token = 2 [(buf.validate.field).string.max_len = 4096];
+}
+
+message SendEmailRegisterCodeResponse {}
+
+// Sends a 6-digit code to bind this email to the CURRENT user (the email
+// counterpart of SendPhoneBindCode).
+message SendEmailBindCodeRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+}
+
+message SendEmailBindCodeResponse {}
+
+// Binding proves ownership, so the email is stored verified.
+message BindEmailRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+  string code = 2 [(buf.validate.field).string = {len: 6}];
+}
+
+message BindEmailResponse {
+  CurrentUser user = 1;
+}
+
+// --- Identifier lifecycle (unbind) + session/device management ---
+
+// Unbinding requires the account password (a hijacked session alone must not
+// be able to strip recovery channels) and keeps at least one identifier —
+// the server rejects removing the last one.
+message UnbindPhoneRequest {
+  string current_password = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message UnbindPhoneResponse {
+  CurrentUser user = 1;
+}
+
+message UnbindEmailRequest {
+  string current_password = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message UnbindEmailResponse {
+  CurrentUser user = 1;
+}
+
+// Session is one signed-in device of the CURRENT user, shaped for the
+// profile page's device list.
+message Session {
+  string id = 1;
+  // Raw User-Agent captured at login; empty for native/API logins without one.
+  string user_agent = 2;
+  string ip = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  // True for the session making this request — the UI marks it and the
+  // revoke button turns into "sign out".
+  bool current = 6;
+}
+
+message ListMySessionsRequest {}
+
+message ListMySessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// Revoking the CURRENT session is allowed and equals logout.
+message RevokeMySessionRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message RevokeMySessionResponse {}
+
+// --- Third-party (OAuth) login ---
+// The browser flow is plain HTTP (GET /api/oauth/{key}/authorize ->
+// provider -> GET /api/oauth/{key}/callback), not RPC — key is the OAuth
+// profile key from system settings. The callback either signs in (identity
+// known), binds (already logged in), or redirects to the completion page
+// with a one-time signup ticket consumed here.
+
+// Completes a social signup: the ticket proves the external identity, the
+// form supplies whatever the signup policy requires on top. Same field
+// semantics as RegisterRequest.
+message CompleteOauthSignupRequest {
+  string ticket = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string username = 3 [(buf.validate.field) = {
+    string: {pattern: "^[a-zA-Z][a-zA-Z0-9._-]{2,31}$"}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string password = 4 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+  string phone = 5 [(buf.validate.field) = {
+    string: {
+      min_len: 5
+      max_len: 20
+    }
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string phone_code = 6 [(buf.validate.field) = {
+    string: {len: 6}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string email = 7 [(buf.validate.field) = {
+    string: {email: true}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string email_code = 8 [(buf.validate.field) = {
+    string: {len: 6}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+}
+
+message CompleteOauthSignupResponse {
+  CurrentUser user = 1;
+  string session_token = 2;
+}
+
+// OauthIdentity is one linked third-party account of the CURRENT user.
+// provider_key references the OAuth profile it was created through.
+message OauthIdentity {
+  string provider_key = 1;
+  // Display name captured from the provider at link time.
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message ListMyIdentitiesRequest {}
+
+message ListMyIdentitiesResponse {
+  repeated OauthIdentity identities = 1;
+}
+
+// Same password gate as unbinding a phone/email: a hijacked session must not
+// strip login methods. Removing the identity is allowed even when it is the
+// only login method IF the account still has an identifier + password.
+message UnbindOauthIdentityRequest {
+  string provider_key = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9-]{1,31}$"];
+  string current_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message UnbindOauthIdentityResponse {}
+
+// --- TOTP two-factor (MFA) ---
+
+// Starts TOTP setup for the CURRENT user: returns the otpauth:// URI (QR) and
+// one-time recovery codes. Nothing is enforced until ActivateTotp confirms.
+message SetupTotpRequest {
+  string current_password = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message SetupTotpResponse {
+  // otpauth://totp/... — render as a QR code; also show the secret for
+  // manual entry.
+  string otpauth_url = 1;
+  string secret = 2;
+  // Shown ONCE; each code works a single time when the authenticator is lost.
+  repeated string recovery_codes = 3;
+}
+
+// Confirms setup with a first valid code — proves the authenticator actually
+// holds the secret before lockout becomes possible.
+message ActivateTotpRequest {
+  string code = 1 [(buf.validate.field).string = {len: 6}];
+}
+
+message ActivateTotpResponse {}
+
+message DisableTotpRequest {
+  string current_password = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message DisableTotpResponse {}
+
+// Public: second login step. The ticket comes from LoginResponse.mfa_ticket;
+// code is a 6-digit TOTP or a recovery code.
+message LoginWithTotpRequest {
+  string mfa_ticket = 1 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 128
+  }];
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 6
+    max_len: 32
+  }];
+}
+
+message LoginWithTotpResponse {
+  CurrentUser user = 1;
+  string session_token = 2;
+}
+
+service AuthService {
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+  rpc GetMe(GetMeRequest) returns (GetMeResponse) {}
+  rpc Register(RegisterRequest) returns (RegisterResponse) {}
+  rpc GetAuthConfig(GetAuthConfigRequest) returns (GetAuthConfigResponse) {}
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse) {}
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse) {}
+  rpc SendVerificationEmail(SendVerificationEmailRequest) returns (SendVerificationEmailResponse) {}
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse) {}
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (RequestPasswordResetResponse) {}
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse) {}
+  rpc SendPhoneBindCode(SendPhoneBindCodeRequest) returns (SendPhoneBindCodeResponse) {}
+  rpc BindPhone(BindPhoneRequest) returns (BindPhoneResponse) {}
+  rpc SendSmsLoginCode(SendSmsLoginCodeRequest) returns (SendSmsLoginCodeResponse) {}
+  rpc LoginWithSms(LoginWithSmsRequest) returns (LoginWithSmsResponse) {}
+  rpc SendPhoneRegisterCode(SendPhoneRegisterCodeRequest) returns (SendPhoneRegisterCodeResponse) {}
+  rpc SendEmailRegisterCode(SendEmailRegisterCodeRequest) returns (SendEmailRegisterCodeResponse) {}
+  rpc SendEmailBindCode(SendEmailBindCodeRequest) returns (SendEmailBindCodeResponse) {}
+  rpc BindEmail(BindEmailRequest) returns (BindEmailResponse) {}
+  rpc UnbindPhone(UnbindPhoneRequest) returns (UnbindPhoneResponse) {}
+  rpc UnbindEmail(UnbindEmailRequest) returns (UnbindEmailResponse) {}
+  rpc ListMySessions(ListMySessionsRequest) returns (ListMySessionsResponse) {}
+  rpc RevokeMySession(RevokeMySessionRequest) returns (RevokeMySessionResponse) {}
+  rpc CompleteOauthSignup(CompleteOauthSignupRequest) returns (CompleteOauthSignupResponse) {}
+  rpc ListMyIdentities(ListMyIdentitiesRequest) returns (ListMyIdentitiesResponse) {}
+  rpc UnbindOauthIdentity(UnbindOauthIdentityRequest) returns (UnbindOauthIdentityResponse) {}
+  rpc SetupTotp(SetupTotpRequest) returns (SetupTotpResponse) {}
+  rpc ActivateTotp(ActivateTotpRequest) returns (ActivateTotpResponse) {}
+  rpc DisableTotp(DisableTotpRequest) returns (DisableTotpResponse) {}
+  rpc LoginWithTotp(LoginWithTotpRequest) returns (LoginWithTotpResponse) {}
+}

@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+// Package user.v1 is the admin-side user management surface (requires
+// user.read / user.write permissions). Self-service profile editing lives in
+// auth.v1.
+package user.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatar_url = 4;
+  bool is_active = 5;
+  // Role names for display; assignment uses role ids.
+  repeated string roles = 6;
+  repeated string role_ids = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  string username = 10;
+}
+
+message ListUsersRequest {}
+
+message ListUsersResponse {
+  repeated User users = 1;
+}
+
+// At least one identifier (username or email) is required — enforced by the
+// server (the CHECK constraint on users backs it up).
+message CreateUserRequest {
+  string email = 1 [(buf.validate.field) = {
+    string: {email: true}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  string password = 3 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+  repeated string role_ids = 4 [(buf.validate.field).repeated.items.string.uuid = true];
+  string username = 5 [(buf.validate.field) = {
+    string: {pattern: "^[a-zA-Z][a-zA-Z0-9._-]{2,31}$"}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+// Partial update; absent fields keep their value. role_ids, when set,
+// replaces the full assignment (the edit form always has the complete list).
+message UpdateUserRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string email = 2 [(buf.validate.field).string.email = true];
+  optional string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  optional bool is_active = 4;
+  message RoleAssignment {
+    repeated string role_ids = 1 [(buf.validate.field).repeated.items.string.uuid = true];
+  }
+  optional RoleAssignment roles = 5;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteUserResponse {}
+
+// Admin fallback for accounts that cannot self-reset (no email bound).
+// Revokes every session of the target user.
+message ResetUserPasswordRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message ResetUserPasswordResponse {}
+
+service UserService {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {}
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {}
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
+  rpc ResetUserPassword(ResetUserPasswordRequest) returns (ResetUserPasswordResponse) {}
+}

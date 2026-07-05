@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+// Package audit.v1 is the read-only audit-trail surface: every mutating RPC
+// is recorded by a server interceptor into an append-only table (who did
+// what, when, from where). There is deliberately NO write/delete RPC —
+// integrity comes from the API not being able to alter history; retention
+// is a server-side janitor concern.
+package audit.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// One recorded action. Request payloads are NOT stored (secrets in system
+// settings are write-only even to the audit trail); resource identifies the
+// target by type and id where the request carried one.
+message AuditLog {
+  string id = 1;
+  // Empty for anonymous actions (e.g. a public register call).
+  string actor_id = 2;
+  // Display name resolved at read time; empty when the user was deleted.
+  string actor_name = 3;
+  // Full RPC procedure, e.g. "/user.v1.UserService/CreateUser".
+  string action = 4;
+  // Proto package short name, e.g. "user" — the filterable domain.
+  string domain = 5;
+  // Id of the touched entity when the request carried one.
+  string resource_id = 6;
+  // OK or the connect error code the call answered with.
+  string result = 7;
+  string ip = 8;
+  string user_agent = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message ListAuditLogsRequest {
+  // Zero-based page; page_size caps at 100.
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // Optional filters; empty = no filter.
+  string actor_id = 3 [(buf.validate.field) = {
+    string: {uuid: true}
+    ignore: IGNORE_IF_ZERO_VALUE
+  }];
+  string domain = 4 [(buf.validate.field).string.max_len = 64];
+  string action = 5 [(buf.validate.field).string.max_len = 256];
+  google.protobuf.Timestamp from = 6;
+  google.protobuf.Timestamp to = 7;
+}
+
+message ListAuditLogsResponse {
+  repeated AuditLog logs = 1;
+  int64 total = 2;
+}
+
+service AuditService {
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListAuditLogsResponse) {}
+}

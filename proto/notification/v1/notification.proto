@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+// Package notification.v1 is the per-user in-app inbox (站内信): business code
+// publishes a message addressed to a user (or fans one out to everyone holding
+// a permission), and each recipient reads, marks, and clears their OWN inbox.
+// Every RPC is scoped to the caller's identity — there is no cross-user read.
+// Delivery rows are a real migrated table (the data plane); WHAT triggers a
+// notification is code, living in the domain that owns the event. Title/body
+// are stored already-rendered, so listing never needs the producer again.
+package notification.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// One inbox entry addressed to a single user.
+message Notification {
+  string id = 1;
+  // Code-defined category the UI groups and icons by (e.g. "system",
+  // "security", "payment"); never shown raw — the client maps it to a label.
+  string category = 2;
+  string title = 3;
+  string body = 4;
+  // Optional in-app deep link the "view" action follows; empty = no link.
+  string link = 5;
+  // Unset while unread; set to the read moment on first mark.
+  optional google.protobuf.Timestamp read_at = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message ListNotificationsRequest {
+  // Zero-based page; page_size caps at 100.
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // When true, only unread entries are returned.
+  bool unread_only = 3;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  // Unread count across the WHOLE inbox (not just this page), so the bell
+  // badge and the list come from one round-trip.
+  int64 unread = 3;
+}
+
+message GetUnreadCountRequest {}
+
+message GetUnreadCountResponse {
+  int64 unread = 1;
+}
+
+// Marks the listed ids read; already-read, missing, or foreign ids are
+// silently skipped (idempotent). Returns the new unread total for the badge.
+message MarkNotificationsReadRequest {
+  repeated string ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 200
+    items: {string: {uuid: true}}
+  }];
+}
+
+message MarkNotificationsReadResponse {
+  int64 unread = 1;
+}
+
+message MarkAllNotificationsReadRequest {}
+
+message MarkAllNotificationsReadResponse {
+  int64 unread = 1;
+}
+
+// Deletes one of the caller's own notifications; a foreign or missing id is a
+// no-op. Returns the new unread total.
+message DeleteNotificationRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteNotificationResponse {
+  int64 unread = 1;
+}
+
+// Every RPC is self-scoped to the caller's session (any authenticated user);
+// there is no admin/cross-user surface here.
+service NotificationService {
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse) {}
+  rpc GetUnreadCount(GetUnreadCountRequest) returns (GetUnreadCountResponse) {}
+  rpc MarkNotificationsRead(MarkNotificationsReadRequest) returns (MarkNotificationsReadResponse) {}
+  rpc MarkAllNotificationsRead(MarkAllNotificationsReadRequest) returns (MarkAllNotificationsReadResponse) {}
+  rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse) {}
+}

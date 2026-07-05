@@ -1,0 +1,4 @@
+$schema: './cache/schemas/toolchains.json'
+
+# All tools come from proto (.prototools). Tasks run via moon's
+# built-in `system` toolchain, so no language toolchains are managed here.

@@ -1,0 +1,30 @@
+$schema: '../cache/schemas/tasks.json'
+
+# Global tasks inherited by every TypeScript/JS project via the
+# `inheritedBy.language` condition (mirrors .moon/tasks/go.yml for Go).
+# A project's moon.yml may add a same-named task to extend these.
+inheritedBy:
+  language: 'typescript'
+
+tasks:
+  # Composite read-only gate: Biome = lint + format + import organization.
+  # Biome resolves the workspace-root biome.json (root config) by upward
+  # traversal and merges any nested `extends: "//"` overrides. Run via
+  # `pnpm exec` so the catalog-pinned binary in node_modules is used.
+  check:
+    command: 'pnpm'
+    args: ['exec', 'biome', 'check', '.']
+    inputs:
+      - '**/*.{js,jsx,ts,tsx,json,jsonc,css}'
+      - 'biome.json'
+      - '/biome.json'
+
+  # Auto-fix counterpart of `check` (same Biome rules, --write applies safe
+  # fixes). `moon run :fix` fixes the whole repo; the pre-commit hook runs it
+  # on staged projects before the read-only gate.
+  fix:
+    command: 'pnpm'
+    args: ['exec', 'biome', 'check', '--write', '.']
+    options:
+      cache: false
+      runInCI: false

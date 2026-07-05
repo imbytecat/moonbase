@@ -1,0 +1,8 @@
+# Pinned toolchain for proto (https://moonrepo.dev/proto) — cross-platform
+# (Windows, macOS, Linux). Install proto, then run `proto use` to set these up.
+# sqlc and goose are NOT pinned here; they run via `go run <pkg>@<version>`
+# (see apps/server/moon.yml), so no extra binaries are needed.
+moon = "2.3.5"
+go = "1.26.4"
+node = "26.4.0"
+pnpm = "11.9.0"
