@@ -11,10 +11,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
+
+// privateURLTTL bounds how long a private file's signed URL stays valid after
+// the authenticated 302.
+const privateURLTTL = 5 * time.Minute
 
 // FileHandler serves GET /f/{file_id}, the permanent file URL (ADR-0004):
 // every RPC returns this shape and the handler dispatches on the purpose's
@@ -47,8 +52,22 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// private purpose: session auth first (the /f/ route is wrapped by the
+	// authn middleware, which resolves but never rejects), then redirect to a
+	// short-lived signed URL. The 302 must never be cached — its target
+	// carries an expiry, so a cached redirect would bypass the auth window.
 	if VisibilityOf(file.Purpose) != VisibilityPublic {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		if auth.IdentityFromContext(r.Context()) == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		u, err := h.client.ResolveURL(r.Context(), file.Purpose, file.ObjectKey, privateURLTTL)
+		if err != nil {
+			h.internal(w, r, "resolve signed url", err)
+			return
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
+		http.Redirect(w, r, u, http.StatusFound)
 		return
 	}
 

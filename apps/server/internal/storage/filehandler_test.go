@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
@@ -94,6 +96,57 @@ func TestFileHandlerUnknownOrInvalidIDReturns404(t *testing.T) {
 		if res.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: status = %d, want 404", name, res.StatusCode)
 		}
+	}
+}
+
+// private × any driver (ADR-0004 last cell): anonymous → 401 with no
+// redirect; authenticated → 302 to the driver's short-lived signed URL with
+// Cache-Control: private, no-store — the redirect target carries an expiry,
+// so caching the 302 would bypass the auth window.
+func TestFileHandlerPrivatePurposeRequiresAuthThenRedirectsToSignedURL(t *testing.T) {
+	const privatePurpose = "private-test"
+	fileID := uuid.New()
+	files := map[uuid.UUID]repository.File{
+		fileID: {ID: fileID, ObjectKey: "m1/doc.pdf", ContentType: "application/pdf", Purpose: privatePurpose},
+	}
+
+	store, client := newLocalFixture(t)
+	st, err := store.Storage(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Bindings[privatePurpose] = []string{"p1"}
+	if err := store.SetStorage(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewFileHandler(store, client, &fileQuerier{files: files},
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux := http.NewServeMux()
+	mux.Handle("GET /f/{file_id}", handler)
+
+	anon := httptest.NewRequest(http.MethodGet, "/f/"+fileID.String(), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, anon)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous status = %d, want 401", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("anonymous must not redirect, got Location %q", got)
+	}
+
+	authed := anon.Clone(auth.WithIdentity(t.Context(), &auth.Identity{UserID: uuid.New()}))
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, authed)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("authenticated status = %d, want 302", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("Cache-Control = %q, want private, no-store", got)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.Contains(loc, "sig=") || !strings.Contains(loc, "exp=") {
+		t.Fatalf("Location = %q, want a short-lived signed URL", loc)
 	}
 }
 
