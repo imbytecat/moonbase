@@ -12,6 +12,10 @@ _Avoid_: blob（与 Postgres bytea/lo 歧义）、object（保留给 `ObjectStor
 `file_attachments` 表的一行——某个领域实体对一个 file 的引用（引用方类型 + 引用方 ID → file_id）。同一 file 可被多处引用。删引用方即删 attachment；file 的 attachment 归零后由清理任务回收。
 _Avoid_: relation、usage、link。
 
+**visibility（可见性）**：
+purpose 的静态属性（public / private），代码写死，管理员不可改，file 行上不存。public = 读免鉴权、URL 稳定可长缓存（如 avatar、site asset）；private = 每次访问先鉴权、发短期签名 URL。写（PUT）永远要凭证，与 visibility 无关。driver 只执行 visibility，不定义它。
+_Avoid_: 把 public/private 当成 bucket 或单个 file 的属性；ACL（暗示 per-file 粒度）。
+
 **unattached（无引用文件）**：
 创建超过宽限期且没有任何 attachment 的 file。是孤儿清理的唯一判定依据——清理任务删 unattached file 及其 object，而非扫桶对账。直传（presign）天然先产生 unattached file，业务保存时建 attachment 才「转正」。
 _Avoid_: orphan（保留给「桶里有 object 但无 file 行」的另一种病态）、临时文件。
