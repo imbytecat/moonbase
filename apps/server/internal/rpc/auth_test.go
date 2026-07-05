@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
@@ -35,6 +36,9 @@ type fakeAuthQuerier struct {
 	deleteSessionByID  func(ctx context.Context, arg repository.DeleteUserSessionByIDParams) (int64, error)
 	consumeTicket      func(ctx context.Context, secretHash []byte) (repository.OauthSignupTicket, error)
 	deleteIdentity     func(ctx context.Context, arg repository.DeleteUserIdentityParams) (int64, error)
+	updateUser         func(ctx context.Context, arg repository.UpdateUserParams) (repository.User, error)
+	getFile            func(ctx context.Context, id uuid.UUID) (repository.File, error)
+	setUserAvatar      func(ctx context.Context, arg repository.SetUserAvatarParams) error
 }
 
 func (f *fakeAuthQuerier) GetUserByEmail(ctx context.Context, email string) (repository.User, error) {
@@ -86,6 +90,18 @@ func (f *fakeAuthQuerier) ClearUserPhone(ctx context.Context, id uuid.UUID) (int
 
 func (f *fakeAuthQuerier) DeleteUserSessionByID(ctx context.Context, arg repository.DeleteUserSessionByIDParams) (int64, error) {
 	return f.deleteSessionByID(ctx, arg)
+}
+
+func (f *fakeAuthQuerier) UpdateUser(ctx context.Context, arg repository.UpdateUserParams) (repository.User, error) {
+	return f.updateUser(ctx, arg)
+}
+
+func (f *fakeAuthQuerier) GetFile(ctx context.Context, id uuid.UUID) (repository.File, error) {
+	return f.getFile(ctx, id)
+}
+
+func (f *fakeAuthQuerier) SetUserAvatar(ctx context.Context, arg repository.SetUserAvatarParams) error {
+	return f.setUserAvatar(ctx, arg)
 }
 
 type noopObjectStore struct{}
@@ -503,5 +519,110 @@ func TestRevokeMySessionScopedToCaller(t *testing.T) {
 	}
 	if gotUserID != userID {
 		t.Fatalf("query scoped to %s, want caller %s", gotUserID, userID)
+	}
+}
+
+// Saving a new avatar transfers the caller's single attachment slot to the file
+// they uploaded: UpdateProfile validates ownership then calls SetUserAvatar with
+// that file id. The DB CTE (integration-tested) does the actual old→new move.
+func TestUpdateProfileTransfersAvatarToOwnedFile(t *testing.T) {
+	userID := uuid.New()
+	fileID := uuid.New()
+	var got *repository.SetUserAvatarParams
+	svc := newAuthService(&fakeAuthQuerier{
+		updateUser: func(_ context.Context, arg repository.UpdateUserParams) (repository.User, error) {
+			return repository.User{ID: arg.ID}, nil
+		},
+		getFile: func(_ context.Context, id uuid.UUID) (repository.File, error) {
+			return repository.File{ID: id, ObjectKey: "avatars/self/new.png", UploadedBy: userID, Purpose: "avatars"}, nil
+		},
+		setUserAvatar: func(_ context.Context, arg repository.SetUserAvatarParams) error {
+			got = &arg
+			return nil
+		},
+	})
+
+	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
+	if _, err := svc.UpdateProfile(ctx, connect.NewRequest(&authv1.UpdateProfileRequest{
+		AvatarFileId: proto.String(fileID.String()),
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	if got == nil {
+		t.Fatal("a saved avatar must transfer the attachment via SetUserAvatar")
+	}
+	if !got.FileID.Valid || uuid.UUID(got.FileID.Bytes) != fileID {
+		t.Fatalf("SetUserAvatar file id = %v, want %s", got.FileID, fileID)
+	}
+	if got.UserID != userID {
+		t.Fatalf("SetUserAvatar user id = %s, want caller %s", got.UserID, userID)
+	}
+}
+
+// A caller may only attach a file they uploaded as an avatar. A file owned by
+// someone else is rejected and never attached — no borrowing another user's file.
+func TestUpdateProfileRejectsUnownedAvatarFile(t *testing.T) {
+	userID := uuid.New()
+	otherID := uuid.New()
+	attached := false
+	svc := newAuthService(&fakeAuthQuerier{
+		updateUser: func(_ context.Context, arg repository.UpdateUserParams) (repository.User, error) {
+			return repository.User{ID: arg.ID}, nil
+		},
+		getFile: func(_ context.Context, id uuid.UUID) (repository.File, error) {
+			return repository.File{ID: id, ObjectKey: "avatars/other/x.png", UploadedBy: otherID, Purpose: "avatars"}, nil
+		},
+		setUserAvatar: func(context.Context, repository.SetUserAvatarParams) error {
+			attached = true
+			return nil
+		},
+	})
+
+	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
+	_, err := svc.UpdateProfile(ctx, connect.NewRequest(&authv1.UpdateProfileRequest{
+		AvatarFileId: proto.String(uuid.NewString()),
+	}))
+
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("code = %v, want invalid_argument for a file the caller didn't upload", connect.CodeOf(err))
+	}
+	if attached {
+		t.Fatal("must not attach a file the caller didn't upload")
+	}
+}
+
+// Clearing the avatar (empty file id) skips the file lookup and calls
+// SetUserAvatar with a NULL file id, so the CTE drops the attachment.
+func TestUpdateProfileClearsAvatar(t *testing.T) {
+	userID := uuid.New()
+	lookedUp := false
+	var got *repository.SetUserAvatarParams
+	svc := newAuthService(&fakeAuthQuerier{
+		updateUser: func(_ context.Context, arg repository.UpdateUserParams) (repository.User, error) {
+			return repository.User{ID: arg.ID}, nil
+		},
+		getFile: func(_ context.Context, _ uuid.UUID) (repository.File, error) {
+			lookedUp = true
+			return repository.File{}, nil
+		},
+		setUserAvatar: func(_ context.Context, arg repository.SetUserAvatarParams) error {
+			got = &arg
+			return nil
+		},
+	})
+
+	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
+	if _, err := svc.UpdateProfile(ctx, connect.NewRequest(&authv1.UpdateProfileRequest{
+		AvatarFileId: proto.String(""),
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	if lookedUp {
+		t.Fatal("clearing the avatar must not look up a file")
+	}
+	if got == nil || got.FileID.Valid {
+		t.Fatalf("clearing must call SetUserAvatar with a NULL file id, got %+v", got)
 	}
 }

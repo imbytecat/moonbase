@@ -163,7 +163,7 @@ function ProfileBasicsCard({
         contentLength: BigInt(file.size),
       })
       await uploadToPresignedUrl(presigned.uploadUrl, file)
-      profileMutation.mutate({ avatarKey: presigned.objectKey })
+      profileMutation.mutate({ avatarFileId: presigned.fileId })
     } catch (err) {
       message.error(err instanceof Error ? humanizeError(err) : m.error_generic())
     }

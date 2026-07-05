@@ -47,7 +47,7 @@ func (s *UserService) ListUsers(
 	}
 	out := make([]*userv1.User, len(users))
 	for i, u := range users {
-		out[i] = s.toProto(ctx, u, assignments[u.ID])
+		out[i] = s.toProto(ctx, u.User, u.AvatarKey, assignments[u.User.ID])
 	}
 	return connect.NewResponse(&userv1.ListUsersResponse{Users: out}), nil
 }
@@ -92,7 +92,7 @@ func (s *UserService) CreateUser(
 		return nil, s.internal(ctx, "list user roles", err)
 	}
 	return connect.NewResponse(&userv1.CreateUserResponse{
-		User: s.toProto(ctx, user, assignments[user.ID]),
+		User: s.toProto(ctx, user, "", assignments[user.ID]),
 	}), nil
 }
 
@@ -156,7 +156,7 @@ func (s *UserService) UpdateUser(
 		return nil, s.internal(ctx, "list user roles", err)
 	}
 	return connect.NewResponse(&userv1.UpdateUserResponse{
-		User: s.toProto(ctx, user, assignments[user.ID]),
+		User: s.toProto(ctx, user, s.avatarObjectKey(ctx, user.AvatarFileID), assignments[user.ID]),
 	}), nil
 }
 
@@ -272,7 +272,7 @@ func (s *UserService) notifyRoleChange(ctx context.Context, userID uuid.UUID) {
 	}
 }
 
-func (s *UserService) toProto(ctx context.Context, u repository.User, roles []roleRef) *userv1.User {
+func (s *UserService) toProto(ctx context.Context, u repository.User, avatarKey string, roles []roleRef) *userv1.User {
 	names := make([]string, len(roles))
 	ids := make([]string, len(roles))
 	for i, r := range roles {
@@ -290,12 +290,24 @@ func (s *UserService) toProto(ctx context.Context, u repository.User, roles []ro
 		CreatedAt: timestamppb.New(u.CreatedAt),
 		UpdatedAt: timestamppb.New(u.UpdatedAt),
 	}
-	if u.AvatarKey != "" {
-		if url, err := s.objects.ResolveURL(ctx, storage.PurposeAvatars, u.AvatarKey, avatarURLTTL); err == nil {
+	if avatarKey != "" {
+		if url, err := s.objects.ResolveURL(ctx, storage.PurposeAvatars, avatarKey, avatarURLTTL); err == nil {
 			out.AvatarUrl = url
 		}
 	}
 	return out
+}
+
+// avatarObjectKey is best effort — a missing file just means no avatar URL.
+func (s *UserService) avatarObjectKey(ctx context.Context, fileID pgtype.UUID) string {
+	if !fileID.Valid {
+		return ""
+	}
+	f, err := s.repo.GetFile(ctx, uuid.UUID(fileID.Bytes))
+	if err != nil {
+		return ""
+	}
+	return f.ObjectKey
 }
 
 func (s *UserService) internal(ctx context.Context, op string, err error) error {

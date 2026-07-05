@@ -26,19 +26,38 @@ WHERE lower(username) = lower(sqlc.arg('username')) AND username <> '';
 SELECT count(*) FROM users;
 
 -- name: ListUsers :many
-SELECT * FROM users
-ORDER BY created_at DESC;
+SELECT sqlc.embed(u), coalesce(f.object_key, '')::text AS avatar_key
+FROM users u
+LEFT JOIN files f ON f.id = u.avatar_file_id
+ORDER BY u.created_at DESC;
 
 -- name: UpdateUser :one
 UPDATE users
 SET email      = coalesce(lower(sqlc.narg('email')), email),
     name       = coalesce(sqlc.narg('name'), name),
     is_active  = coalesce(sqlc.narg('is_active'), is_active),
-    avatar_key = coalesce(sqlc.narg('avatar_key'), avatar_key),
     locale     = coalesce(sqlc.narg('locale'), locale),
     updated_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- name: SetUserAvatar :exec
+-- Transfer the user's single avatar slot to file_id (NULL clears it) in one
+-- atomic statement: drop the old attachment, add the new one, and repoint the
+-- user. The old file loses its last attachment and becomes unattached, so the
+-- sweep reclaims it (ADR-0003) — no explicit delete here.
+WITH cleared AS (
+    DELETE FROM file_attachments
+    WHERE owner_type = 'user' AND owner_id = sqlc.arg('user_id')::uuid::text
+),
+attached AS (
+    INSERT INTO file_attachments (file_id, owner_type, owner_id)
+    SELECT sqlc.narg('file_id')::uuid, 'user', sqlc.arg('user_id')::uuid::text
+    WHERE sqlc.narg('file_id') IS NOT NULL
+)
+UPDATE users
+SET avatar_file_id = sqlc.narg('file_id')::uuid, updated_at = now()
+WHERE users.id = sqlc.arg('user_id')::uuid;
 
 -- name: UpdateUserPassword :exec
 UPDATE users
