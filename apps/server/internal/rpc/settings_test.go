@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -48,25 +47,9 @@ func (f *fakeSettingsQuerier) SetSiteWithAssets(ctx context.Context, arg reposit
 	return nil
 }
 
-// keyEchoObjectStore resolves any key to a stable URL so read-path tests can
-// assert a resolved asset URL without a real backend.
-type keyEchoObjectStore struct{}
-
-func (keyEchoObjectStore) PresignPut(context.Context, string, string, string, time.Duration) (string, error) {
-	return "", nil
-}
-
-func (keyEchoObjectStore) ResolveURL(_ context.Context, _, key string, _ time.Duration) (string, error) {
-	return "https://cdn.test/" + key, nil
-}
-
-func (keyEchoObjectStore) Delete(context.Context, string, string) error {
-	return nil
-}
-
 func newSettingsService(q repository.Querier) *SettingsService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewSettingsService(settings.NewStore(q), q, noopObjectStore{}, logger)
+	return NewSettingsService(settings.NewStore(q), q, logger)
 }
 
 func TestUpdateSettingsPhoneSignupRequiresSmsChannel(t *testing.T) {
@@ -118,8 +101,9 @@ func TestUpdateSettingsUsernameSignupNeedsNoChannel(t *testing.T) {
 	}
 }
 
-// GetSiteInfo resolves the public asset URLs by looking the brand file ids up
-// in the ledger and turning each object key into a URL (ADR-0003 read side).
+// GetSiteInfo returns the permanent /f/{file_id} URL shape for brand assets
+// (ADR-0004): the handler behind it resolves storage at request time, so the
+// URL survives profile rebinding.
 func TestGetSiteInfoResolvesAssetURLsFromFileIDs(t *testing.T) {
 	logoID := uuid.New()
 	faviconID := uuid.New()
@@ -144,17 +128,17 @@ func TestGetSiteInfoResolvesAssetURLsFromFileIDs(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc := NewSettingsService(settings.NewStore(q), q, keyEchoObjectStore{}, logger)
+	svc := NewSettingsService(settings.NewStore(q), q, logger)
 
 	resp, err := svc.GetSiteInfo(t.Context(), connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := resp.Msg.GetLogoUrl(); got != "https://cdn.test/site/logo-a.png" {
-		t.Fatalf("logo_url = %q, want URL resolved from the logo file's object key", got)
+	if got := resp.Msg.GetLogoUrl(); got != "/f/"+logoID.String() {
+		t.Fatalf("logo_url = %q, want permanent /f/%s", got, logoID)
 	}
-	if got := resp.Msg.GetFaviconUrl(); got != "https://cdn.test/site/favicon-b.ico" {
-		t.Fatalf("favicon_url = %q, want URL resolved from the favicon file's object key", got)
+	if got := resp.Msg.GetFaviconUrl(); got != "/f/"+faviconID.String() {
+		t.Fatalf("favicon_url = %q, want permanent /f/%s", got, faviconID)
 	}
 }
 

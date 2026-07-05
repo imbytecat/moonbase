@@ -17,18 +17,16 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/notification"
 	"github.com/imbytecat/moonbase/server/internal/repository"
-	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
 type UserService struct {
 	repo     repository.Querier
-	objects  storage.ObjectStore
 	notifier notification.Publisher
 	logger   *slog.Logger
 }
 
-func NewUserService(repo repository.Querier, objects storage.ObjectStore, notifier notification.Publisher, logger *slog.Logger) *UserService {
-	return &UserService{repo: repo, objects: objects, notifier: notifier, logger: logger}
+func NewUserService(repo repository.Querier, notifier notification.Publisher, logger *slog.Logger) *UserService {
+	return &UserService{repo: repo, notifier: notifier, logger: logger}
 }
 
 var _ userv1connect.UserServiceHandler = (*UserService)(nil)
@@ -47,7 +45,7 @@ func (s *UserService) ListUsers(
 	}
 	out := make([]*userv1.User, len(users))
 	for i, u := range users {
-		out[i] = s.toProto(ctx, u.User, u.AvatarKey, assignments[u.User.ID])
+		out[i] = s.toProto(u, assignments[u.ID])
 	}
 	return connect.NewResponse(&userv1.ListUsersResponse{Users: out}), nil
 }
@@ -92,7 +90,7 @@ func (s *UserService) CreateUser(
 		return nil, s.internal(ctx, "list user roles", err)
 	}
 	return connect.NewResponse(&userv1.CreateUserResponse{
-		User: s.toProto(ctx, user, "", assignments[user.ID]),
+		User: s.toProto(user, assignments[user.ID]),
 	}), nil
 }
 
@@ -156,7 +154,7 @@ func (s *UserService) UpdateUser(
 		return nil, s.internal(ctx, "list user roles", err)
 	}
 	return connect.NewResponse(&userv1.UpdateUserResponse{
-		User: s.toProto(ctx, user, s.avatarObjectKey(ctx, user.AvatarFileID), assignments[user.ID]),
+		User: s.toProto(user, assignments[user.ID]),
 	}), nil
 }
 
@@ -272,7 +270,7 @@ func (s *UserService) notifyRoleChange(ctx context.Context, userID uuid.UUID) {
 	}
 }
 
-func (s *UserService) toProto(ctx context.Context, u repository.User, avatarKey string, roles []roleRef) *userv1.User {
+func (s *UserService) toProto(u repository.User, roles []roleRef) *userv1.User {
 	names := make([]string, len(roles))
 	ids := make([]string, len(roles))
 	for i, r := range roles {
@@ -290,24 +288,10 @@ func (s *UserService) toProto(ctx context.Context, u repository.User, avatarKey 
 		CreatedAt: timestamppb.New(u.CreatedAt),
 		UpdatedAt: timestamppb.New(u.UpdatedAt),
 	}
-	if avatarKey != "" {
-		if url, err := s.objects.ResolveURL(ctx, storage.PurposeAvatars, avatarKey, avatarURLTTL); err == nil {
-			out.AvatarUrl = url
-		}
+	if u.AvatarFileID.Valid {
+		out.AvatarUrl = "/f/" + uuid.UUID(u.AvatarFileID.Bytes).String()
 	}
 	return out
-}
-
-// avatarObjectKey is best effort — a missing file just means no avatar URL.
-func (s *UserService) avatarObjectKey(ctx context.Context, fileID pgtype.UUID) string {
-	if !fileID.Valid {
-		return ""
-	}
-	f, err := s.repo.GetFile(ctx, uuid.UUID(fileID.Bytes))
-	if err != nil {
-		return ""
-	}
-	return f.ObjectKey
 }
 
 func (s *UserService) internal(ctx context.Context, op string, err error) error {

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -23,19 +22,16 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
-const siteAssetURLTTL = time.Hour
-
 // SettingsService is the BUSINESS settings surface (settings.*). The
 // infrastructure channels live in SystemService behind system.*.
 type SettingsService struct {
 	settings *settings.Store
 	repo     repository.Querier
-	objects  storage.ObjectStore
 	logger   *slog.Logger
 }
 
-func NewSettingsService(store *settings.Store, repo repository.Querier, objects storage.ObjectStore, logger *slog.Logger) *SettingsService {
-	return &SettingsService{settings: store, repo: repo, objects: objects, logger: logger}
+func NewSettingsService(store *settings.Store, repo repository.Querier, logger *slog.Logger) *SettingsService {
+	return &SettingsService{settings: store, repo: repo, logger: logger}
 }
 
 var _ settingsv1connect.SettingsServiceHandler = (*SettingsService)(nil)
@@ -135,22 +131,18 @@ func (s *SettingsService) GetSiteInfo(
 	return connect.NewResponse(out), nil
 }
 
-// resolveSiteAssetURL turns a brand asset file id into a fetchable URL, best
-// effort — a missing file or storage hiccup just means no asset URL.
+// resolveSiteAssetURL turns a brand asset file id into its permanent
+// /f/{file_id} URL (ADR-0004), best effort — a missing or reclaimed file just
+// means no asset URL.
 func (s *SettingsService) resolveSiteAssetURL(ctx context.Context, fileID string) string {
 	parsed, err := uuid.Parse(fileID)
 	if err != nil {
 		return ""
 	}
-	file, err := s.repo.GetFile(ctx, parsed)
-	if err != nil {
+	if _, err := s.repo.GetFile(ctx, parsed); err != nil {
 		return ""
 	}
-	u, err := s.objects.ResolveURL(ctx, storage.PurposeSiteAssets, file.ObjectKey, siteAssetURLTTL)
-	if err != nil {
-		return ""
-	}
-	return u
+	return "/f/" + parsed.String()
 }
 
 // validateSiteAssetFile rejects a brand asset id that is not an uploaded site

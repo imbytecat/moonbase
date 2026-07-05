@@ -26,10 +26,8 @@ WHERE lower(username) = lower(sqlc.arg('username')) AND username <> '';
 SELECT count(*) FROM users;
 
 -- name: ListUsers :many
-SELECT sqlc.embed(u), coalesce(f.object_key, '')::text AS avatar_key
-FROM users u
-LEFT JOIN files f ON f.id = u.avatar_file_id
-ORDER BY u.created_at DESC;
+SELECT * FROM users
+ORDER BY created_at DESC;
 
 -- name: UpdateUser :one
 UPDATE users

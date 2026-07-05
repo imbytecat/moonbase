@@ -108,7 +108,7 @@ func NewMiddleware(repo repository.Querier, logger *slog.Logger, policy SessionP
 			Username:      row.Username,
 			Email:         row.Email,
 			Name:          row.Name,
-			AvatarKey:     row.AvatarKey,
+			AvatarFileID:  row.AvatarFileID,
 			Phone:         row.Phone,
 			Locale:        row.Locale,
 			EmailVerified: row.EmailVerified,

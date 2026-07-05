@@ -135,7 +135,6 @@ func newFlowService(q repository.Querier, smser sms.Sender) *AuthService {
 	return NewAuthService(AuthServiceDeps{
 		Repo:      q,
 		Settings:  settings.NewStore(q),
-		Objects:   noopObjectStore{},
 		Captcha:   allowAllCaptcha{},
 		Smser:     smser,
 		Verifier:  verify.NewService(q),

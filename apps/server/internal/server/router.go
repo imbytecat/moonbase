@@ -70,7 +70,6 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	authSvc := rpc.NewAuthService(rpc.AuthServiceDeps{
 		Repo:         repo,
 		Settings:     settingsStore,
-		Objects:      s3,
 		Captcha:      captchaVerifier,
 		Mailer:       mailer,
 		Smser:        smser,
@@ -81,9 +80,9 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 		SecureCookie: cfg.Auth.SecureCookie,
 		PublicURL:    cfg.Server.PublicURL,
 	})
-	userSvc := rpc.NewUserService(repo, s3, notifier, logger)
+	userSvc := rpc.NewUserService(repo, notifier, logger)
 	roleSvc := rpc.NewRoleService(repo, logger)
-	settingsSvc := rpc.NewSettingsService(settingsStore, repo, s3, logger)
+	settingsSvc := rpc.NewSettingsService(settingsStore, repo, logger)
 	systemSvc := rpc.NewSystemService(settingsStore, repo, s3, mailer, smser, chatter, logger)
 	storageSvc := rpc.NewStorageService(repo, s3, logger)
 	workflowSvc := rpc.NewWorkflowService(engine, logger)
@@ -150,7 +149,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	// authn middleware wraps the API mux: it resolves the session cookie to an
 	// Identity for every /api request (anonymous when absent) — the HTTP layer
 	// is the only place with cookie access.
-	authed := auth.NewMiddleware(repo, logger, policy).Wrap(api)
+	authn := auth.NewMiddleware(repo, logger, policy)
+	authed := authn.Wrap(api)
 
 	// Mount the API mux under /api with the prefix stripped, so the Connect
 	// handler sees its canonical path. This keeps the Vite dev proxy (/api ->
@@ -158,6 +158,12 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", authed))
 
+	// Permanent file URLs (ADR-0004). Public purposes must be reachable with
+	// no session (the login page loads the logo through here); the authn wrap
+	// only resolves an identity — never rejects — so private purposes can
+	// authorize per-request.
+	fileH := storage.NewFileHandler(settingsStore, s3, repo, logger)
+	mux.Handle("GET /f/{file_id}", authn.Wrap(fileH))
 	// /metrics sits on the outer mux, outside the /api authn chain, so a
 	// Prometheus scraper (which carries no session) can reach it. Restrict
 	// access at the network layer.

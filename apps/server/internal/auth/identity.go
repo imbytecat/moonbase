@@ -25,7 +25,7 @@ type Identity struct {
 	Username      string
 	Email         string
 	Name          string
-	AvatarKey     string
+	AvatarFileID  string
 	Phone         string
 	Locale        string
 	EmailVerified bool

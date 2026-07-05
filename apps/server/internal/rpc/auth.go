@@ -30,14 +30,11 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
 
-const avatarURLTTL = time.Hour
-
 var errInvalidCredentials = connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
 
 type AuthService struct {
 	repo         repository.Querier
 	settings     *settings.Store
-	objects      storage.ObjectStore
 	captcha      captcha.Verifier
 	mailer       mail.Sender
 	smser        sms.Sender
@@ -52,7 +49,6 @@ type AuthService struct {
 type AuthServiceDeps struct {
 	Repo     repository.Querier
 	Settings *settings.Store
-	Objects  storage.ObjectStore
 	Captcha  captcha.Verifier
 	Mailer   mail.Sender
 	Smser    sms.Sender
@@ -70,7 +66,6 @@ func NewAuthService(d AuthServiceDeps) *AuthService {
 	return &AuthService{
 		repo:         d.Repo,
 		settings:     d.Settings,
-		objects:      d.Objects,
 		captcha:      d.Captcha,
 		mailer:       d.Mailer,
 		smser:        d.Smser,
@@ -218,7 +213,7 @@ func identityFromRow(row repository.GetSessionIdentityRow) *auth.Identity {
 		Username:      row.Username,
 		Email:         row.Email,
 		Name:          row.Name,
-		AvatarKey:     row.AvatarKey,
+		AvatarFileID:  row.AvatarFileID,
 		Phone:         row.Phone,
 		EmailVerified: row.EmailVerified,
 		Permissions:   auth.PermissionSet(row.Permissions...),
@@ -451,48 +446,43 @@ func (s *AuthService) UpdateProfile(
 	// The avatar is a file reference, not a user-row column: only touch it when
 	// the client sends the field, transferring the attachment to the new file.
 	if req.Msg.AvatarFileId != nil {
-		avatarKey, err := s.setAvatar(ctx, id.UserID, req.Msg.GetAvatarFileId())
-		if err != nil {
+		if err := s.setAvatar(ctx, id.UserID, req.Msg.GetAvatarFileId()); err != nil {
 			return nil, err
 		}
-		updated.AvatarKey = avatarKey
+		updated.AvatarFileID = req.Msg.GetAvatarFileId()
 	}
 	return connect.NewResponse(&authv1.UpdateProfileResponse{User: s.currentUser(ctx, &updated)}), nil
 }
 
-// setAvatar points the caller's avatar slot at fileID (empty clears it) and
-// returns the resulting object key. It refuses any file the caller did not
-// upload as an avatar, so no one can attach another user's file to themselves.
-func (s *AuthService) setAvatar(ctx context.Context, userID uuid.UUID, fileID string) (string, error) {
-	var (
-		param     pgtype.UUID
-		objectKey string
-	)
+// setAvatar points the caller's avatar slot at fileID (empty clears it). It
+// refuses any file the caller did not upload as an avatar, so no one can
+// attach another user's file to themselves.
+func (s *AuthService) setAvatar(ctx context.Context, userID uuid.UUID, fileID string) error {
+	var param pgtype.UUID
 	if fileID != "" {
 		parsed, err := uuid.Parse(fileID)
 		if err != nil {
-			return "", connect.NewError(connect.CodeInvalidArgument, errors.New("invalid avatar file id"))
+			return connect.NewError(connect.CodeInvalidArgument, errors.New("invalid avatar file id"))
 		}
 		file, err := s.repo.GetFile(ctx, parsed)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", connect.NewError(connect.CodeInvalidArgument, errors.New("unknown avatar file"))
+			return connect.NewError(connect.CodeInvalidArgument, errors.New("unknown avatar file"))
 		}
 		if err != nil {
-			return "", s.internal(ctx, "get avatar file", err)
+			return s.internal(ctx, "get avatar file", err)
 		}
 		if file.UploadedBy != userID || file.Purpose != storage.PurposeAvatars {
-			return "", connect.NewError(connect.CodeInvalidArgument, errors.New("file is not an avatar you uploaded"))
+			return connect.NewError(connect.CodeInvalidArgument, errors.New("file is not an avatar you uploaded"))
 		}
 		param = pgtype.UUID{Bytes: parsed, Valid: true}
-		objectKey = file.ObjectKey
 	}
 	if err := s.repo.SetUserAvatar(ctx, repository.SetUserAvatarParams{
 		UserID: userID,
 		FileID: param,
 	}); err != nil {
-		return "", s.internal(ctx, "set avatar", err)
+		return s.internal(ctx, "set avatar", err)
 	}
-	return objectKey, nil
+	return nil
 }
 
 func (s *AuthService) ChangePassword(
@@ -550,10 +540,8 @@ func (s *AuthService) currentUser(ctx context.Context, id *auth.Identity) *authv
 		Permissions:   perms,
 		Locale:        id.Locale,
 	}
-	if id.AvatarKey != "" {
-		if u, err := s.objects.ResolveURL(ctx, storage.PurposeAvatars, id.AvatarKey, avatarURLTTL); err == nil {
-			out.AvatarUrl = u
-		}
+	if id.AvatarFileID != "" {
+		out.AvatarUrl = "/f/" + id.AvatarFileID
 	}
 	if mfa, err := s.repo.GetUserMfa(ctx, id.UserID); err == nil && mfa.ActivatedAt.Valid {
 		out.TotpEnabled = true

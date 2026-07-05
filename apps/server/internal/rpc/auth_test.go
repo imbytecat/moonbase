@@ -17,7 +17,6 @@ import (
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/storage"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
 
@@ -104,20 +103,6 @@ func (f *fakeAuthQuerier) SetUserAvatar(ctx context.Context, arg repository.SetU
 	return f.setUserAvatar(ctx, arg)
 }
 
-type noopObjectStore struct{}
-
-func (noopObjectStore) PresignPut(context.Context, string, string, string, time.Duration) (string, error) {
-	return "", storage.ErrNotConfigured
-}
-
-func (noopObjectStore) ResolveURL(context.Context, string, string, time.Duration) (string, error) {
-	return "", storage.ErrNotConfigured
-}
-
-func (noopObjectStore) Delete(context.Context, string, string) error {
-	return nil
-}
-
 type allowAllCaptcha struct{}
 
 func (allowAllCaptcha) Enabled(context.Context, string) (bool, error)        { return false, nil }
@@ -128,7 +113,6 @@ func newAuthService(q repository.Querier) *AuthService {
 	return NewAuthService(AuthServiceDeps{
 		Repo:      q,
 		Settings:  settings.NewStore(q),
-		Objects:   noopObjectStore{},
 		Captcha:   allowAllCaptcha{},
 		Verifier:  verify.NewService(q),
 		Logger:    logger,

@@ -61,15 +61,11 @@ func VisibilityOf(purpose string) Visibility {
 // incomplete; callers map it to a friendly "storage not configured" RPC error.
 var ErrNotConfigured = fmt.Errorf("file storage is not configured")
 
-// ObjectStore is the app-facing surface: write via presigned PUT, read via
-// ResolveURL (public URL or signed GET depending on the profile), reclaim via
-// Delete.
+// ObjectStore is the app-facing surface: write via presigned PUT, reclaim via
+// Delete. Reads happen through the permanent /f/{file_id} handler (ADR-0004),
+// never through URLs minted by RPC services.
 type ObjectStore interface {
 	PresignPut(ctx context.Context, purpose, key, contentType string, expires time.Duration) (string, error)
-	// ResolveURL turns an object key into a fetchable URL. Public profiles
-	// (public base URL set) return a stable public URL; private ones return a
-	// short-lived signed GET.
-	ResolveURL(ctx context.Context, purpose, key string, expires time.Duration) (string, error)
 	// Delete removes an object. It is idempotent: deleting a key that no longer
 	// exists returns nil, so the unattached-file sweep can safely re-run after a
 	// crash (ADR-0003).

@@ -29,6 +29,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // Permanent file URLs (/f/{file_id}) are served by the Go server too.
+      '/f': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -15,7 +15,7 @@ SELECT
     u.username,
     u.email,
     u.name,
-    coalesce(f.object_key, '')::text AS avatar_key,
+    coalesce(u.avatar_file_id::text, '')::text AS avatar_file_id,
     u.phone,
     u.locale,
     (u.email_verified_at IS NOT NULL)::bool AS email_verified,
@@ -25,13 +25,12 @@ SELECT
     )::text[] AS permissions
 FROM sessions s
 JOIN users u ON u.id = s.user_id
-LEFT JOIN files f ON f.id = u.avatar_file_id
 LEFT JOIN user_roles ur ON ur.user_id = u.id
 LEFT JOIN role_permissions rp ON rp.role_id = ur.role_id
 WHERE s.token_hash = $1
   AND s.expires_at > now()
   AND u.is_active
-GROUP BY s.id, u.id, f.object_key;
+GROUP BY s.id, u.id;
 
 -- name: TouchSession :exec
 UPDATE sessions
