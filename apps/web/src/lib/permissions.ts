@@ -16,7 +16,7 @@ export function permissionKey(p: Permission): string {
 
 // Client-side translations for the permission catalog. The wire description
 // stays the English source of truth; an untranslated key falls back to it.
-const PERMISSION_DESCRIPTIONS: Record<string, () => string> = {
+export const PERMISSION_DESCRIPTIONS: Record<string, () => string> = {
   'report.read': m.permission_report_read,
   'user.read': m.permission_user_read,
   'user.write': m.permission_user_write,
@@ -43,7 +43,7 @@ export function permissionResource(p: Permission): string {
 
 // Group headers for the permission picker, keyed by the `resource` prefix of a
 // `resource.action` key. Unknown resources fall back to the raw prefix.
-const RESOURCE_LABELS: Record<string, () => string> = {
+export const RESOURCE_LABELS: Record<string, () => string> = {
   report: m.permissionGroup_report,
   user: m.permissionGroup_user,
   role: m.permissionGroup_role,
