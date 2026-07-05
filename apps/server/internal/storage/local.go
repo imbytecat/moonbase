@@ -35,7 +35,13 @@ func (c *Client) localPresignPut(ctx context.Context, _ systemcodec.StorageProfi
 	return c.localSignedURL(ctx, "PUT", purpose, key, expires)
 }
 
+// localResolveURL returns an unsigned stable URL for public purposes (the
+// handler serves public GETs without a signature) and a short-lived signed
+// URL for private ones.
 func (c *Client) localResolveURL(ctx context.Context, _ systemcodec.StorageProfile, purpose, key string, expires time.Duration) (string, error) {
+	if VisibilityOf(purpose) == VisibilityPublic {
+		return "/api/files/" + purpose + "/" + key, nil
+	}
 	return c.localSignedURL(ctx, "GET", purpose, key, expires)
 }
 

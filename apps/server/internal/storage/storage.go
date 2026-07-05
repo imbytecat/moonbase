@@ -21,16 +21,41 @@ import (
 // reads/writes, and operators bind each one to a connection profile. Adding a
 // feature that stores objects = adding a purpose here.
 const (
-	// PurposeAvatars holds user avatars; a private bucket is recommended
-	// (reads go through short-lived presigned URLs).
+	// PurposeAvatars holds user avatars, rendered on public-facing pages
+	// (user lists, comments); reads are public.
 	PurposeAvatars = "avatars"
 	// PurposeSiteAssets holds site branding (logo, favicon) referenced from
-	// public pages; a public-read bucket (public base URL set) is recommended.
+	// public pages (including the login page, before any session); reads are
+	// public.
 	PurposeSiteAssets = "site-assets"
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = channel.Catalog{PurposeAvatars, PurposeSiteAssets}
+
+// Visibility is a static property of a purpose (public / private), fixed in
+// code — never stored on file rows nor editable by admins. Public means reads
+// skip auth and URLs are stable and long-cacheable; private means every read
+// is authenticated and served via a short-lived signed URL. Writes (PUT)
+// always require credentials regardless of visibility. Drivers execute
+// visibility; this table defines it.
+var visibilityByPurpose = map[string]Visibility{
+	PurposeAvatars:    VisibilityPublic,
+	PurposeSiteAssets: VisibilityPublic,
+}
+
+type Visibility int
+
+const (
+	VisibilityPrivate Visibility = iota
+	VisibilityPublic
+)
+
+// VisibilityOf returns the purpose's visibility; unknown purposes are private
+// (fail closed).
+func VisibilityOf(purpose string) Visibility {
+	return visibilityByPurpose[purpose]
+}
 
 // ErrNotConfigured signals that the purpose is unbound or its profile is
 // incomplete; callers map it to a friendly "storage not configured" RPC error.

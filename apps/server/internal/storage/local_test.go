@@ -94,13 +94,56 @@ func TestLocalPutThenGetRoundtrip(t *testing.T) {
 	}
 }
 
+// Visibility is a static property of the purpose (CONTEXT.md): public
+// purposes (avatars, site assets) are readable without a signature and served
+// with an immutable year-long cache header — files are spiritually immutable
+// (ADR-0003), so the aggressive cache is sound.
+func TestLocalServesPublicPurposeWithoutSignature(t *testing.T) {
+	store, client := newLocalFixture(t)
+	mux := http.NewServeMux()
+	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	srv := httptest.NewServer(http.StripPrefix("/api", mux))
+	defer srv.Close()
+
+	putURL, err := client.PresignPut(t.Context(), PurposeAvatars, "u1/pic.png", "image/png", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+putURL, strings.NewReader("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+
+	res, err = http.Get(srv.URL + "/api/files/" + PurposeAvatars + "/u1/pic.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || string(body) != "payload" {
+		t.Fatalf("unsigned GET public = %d %q, want 200 \"payload\"", res.StatusCode, body)
+	}
+	if got := res.Header.Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("Cache-Control = %q, want public immutable year", got)
+	}
+}
+
+// Signature rejection is exercised through a private purpose (unknown
+// purposes fail closed to private): public GETs skip the signature entirely,
+// but private GETs and every PUT still require a valid one.
 func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
+	const privatePurpose = "private-test"
 	store, client := newLocalFixture(t)
 	handler := NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux := http.NewServeMux()
 	mux.Handle("/files/{purpose}/{key...}", handler)
 
-	signed, err := client.ResolveURL(t.Context(), PurposeAvatars, "u1/pic.png", time.Minute)
+	signed, err := client.localSignedURL(t.Context(), http.MethodGet, privatePurpose, "u1/pic.png", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,9 +168,11 @@ func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
 		method string
 		target string
 	}{
-		"tampered signature": {http.MethodGet, tampered.String()},
-		"expired signature":  {http.MethodGet, expired.String()},
-		"method mismatch":    {http.MethodPut, wrongMethod.String()},
+		"tampered signature":   {http.MethodGet, tampered.String()},
+		"expired signature":    {http.MethodGet, expired.String()},
+		"method mismatch":      {http.MethodPut, wrongMethod.String()},
+		"unsigned private GET": {http.MethodGet, "/files/" + privatePurpose + "/u1/pic.png"},
+		"unsigned public PUT":  {http.MethodPut, "/files/" + PurposeAvatars + "/u1/pic.png"},
 	} {
 		req := httptest.NewRequest(tc.method, strings.TrimPrefix(tc.target, "/api"), nil)
 		rec := httptest.NewRecorder()
@@ -135,6 +180,17 @@ func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Errorf("%s: status = %d, want 403", name, rec.Code)
 		}
+	}
+}
+
+func TestLocalResolveURLPublicPurposeIsUnsignedAndStable(t *testing.T) {
+	_, client := newLocalFixture(t)
+	got, err := client.ResolveURL(t.Context(), PurposeAvatars, "u1/pic.png", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "/api/files/" + PurposeAvatars + "/u1/pic.png"; got != want {
+		t.Fatalf("ResolveURL(public) = %q, want unsigned stable %q", got, want)
 	}
 }
 

@@ -33,19 +33,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	purpose := r.PathValue("purpose")
 	key := r.PathValue("key")
 
-	exp, err := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
-	if err != nil {
-		http.Error(w, "invalid signature", http.StatusForbidden)
-		return
-	}
-	secret, err := h.store.StorageSignKey(r.Context())
-	if err != nil {
-		h.internal(w, r, "load sign key", err)
-		return
-	}
-	if !verifyLocalSignature(secret, r.Method, purpose, key, exp, r.URL.Query().Get("sig")) {
-		http.Error(w, "invalid signature", http.StatusForbidden)
-		return
+	// Public purposes skip the GET signature check (visibility is a static
+	// property of the purpose); PUT always requires a signature — writes need
+	// credentials regardless of visibility.
+	public := r.Method == http.MethodGet && VisibilityOf(purpose) == VisibilityPublic
+	if !public {
+		exp, err := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
+		if err != nil {
+			http.Error(w, "invalid signature", http.StatusForbidden)
+			return
+		}
+		secret, err := h.store.StorageSignKey(r.Context())
+		if err != nil {
+			h.internal(w, r, "load sign key", err)
+			return
+		}
+		if !verifyLocalSignature(secret, r.Method, purpose, key, exp, r.URL.Query().Get("sig")) {
+			http.Error(w, "invalid signature", http.StatusForbidden)
+			return
+		}
 	}
 
 	st, err := h.store.Storage(r.Context())
@@ -66,6 +72,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		if public {
+			// Files are spiritually immutable (ADR-0003: replace = new file),
+			// so a year-long immutable cache is sound.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
 		h.get(w, r, path)
 	case http.MethodPut:
 		h.put(w, r, path)
