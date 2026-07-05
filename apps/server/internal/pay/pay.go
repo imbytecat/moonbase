@@ -258,9 +258,10 @@ func InputsOf(provider, method string) []Input {
 	return m.Inputs
 }
 
-// Currency is the settlement currency a provider's orders use — driver
-// declared, so an international driver (e.g. Stripe) can vary it while the CN
-// gateways stay on CNY.
+// Currency is the settlement currency of a provider's orders. The system is
+// CNY-only (see docs/adr/0001): both CN drivers settle in CNY, and this exists
+// only so the payment_orders.currency column carries an honest value — not as a
+// multi-currency seam.
 func Currency(provider string) string {
 	if c := drivers[provider].Ops.currency; c != "" {
 		return c
