@@ -29,6 +29,9 @@ message PresignAvatarUploadRequest {
 message PresignAvatarUploadResponse {
   string upload_url = 1;
   string object_key = 2;
+  // file_id is the ledger row created for this object at presign time
+  // (ADR-0003 "presign 即落库"); consumers attach it once the upload is saved.
+  string file_id = 3;
 }
 
 // PresignSiteAssetUpload authorizes uploading site branding (logo / favicon)
@@ -61,6 +64,7 @@ message PresignSiteAssetUploadRequest {
 message PresignSiteAssetUploadResponse {
   string upload_url = 1;
   string object_key = 2;
+  string file_id = 3;
 }
 
 service StorageService {

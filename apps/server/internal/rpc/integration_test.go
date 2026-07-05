@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/config"
@@ -37,6 +38,14 @@ const (
 // against MOONBASE_DATABASE_URL. Without that env the test skips, so
 // `go test ./...` stays green on machines with no Postgres.
 func newStack(t *testing.T) (baseURL string, client *http.Client) {
+	t.Helper()
+	baseURL, client, _ = newStackWithPool(t)
+	return baseURL, client
+}
+
+// newStackWithPool is newStack plus the backing pool, for integration tests
+// that assert on persisted rows the RPC surface doesn't yet read back.
+func newStackWithPool(t *testing.T) (baseURL string, client *http.Client, pool *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("MOONBASE_DATABASE_URL")
 	if dsn == "" {
@@ -73,7 +82,7 @@ func newStack(t *testing.T) (baseURL string, client *http.Client) {
 	}
 	httpClient := srv.Client()
 	httpClient.Jar = jar
-	return srv.URL + "/api", httpClient
+	return srv.URL + "/api", httpClient, pool
 }
 
 // loginAsAdmin authenticates against the real Login RPC; the cookie jar then

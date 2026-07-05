@@ -85,7 +85,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	roleSvc := rpc.NewRoleService(repo, logger)
 	settingsSvc := rpc.NewSettingsService(settingsStore, s3, logger)
 	systemSvc := rpc.NewSystemService(settingsStore, repo, s3, mailer, smser, chatter, logger)
-	storageSvc := rpc.NewStorageService(s3, logger)
+	storageSvc := rpc.NewStorageService(repo, s3, logger)
 	workflowSvc := rpc.NewWorkflowService(engine, logger)
 	auditSvc := rpc.NewAuditService(repo, logger)
 	paymentSvc := rpc.NewPaymentService(repo, payGateway, logger)

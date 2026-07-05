@@ -2,6 +2,20 @@
 
 Go 后端领域。领域词汇的权威真源是 `proto/`；本文件只收录本上下文里**需要被消歧或对齐**的术语，引用而非重造 proto 定义。
 
+## Language — 文件（File）
+
+**file（文件）**：
+`files` 表的一行——系统**认账**的一个已上传对象的元数据（object key、content_type、size、上传者、创建时间）。presign 即落库，一文件一行，精神上不可变（替换 = 新 file，不改旧行）。file 属领域层；桶里的原始条目属 driver 层，叫 object。头像 / 站点 logo / favicon 等一切上传物统一走 file，不存裸 key。见 ADR-0003。
+_Avoid_: blob（与 Postgres bytea/lo 歧义）、object（保留给 `ObjectStore` seam / S3 层）、attachment（指引用关系，非文件本体）。
+
+**attachment（引用）**：
+`file_attachments` 表的一行——某个领域实体对一个 file 的引用（引用方类型 + 引用方 ID → file_id）。同一 file 可被多处引用。删引用方即删 attachment；file 的 attachment 归零后由清理任务回收。
+_Avoid_: relation、usage、link。
+
+**unattached（无引用文件）**：
+创建超过宽限期且没有任何 attachment 的 file。是孤儿清理的唯一判定依据——清理任务删 unattached file 及其 object，而非扫桶对账。直传（presign）天然先产生 unattached file，业务保存时建 attachment 才「转正」。
+_Avoid_: orphan（保留给「桶里有 object 但无 file 行」的另一种病态）、临时文件。
+
 ## Language — 支付（Payment）
 
 **支付 driver**：

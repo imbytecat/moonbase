@@ -14,6 +14,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/storage/v1/storagev1connect"
+	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
@@ -29,12 +30,13 @@ var contentTypeExt = map[string]string{
 }
 
 type StorageService struct {
+	repo    repository.Querier
 	objects storage.ObjectStore
 	logger  *slog.Logger
 }
 
-func NewStorageService(objects storage.ObjectStore, logger *slog.Logger) *StorageService {
-	return &StorageService{objects: objects, logger: logger}
+func NewStorageService(repo repository.Querier, objects storage.ObjectStore, logger *slog.Logger) *StorageService {
+	return &StorageService{repo: repo, objects: objects, logger: logger}
 }
 
 var _ storagev1connect.StorageServiceHandler = (*StorageService)(nil)
@@ -55,9 +57,18 @@ func (s *StorageService) PresignAvatarUpload(
 	if err != nil {
 		return nil, s.presignError(ctx, err)
 	}
+	file, err := s.repo.InsertFile(ctx, repository.InsertFileParams{
+		ObjectKey:   key,
+		ContentType: req.Msg.GetContentType(),
+		UploadedBy:  id.UserID,
+	})
+	if err != nil {
+		return nil, s.internal(ctx, "record avatar file", err)
+	}
 	return connect.NewResponse(&storagev1.PresignAvatarUploadResponse{
 		UploadUrl: url,
 		ObjectKey: key,
+		FileId:    file.ID.String(),
 	}), nil
 }
 
@@ -65,6 +76,8 @@ func (s *StorageService) PresignSiteAssetUpload(
 	ctx context.Context,
 	req *connect.Request[storagev1.PresignSiteAssetUploadRequest],
 ) (*connect.Response[storagev1.PresignSiteAssetUploadResponse], error) {
+	id := auth.IdentityFromContext(ctx)
+
 	// kind is validated by protovalidate ("logo" | "favicon"); the random
 	// suffix busts caches when branding is replaced.
 	key := fmt.Sprintf("site/%s-%s.%s",
@@ -75,9 +88,18 @@ func (s *StorageService) PresignSiteAssetUpload(
 	if err != nil {
 		return nil, s.presignError(ctx, err)
 	}
+	file, err := s.repo.InsertFile(ctx, repository.InsertFileParams{
+		ObjectKey:   key,
+		ContentType: req.Msg.GetContentType(),
+		UploadedBy:  id.UserID,
+	})
+	if err != nil {
+		return nil, s.internal(ctx, "record site asset file", err)
+	}
 	return connect.NewResponse(&storagev1.PresignSiteAssetUploadResponse{
 		UploadUrl: url,
 		ObjectKey: key,
+		FileId:    file.ID.String(),
 	}), nil
 }
 
