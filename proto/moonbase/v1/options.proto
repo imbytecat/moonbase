@@ -27,3 +27,21 @@ extend google.protobuf.FieldOptions {
   // keeps the stored value (e.g. an OAuth key referenced by identity rows).
   bool immutable = 50002;
 }
+
+extend google.protobuf.EnumValueOptions {
+  // description carries an enum value's human-readable catalog text. A code
+  // generator (protoc-gen-permissions) turns every value that has one into a
+  // catalog entry — key derived from the value name — so the enum is the
+  // single source for both the wire type and its Go catalog.
+  string description = 50001;
+
+  // method_provider / method_credential_kind / method_input describe a payment
+  // product on a PaymentMethod enum value: which driver offers it, how the
+  // checkout consumes its credential (qr / redirect / params), and the extra
+  // per-order inputs it collects (payer_id / return_url). protoc-gen-paymentcatalog
+  // turns them into the Go and TS method catalogs, so the enum is the single
+  // source and the two ends cannot drift.
+  string method_provider = 50002;
+  string method_credential_kind = 50003;
+  repeated string method_input = 50004;
+}

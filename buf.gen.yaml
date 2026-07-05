@@ -48,3 +48,22 @@ plugins:
   # apps/server so `go run ./cmd/...` resolves inside that module.
   - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-settings']
     out: apps/server/internal/systemcodec
+
+  # --- permission catalog (server) --- repo-local plugin: for every enum whose
+  # values carry (moonbase.v1.description) it emits the Go {Key, Description}
+  # catalog into internal/authcatalog, which auth.Catalog aliases — the proto
+  # enum is the single source for the permission catalog.
+  - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-permissions']
+    out: apps/server/internal/authcatalog
+
+  # --- payment catalog (server + web) --- repo-local plugin: from the
+  # payment.v1.PaymentMethod enum it emits the structured method catalog to both
+  # ends. lang=go -> internal/paymentcatalog (the pay drivers' []Method);
+  # lang=ts -> the api-client gen tree (PROVIDER_METHODS / METHOD_INPUTS the
+  # frontend re-exports). One proto source, no drift between Go and TS.
+  - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-paymentcatalog']
+    out: apps/server/internal/paymentcatalog
+    opt: [lang=go]
+  - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-paymentcatalog']
+    out: packages/api-client/src/gen
+    opt: [lang=ts]

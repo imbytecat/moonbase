@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/paymentcatalog"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -72,6 +73,7 @@ type Method struct {
 
 var (
 	ErrNotConfigured    = errors.New("payment is not configured")
+	ErrUnknownMethod    = errors.New("payment method is not a known product")
 	ErrMethodNotOffered = errors.New("payment method is not offered by this profile")
 	ErrMissingInput     = errors.New("payment method is missing a required input")
 )
@@ -171,7 +173,7 @@ var drivers = channel.Registry[systemcodec.PaymentProfile, payOps]{
 	"alipay": {
 		Usable: alipayUsable,
 		Ops: payOps{
-			catalog:     alipayCatalog,
+			catalog:     methodCatalog("alipay"),
 			currency:    "CNY",
 			create:      alipayCreate,
 			query:       alipayQuery,
@@ -183,7 +185,7 @@ var drivers = channel.Registry[systemcodec.PaymentProfile, payOps]{
 	"wechat": {
 		Usable: wechatUsable,
 		Ops: payOps{
-			catalog:     wechatCatalog,
+			catalog:     methodCatalog("wechat"),
 			currency:    "CNY",
 			create:      wechatCreate,
 			query:       wechatQuery,
@@ -192,6 +194,37 @@ var drivers = channel.Registry[systemcodec.PaymentProfile, payOps]{
 			parseNotify: wechatParseNotify,
 		},
 	},
+}
+
+// methodCatalog builds a provider's product list from the generated catalog
+// (paymentcatalog.Methods, derived from the payment.v1.PaymentMethod enum),
+// mapping the stringly-typed generated data to the pay domain types. The
+// generated slice is in enum-declaration order, so each provider keeps its
+// checkout display order.
+func methodCatalog(provider string) []Method {
+	var out []Method
+	for _, m := range paymentcatalog.Methods {
+		if m.Provider != provider {
+			continue
+		}
+		out = append(out, Method{
+			ID:     m.ID,
+			Kind:   CredentialKind(m.Kind),
+			Inputs: toInputs(m.Inputs),
+		})
+	}
+	return out
+}
+
+func toInputs(names []string) []Input {
+	if len(names) == 0 {
+		return nil
+	}
+	out := make([]Input, len(names))
+	for i, n := range names {
+		out[i] = Input(n)
+	}
+	return out
 }
 
 // Providers lists registered driver names, sorted.
@@ -244,6 +277,19 @@ func methodByID(provider, method string) (Method, bool) {
 		}
 	}
 	return Method{}, false
+}
+
+// ValidateMethods reports whether every id in methods is a product of the
+// provider's catalog. An empty list is valid — it means "all products". This is
+// the save-time guard for a profile's signed products, replacing the removed
+// proto `in:` rule on PaymentProfile.methods with a catalog-derived check.
+func ValidateMethods(provider string, methods []string) error {
+	for _, id := range methods {
+		if _, ok := methodByID(provider, id); !ok {
+			return fmt.Errorf("%w: %q for provider %q", ErrUnknownMethod, id, provider)
+		}
+	}
+	return nil
 }
 
 // KindOf reports how an order's credential should be consumed by the client.
@@ -329,6 +375,9 @@ func (c *Client) Create(ctx context.Context, p systemcodec.PaymentProfile, req C
 	ops, ok := drivers.OpsFor(p)
 	if !ok {
 		return "", ErrNotConfigured
+	}
+	if !slices.Contains(Methods(), req.Method) {
+		return "", fmt.Errorf("%w: %q", ErrUnknownMethod, req.Method)
 	}
 	if !slices.Contains(Offered(p), req.Method) {
 		return "", fmt.Errorf("%w: %q", ErrMethodNotOffered, req.Method)

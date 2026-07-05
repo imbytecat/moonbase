@@ -7,12 +7,13 @@ import (
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 )
 
-// TestPermissionEnumMatchesCatalog locks the proto Permission enum to the Go
-// auth.Catalog: every catalog key must round-trip through the enum, and every
-// enum value (besides UNSPECIFIED and the admin wildcard) must map back to a
-// catalog key. A drift on either side — a new enum value without a catalog
-// entry, or a key the derive rule can't reproduce — fails here instead of
-// silently corrupting authorization mapping.
+// TestPermissionEnumMatchesCatalog is the behavioral backstop for the generated
+// permission catalog. auth.Catalog is now derived from the proto Permission
+// enum (protoc-gen-permissions), so parity is structural rather than hand-kept;
+// this catches the two things generation can still get wrong: a grantable enum
+// value that shipped without a (moonbase.v1.description) — so it never became a
+// catalog entry — and drift between the generator's key derivation and the
+// runtime permissionKey/permissionEnum mapping the wire relies on.
 func TestPermissionEnumMatchesCatalog(t *testing.T) {
 	catalog := map[string]bool{}
 	for _, p := range auth.Catalog {

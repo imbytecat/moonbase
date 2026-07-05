@@ -1,6 +1,8 @@
 package pay
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -195,6 +197,82 @@ func TestOffered(t *testing.T) {
 	})
 	if !slices.Equal(sub, []string{alipayMethodPreCreate, alipayMethodWapPay}) {
 		t.Errorf("Offered should keep signed alipay ids in catalog order and drop foreign ids, got %v", sub)
+	}
+}
+
+// Create validates the method against the catalog before any provider round-trip
+// (the wire no longer carries an `in:` list). A method no driver knows is an
+// unknown-method error (InvalidArgument at the RPC); a known method the profile
+// didn't sign for is a not-offered error (FailedPrecondition) — the two error
+// codes the removed `in:` rule and the Offered check used to produce separately.
+// The profile is usable because ProfileFor only ever hands Create a usable one.
+func TestCreateRejectsUnknownMethod(t *testing.T) {
+	c := NewClient(nil, "http://x")
+	if _, err := c.Create(context.Background(), usableAlipay("precreate"), CreateRequest{Method: "bogus"}); !errors.Is(err, ErrUnknownMethod) {
+		t.Errorf("Create with catalog-unknown method = %v, want ErrUnknownMethod", err)
+	}
+}
+
+func TestCreateRejectsUnofferedMethod(t *testing.T) {
+	c := NewClient(nil, "http://x")
+	if _, err := c.Create(context.Background(), usableAlipay("precreate"), CreateRequest{Method: "page_pay"}); !errors.Is(err, ErrMethodNotOffered) {
+		t.Errorf("Create with known-but-unoffered method = %v, want ErrMethodNotOffered", err)
+	}
+}
+
+func usableAlipay(methods ...string) systemcodec.PaymentProfile {
+	return systemcodec.PaymentProfile{
+		Provider: "alipay",
+		Methods:  methods,
+		Alipay: systemcodec.AlipayPaymentConfig{
+			AppId:           "2021000000000000",
+			AppPrivateKey:   "key",
+			AuthMethod:      settings.PaymentAuthPublicKey,
+			AlipayPublicKey: "pub",
+		},
+	}
+}
+
+// TestCatalog is the behavioral spec for the whole method catalog: each
+// provider's products in display order with their credential kind and inputs,
+// plus the sorted id union. The catalog is generated from the proto
+// PaymentMethod enum (protoc-gen-paymentcatalog); this pins the generated data
+// to the established set so drivers, Offered/KindOf/InputsOf, and the checkout
+// keep behaving identically.
+func TestCatalog(t *testing.T) {
+	alipay := []Method{
+		{ID: "precreate", Kind: CredentialQR},
+		{ID: "page_pay", Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
+		{ID: "wap_pay", Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
+		{ID: "create", Kind: CredentialParams, Inputs: []Input{InputPayerID}},
+		{ID: "app_pay", Kind: CredentialParams},
+	}
+	assertCatalog(t, "alipay", alipay)
+
+	wechat := []Method{
+		{ID: "native", Kind: CredentialQR},
+		{ID: "h5", Kind: CredentialRedirect},
+		{ID: "jsapi", Kind: CredentialParams, Inputs: []Input{InputPayerID}},
+		{ID: "app", Kind: CredentialParams},
+	}
+	assertCatalog(t, "wechat", wechat)
+
+	wantMethods := []string{"app", "app_pay", "create", "h5", "jsapi", "native", "page_pay", "precreate", "wap_pay"}
+	if !slices.Equal(Methods(), wantMethods) {
+		t.Errorf("Methods() = %v, want sorted union %v", Methods(), wantMethods)
+	}
+}
+
+func assertCatalog(t *testing.T, provider string, want []Method) {
+	t.Helper()
+	got := Catalog(provider)
+	if len(got) != len(want) {
+		t.Fatalf("%s catalog has %d methods, want %d: %+v", provider, len(got), len(want), got)
+	}
+	for i, w := range want {
+		if got[i].ID != w.ID || got[i].Kind != w.Kind || !slices.Equal(got[i].Inputs, w.Inputs) {
+			t.Errorf("%s catalog[%d] = %+v, want %+v", provider, i, got[i], w)
+		}
 	}
 }
 

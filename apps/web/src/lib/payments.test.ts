@@ -1,41 +1,31 @@
-import { getOption, hasOption } from '@bufbuild/protobuf'
-import { fieldRulesExtension, PaymentProfileSchema } from '@moonbase/api-client'
 import { describe, expect, it } from 'vitest'
-import { METHOD_DESC, METHOD_INPUTS, METHOD_LABEL, PROVIDER_METHODS } from '#lib/payments'
+import { METHOD_INPUTS, methodInputs, PROVIDER_METHODS } from '#lib/payments'
 
-// Drift-gate: the hand-written payment-method catalog (payments.ts) mirrors the
-// Go driver catalog. It can't read Go, but the proto `methods` field pins the
-// same union as a buf.validate `repeated.items.string.in` rule (the Go guardrail
-// TestPaymentProfileMethodsMatchContract keeps that == pay.Methods()). Reading
-// that rule off the descriptor chains the frontend catalog to the one source.
-function contractMethods(): string[] {
-  const field = PaymentProfileSchema.fields.find((f) => f.name === 'methods')
-  if (!field) throw new Error('PaymentProfile has no `methods` field')
-  if (!hasOption(field, fieldRulesExtension)) {
-    throw new Error('PaymentProfile.methods carries no buf.validate rule (options stripped?)')
-  }
-  const rules = getOption(field, fieldRulesExtension)
-  const items = rules.type?.case === 'repeated' ? rules.type.value.items : undefined
-  const values = items?.type?.case === 'string' ? items.type.value.in : undefined
-  if (!values || values.length === 0) {
-    throw new Error('PaymentProfile.methods has no string `in:` values')
-  }
-  return [...values].sort()
-}
-
-describe('payment method catalog mirror tracks the proto contract', () => {
-  const contract = contractMethods()
-
-  it('PROVIDER_METHODS union equals the proto methods in: constraint', () => {
-    const mirror = [...new Set(Object.values(PROVIDER_METHODS).flat())].sort()
-    expect(mirror).toEqual(contract)
+// Behavioral spec for the generated payment method catalog (protoc-gen-paymentcatalog,
+// re-exported through payments.ts). The Go and TS catalogs are generated from the
+// one payment.v1.PaymentMethod proto enum, so they can't drift — this pins the
+// generated TS values to the established set so a generation regression fails here
+// instead of silently mis-rendering the checkout.
+describe('generated payment method catalog', () => {
+  it('groups product ids by provider in display order', () => {
+    expect(PROVIDER_METHODS).toEqual({
+      alipay: ['precreate', 'page_pay', 'wap_pay', 'create', 'app_pay'],
+      wechat: ['native', 'h5', 'jsapi', 'app'],
+    })
   })
 
-  it('every contract method has an inputs, label and description entry', () => {
-    for (const method of contract) {
-      expect(Object.keys(METHOD_INPUTS)).toContain(method)
-      expect(METHOD_LABEL[method]).toBeDefined()
-      expect(METHOD_DESC[method]).toBeDefined()
+  it('collects payer_id / return_url only where the product needs it', () => {
+    expect(methodInputs('page_pay')).toEqual(['return_url'])
+    expect(methodInputs('wap_pay')).toEqual(['return_url'])
+    expect(methodInputs('create')).toEqual(['payer_id'])
+    expect(methodInputs('jsapi')).toEqual(['payer_id'])
+    expect(methodInputs('precreate')).toEqual([])
+    expect(methodInputs('native')).toEqual([])
+  })
+
+  it('has an inputs entry for every catalogued product', () => {
+    for (const id of Object.values(PROVIDER_METHODS).flat()) {
+      expect(METHOD_INPUTS[id]).toBeDefined()
     }
   })
 })

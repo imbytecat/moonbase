@@ -25,21 +25,15 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-// WeChat method ids are the official APIv3 trade types; wechatCatalog maps each
-// to its credential shape.
+// WeChat method ids are the official APIv3 trade types, matched by the driver's
+// per-method dispatch below; the generated catalog (paymentcatalog) owns each
+// method's credential shape.
 const (
 	wechatMethodNative = "native" // Native 扫码支付
 	wechatMethodH5     = "h5"     // H5 支付
 	wechatMethodJsapi  = "jsapi"  // JSAPI（公众号 / 小程序）支付
 	wechatMethodApp    = "app"    // APP 支付
 )
-
-var wechatCatalog = []Method{
-	{ID: wechatMethodNative, Kind: CredentialQR},
-	{ID: wechatMethodH5, Kind: CredentialRedirect},
-	{ID: wechatMethodJsapi, Kind: CredentialParams, Inputs: []Input{InputPayerID}},
-	{ID: wechatMethodApp, Kind: CredentialParams},
-}
 
 func wechatUsable(p systemcodec.PaymentProfile) bool {
 	w := p.Wechat

@@ -14,8 +14,10 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-// Alipay method ids are the official API-method names; alipayCatalog maps each
-// to its credential shape and the sales product_code it sends to the gateway.
+// Alipay method ids are the official API-method names, matched by the driver's
+// per-method dispatch below; the generated catalog (paymentcatalog) owns each
+// method's credential shape and inputs, and alipayProduct* the sales
+// product_code it sends to the gateway.
 const (
 	alipayMethodPreCreate = "precreate" // 当面付/订单码 扫码 · alipay.trade.precreate
 	alipayMethodPagePay   = "page_pay"  // 电脑网站支付 · alipay.trade.page.pay
@@ -31,14 +33,6 @@ const (
 	alipayProductJSAPI      = "JSAPI_PAY"
 	alipayProductApp        = "QUICK_MSECURITY_PAY"
 )
-
-var alipayCatalog = []Method{
-	{ID: alipayMethodPreCreate, Kind: CredentialQR},
-	{ID: alipayMethodPagePay, Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
-	{ID: alipayMethodWapPay, Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
-	{ID: alipayMethodCreate, Kind: CredentialParams, Inputs: []Input{InputPayerID}},
-	{ID: alipayMethodAppPay, Kind: CredentialParams},
-}
 
 func alipayUsable(p systemcodec.PaymentProfile) bool {
 	a := p.Alipay

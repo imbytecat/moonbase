@@ -14,6 +14,10 @@ export * from './gen/auth/v1/permission_pb'
 export { field as fieldRulesExtension } from './gen/buf/validate/validate_pb'
 export * from './gen/notification/v1/notification_pb'
 export * from './gen/notification/v1/notification-NotificationService_connectquery'
+// Generated payment method catalog (protoc-gen-paymentcatalog): PROVIDER_METHODS
+// / METHOD_INPUTS, the structured half of the frontend catalog. Label + desc
+// text stays in the client i18n catalog (apps/web src/lib/payments.ts).
+export * from './gen/payment/v1/method_catalog_pb'
 export * from './gen/payment/v1/payment_pb'
 export * from './gen/payment/v1/payment-PaymentService_connectquery'
 export * from './gen/report/v1/report_pb'

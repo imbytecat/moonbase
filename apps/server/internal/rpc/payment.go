@@ -82,6 +82,9 @@ func (s *PaymentService) CreatePaymentOrder(
 		ClientIP:   clientIP(req),
 	})
 	if err != nil {
+		if errors.Is(err, pay.ErrUnknownMethod) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 		if errors.Is(err, pay.ErrMethodNotOffered) {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				errors.New("this payment method is not offered by the selected profile"))

@@ -439,24 +439,11 @@ message PaymentProfile {
   // page_pay 电脑网站支付, wap_pay 手机网站支付, create 小程序支付,
   // app_pay APP 支付) or WeChat trade_type (native, h5, jsapi, app). A profile
   // only offers what it subscribed to; empty = all of the provider's products,
-  // for back-compat.
+  // for back-compat. Membership is validated server-side against the generated
+  // driver catalog (the single source), so the wire only bounds each string.
   repeated string methods = 6 [(buf.validate.field).repeated = {
     unique: true
-    items: {
-      string: {
-        in: [
-          "precreate",
-          "page_pay",
-          "wap_pay",
-          "create",
-          "app_pay",
-          "native",
-          "h5",
-          "jsapi",
-          "app"
-        ]
-      }
-    }
+    items: {string: {max_len: 32}}
   }];
 }
 

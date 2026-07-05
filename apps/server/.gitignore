@@ -3,13 +3,19 @@
 /tmp/
 # Stray plugin binary from `go build ./cmd/protoc-gen-settings` (buf runs it via `go run`)
 /protoc-gen-settings
+/protoc-gen-permissions
+/protoc-gen-paymentcatalog
 
 # Generated code (regenerate, never commit):
 #   internal/gen        -> buf/protoc (moon run proto:generate) — connect-go stubs
 #   internal/systemcodec -> protoc-gen-settings (moon run proto:generate) — profile structs + codecs
+#   internal/authcatalog -> protoc-gen-permissions (moon run proto:generate) — permission catalog
+#   internal/paymentcatalog -> protoc-gen-paymentcatalog (moon run proto:generate) — payment method catalog
 #   internal/repository -> sqlc (moon run server:generate)
 #   internal/web/dist   -> web:build SPA, embedded via -tags embed (lands in server tree)
 /internal/gen/
 /internal/systemcodec/
+/internal/authcatalog/
+/internal/paymentcatalog/
 /internal/repository/
 /internal/web/dist/

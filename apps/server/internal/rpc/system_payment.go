@@ -21,11 +21,25 @@ func (s *SystemService) paymentOps() channelOps[systemcodec.PaymentProfile] {
 	}
 }
 
+// validatePaymentMethods rejects a profile whose signed products aren't in its
+// provider's catalog. It is the save-time guard that replaces the removed proto
+// `in:` rule on PaymentProfile.methods (an empty list is valid — "all products").
+func validatePaymentMethods(p systemcodec.PaymentProfile) error {
+	if err := pay.ValidateMethods(p.Provider, p.Methods); err != nil {
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	return nil
+}
+
 func (s *SystemService) CreatePaymentProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreatePaymentProfileRequest],
 ) (*connect.Response[systemv1.CreatePaymentProfileResponse], error) {
-	profile, err := s.paymentOps().create(ctx, s, systemcodec.PaymentCodec.FromProto(req.Msg.GetProfile()))
+	in := systemcodec.PaymentCodec.FromProto(req.Msg.GetProfile())
+	if err := validatePaymentMethods(in); err != nil {
+		return nil, err
+	}
+	profile, err := s.paymentOps().create(ctx, s, in)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +52,11 @@ func (s *SystemService) UpdatePaymentProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdatePaymentProfileRequest],
 ) (*connect.Response[systemv1.UpdatePaymentProfileResponse], error) {
-	profile, err := s.paymentOps().update(ctx, s, systemcodec.PaymentCodec.FromProto(req.Msg.GetProfile()))
+	in := systemcodec.PaymentCodec.FromProto(req.Msg.GetProfile())
+	if err := validatePaymentMethods(in); err != nil {
+		return nil, err
+	}
+	profile, err := s.paymentOps().update(ctx, s, in)
 	if err != nil {
 		return nil, err
 	}

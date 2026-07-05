@@ -5,27 +5,31 @@ syntax = "proto3";
 // typo is a compile error on both ends instead of a silent mis-grant.
 package auth.v1;
 
+import "moonbase/v1/options.proto";
+
 // Permission is the code-defined capability catalog, kept 1:1 with what RPCs
 // enforce. Each value's wire/DB key is its name lower-cased with the last
-// underscore turned into a dot (PERMISSION_USER_READ -> "user.read"); a
-// guardrail test keeps the enum in lockstep with the Go auth.Catalog.
-// PERMISSION_ALL is the admin wildcard, stored as "*" and never granted to
-// ordinary roles.
+// underscore turned into a dot (PERMISSION_USER_READ -> "user.read"). The
+// (moonbase.v1.description) option carries its catalog text; protoc-gen-permissions
+// generates the Go auth.Catalog from every value that has one, so the enum is
+// the single source. PERMISSION_ALL is the admin wildcard, stored as "*" and
+// never granted to ordinary roles — it (and UNSPECIFIED) carry no description
+// and are therefore not catalog entries.
 enum Permission {
   PERMISSION_UNSPECIFIED = 0;
   PERMISSION_ALL = 1;
-  PERMISSION_REPORT_READ = 2;
-  PERMISSION_USER_READ = 3;
-  PERMISSION_USER_WRITE = 4;
-  PERMISSION_ROLE_READ = 5;
-  PERMISSION_ROLE_WRITE = 6;
-  PERMISSION_SETTINGS_READ = 7;
-  PERMISSION_SETTINGS_WRITE = 8;
-  PERMISSION_SYSTEM_READ = 9;
-  PERMISSION_SYSTEM_WRITE = 10;
-  PERMISSION_WORKFLOW_READ = 11;
-  PERMISSION_WORKFLOW_WRITE = 12;
-  PERMISSION_AUDIT_READ = 13;
-  PERMISSION_PAYMENT_READ = 14;
-  PERMISSION_PAYMENT_WRITE = 15;
+  PERMISSION_REPORT_READ = 2 [(moonbase.v1.description) = "View dashboard reports and statistics"];
+  PERMISSION_USER_READ = 3 [(moonbase.v1.description) = "View users and their roles"];
+  PERMISSION_USER_WRITE = 4 [(moonbase.v1.description) = "Create, update and delete users; assign roles"];
+  PERMISSION_ROLE_READ = 5 [(moonbase.v1.description) = "View roles and permissions"];
+  PERMISSION_ROLE_WRITE = 6 [(moonbase.v1.description) = "Create, update and delete roles"];
+  PERMISSION_SETTINGS_READ = 7 [(moonbase.v1.description) = "View business settings"];
+  PERMISSION_SETTINGS_WRITE = 8 [(moonbase.v1.description) = "Change business settings"];
+  PERMISSION_SYSTEM_READ = 9 [(moonbase.v1.description) = "View system settings (storage, captcha, email, SMS, AI, payments)"];
+  PERMISSION_SYSTEM_WRITE = 10 [(moonbase.v1.description) = "Change system settings and run channel tests"];
+  PERMISSION_WORKFLOW_READ = 11 [(moonbase.v1.description) = "View workflow runs and their steps"];
+  PERMISSION_WORKFLOW_WRITE = 12 [(moonbase.v1.description) = "Cancel, resume and trigger workflows"];
+  PERMISSION_AUDIT_READ = 13 [(moonbase.v1.description) = "View the audit trail of admin actions"];
+  PERMISSION_PAYMENT_READ = 14 [(moonbase.v1.description) = "View payment orders"];
+  PERMISSION_PAYMENT_WRITE = 15 [(moonbase.v1.description) = "Create, sync and refund payment orders"];
 }
