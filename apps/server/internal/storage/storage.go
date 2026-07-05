@@ -37,13 +37,18 @@ var Purposes = channel.Catalog{PurposeAvatars, PurposeSiteAssets}
 var ErrNotConfigured = fmt.Errorf("file storage is not configured")
 
 // ObjectStore is the app-facing surface: write via presigned PUT, read via
-// ResolveURL (public URL or signed GET depending on the profile).
+// ResolveURL (public URL or signed GET depending on the profile), reclaim via
+// Delete.
 type ObjectStore interface {
 	PresignPut(ctx context.Context, purpose, key, contentType string, expires time.Duration) (string, error)
 	// ResolveURL turns an object key into a fetchable URL. Public profiles
 	// (public base URL set) return a stable public URL; private ones return a
 	// short-lived signed GET.
 	ResolveURL(ctx context.Context, purpose, key string, expires time.Duration) (string, error)
+	// Delete removes an object. It is idempotent: deleting a key that no longer
+	// exists returns nil, so the unattached-file sweep can safely re-run after a
+	// crash (ADR-0003).
+	Delete(ctx context.Context, purpose, key string) error
 }
 
 type ConnectionTester interface {
@@ -59,6 +64,7 @@ type ConnectionTester interface {
 type storageOps struct {
 	presignPut func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key, contentType string, expires time.Duration) (string, error)
 	resolveURL func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key string, expires time.Duration) (string, error)
+	delete     func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key string) error
 	test       func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile) error
 }
 
@@ -70,6 +76,7 @@ var drivers = channel.Registry[systemcodec.StorageProfile, storageOps]{
 		Ops: storageOps{
 			presignPut: (*Client).s3PresignPut,
 			resolveURL: (*Client).s3ResolveURL,
+			delete:     (*Client).s3Delete,
 			test:       (*Client).s3Test,
 		},
 	},
@@ -78,6 +85,7 @@ var drivers = channel.Registry[systemcodec.StorageProfile, storageOps]{
 		Ops: storageOps{
 			presignPut: (*Client).localPresignPut,
 			resolveURL: (*Client).localResolveURL,
+			delete:     (*Client).localDelete,
 			test:       (*Client).localTest,
 		},
 	},
@@ -116,6 +124,14 @@ func (c *Client) ResolveURL(ctx context.Context, purpose, key string, expires ti
 		return "", err
 	}
 	return ops.resolveURL(c, ctx, cfg, purpose, key, expires)
+}
+
+func (c *Client) Delete(ctx context.Context, purpose, key string) error {
+	ops, cfg, err := c.opsFor(ctx, purpose)
+	if err != nil {
+		return err
+	}
+	return ops.delete(c, ctx, cfg, purpose, key)
 }
 
 func (c *Client) TestConnection(ctx context.Context, cfg systemcodec.StorageProfile) error {

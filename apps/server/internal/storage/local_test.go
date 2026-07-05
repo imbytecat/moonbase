@@ -158,3 +158,50 @@ func TestLocalTestProvesDirectoryWritable(t *testing.T) {
 		t.Fatalf("writable directory must pass: %v", err)
 	}
 }
+
+// The unattached-file sweep deletes objects through ObjectStore.Delete, so the
+// local driver must remove the on-disk file — and deleting a key that is
+// already gone must be a no-op, not an error, so a crash-resumed sweep can
+// re-run safely (ADR-0003 idempotent Delete).
+func TestLocalDeleteRemovesObjectAndIsIdempotent(t *testing.T) {
+	store, client := newLocalFixture(t)
+	mux := http.NewServeMux()
+	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	srv := httptest.NewServer(http.StripPrefix("/api", mux))
+	defer srv.Close()
+
+	putURL, err := client.PresignPut(t.Context(), PurposeAvatars, "u1/pic.png", "image/png", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+putURL, strings.NewReader("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+
+	if err := client.Delete(t.Context(), PurposeAvatars, "u1/pic.png"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	getURL, err := client.ResolveURL(t.Context(), PurposeAvatars, "u1/pic.png", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = http.Get(srv.URL + getURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("after delete, GET status = %d, want 404", res.StatusCode)
+	}
+
+	if err := client.Delete(t.Context(), PurposeAvatars, "u1/pic.png"); err != nil {
+		t.Fatalf("deleting an already-gone object must be a no-op, got %v", err)
+	}
+}

@@ -60,6 +60,10 @@ func (keyEchoObjectStore) ResolveURL(_ context.Context, _, key string, _ time.Du
 	return "https://cdn.test/" + key, nil
 }
 
+func (keyEchoObjectStore) Delete(context.Context, string, string) error {
+	return nil
+}
+
 func newSettingsService(q repository.Querier) *SettingsService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return NewSettingsService(settings.NewStore(q), q, noopObjectStore{}, logger)

@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -36,6 +37,19 @@ func (c *Client) localPresignPut(ctx context.Context, _ systemcodec.StorageProfi
 
 func (c *Client) localResolveURL(ctx context.Context, _ systemcodec.StorageProfile, purpose, key string, expires time.Duration) (string, error) {
 	return c.localSignedURL(ctx, "GET", purpose, key, expires)
+}
+
+// localDelete removes the on-disk object. A missing file is not an error, so
+// the sweep is idempotent under crash-resume (ADR-0003).
+func (c *Client) localDelete(_ context.Context, cfg systemcodec.StorageProfile, _, key string) error {
+	path, err := localObjectPath(cfg.Local, key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // localTest proves the directory is writable by round-tripping a probe file.

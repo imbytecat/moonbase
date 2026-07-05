@@ -29,6 +29,10 @@ func (stubObjectStore) ResolveURL(context.Context, string, string, time.Duration
 	return "", nil
 }
 
+func (stubObjectStore) Delete(context.Context, string, string) error {
+	return nil
+}
+
 type fakeStorageQuerier struct {
 	repository.Querier
 	insertFile func(ctx context.Context, arg repository.InsertFileParams) (repository.File, error)

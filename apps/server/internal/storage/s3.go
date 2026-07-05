@@ -42,6 +42,19 @@ func (c *Client) s3ResolveURL(ctx context.Context, cfg systemcodec.StorageProfil
 	return u.String(), nil
 }
 
+// s3Delete removes an object. S3 DELETE is idempotent — removing a key that is
+// already gone succeeds — so the sweep can safely re-run after a crash.
+func (c *Client) s3Delete(ctx context.Context, cfg systemcodec.StorageProfile, _, key string) error {
+	mc, err := newMinio(cfg.S3)
+	if err != nil {
+		return err
+	}
+	if err := mc.RemoveObject(ctx, cfg.S3.Bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		return fmt.Errorf("delete object: %w", err)
+	}
+	return nil
+}
+
 // s3Test verifies the config end-to-end by checking the bucket exists — the
 // cheapest call that exercises endpoint, credentials and bucket.
 func (c *Client) s3Test(ctx context.Context, cfg systemcodec.StorageProfile) error {

@@ -114,6 +114,10 @@ func (noopObjectStore) ResolveURL(context.Context, string, string, time.Duration
 	return "", storage.ErrNotConfigured
 }
 
+func (noopObjectStore) Delete(context.Context, string, string) error {
+	return nil
+}
+
 type allowAllCaptcha struct{}
 
 func (allowAllCaptcha) Enabled(context.Context, string) (bool, error)        { return false, nil }

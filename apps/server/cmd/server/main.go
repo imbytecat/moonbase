@@ -20,6 +20,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/server"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/storage"
 	"github.com/imbytecat/moonbase/server/internal/tracing"
 	"github.com/imbytecat/moonbase/server/internal/workflow"
 )
@@ -86,8 +87,11 @@ func run() error {
 	audit.StartRetentionJanitor(ctx, repository.New(pool), logger, time.Hour, cfg.Audit.Retention())
 
 	// Durable workflows: DBOS checkpoints into the "dbos" schema of the same
-	// Postgres. The engine recovers interrupted runs on startup.
-	engine, err := workflow.New(ctx, cfg.Database.URL, "moonbase", logger)
+	// Postgres. The engine recovers interrupted runs on startup and runs the
+	// scheduled unattached-file sweep against storage + the file ledger.
+	reclaimRepo := repository.New(pool)
+	reclaimObjects := storage.NewClient(settings.NewStore(reclaimRepo))
+	engine, err := workflow.New(ctx, cfg.Database.URL, "moonbase", reclaimRepo, reclaimObjects, logger)
 	if err != nil {
 		return err
 	}

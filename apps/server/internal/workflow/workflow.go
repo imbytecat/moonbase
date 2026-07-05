@@ -27,8 +27,9 @@ type Engine struct {
 }
 
 // New initializes DBOS against the given database URL and launches the
-// executor. Call Shutdown on process exit.
-func New(ctx context.Context, databaseURL, appName string, logger *slog.Logger) (*Engine, error) {
+// executor. Call Shutdown on process exit. store and objects back the scheduled
+// unattached-file sweep.
+func New(ctx context.Context, databaseURL, appName string, store ReclaimStore, objects ObjectDeleter, logger *slog.Logger) (*Engine, error) {
 	dctx, err := dbos.NewDBOSContext(ctx, dbos.Config{
 		AppName:     appName,
 		DatabaseURL: databaseURL,
@@ -38,6 +39,7 @@ func New(ctx context.Context, databaseURL, appName string, logger *slog.Logger) 
 		return nil, fmt.Errorf("init workflow engine: %w", err)
 	}
 	dbos.RegisterWorkflow(dctx, demoWorkflow)
+	registerReclaim(dctx, store, objects, logger)
 	if err := dbos.Launch(dctx); err != nil {
 		return nil, fmt.Errorf("launch workflow engine: %w", err)
 	}
