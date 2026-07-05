@@ -81,6 +81,11 @@ func TestPresignAvatarUploadPersistsFile(t *testing.T) {
 	if got.UploadedBy != userID {
 		t.Fatalf("persisted uploaded_by = %v, want caller %v", got.UploadedBy, userID)
 	}
+	// The row records the storage purpose so the unattached sweep can later
+	// resolve which backend to delete the object from (ADR-0003).
+	if got.Purpose != "avatars" {
+		t.Fatalf("persisted purpose = %q, want avatars", got.Purpose)
+	}
 	// file_id echoes the row's id so consumers can attach it later.
 	if resp.Msg.GetFileId() != fileID.String() {
 		t.Fatalf("response file_id = %q, want persisted id %q", resp.Msg.GetFileId(), fileID.String())
@@ -127,6 +132,9 @@ func TestPresignSiteAssetUploadPersistsFile(t *testing.T) {
 	}
 	if got.UploadedBy != userID {
 		t.Fatalf("persisted uploaded_by = %v, want caller %v", got.UploadedBy, userID)
+	}
+	if got.Purpose != "site-assets" {
+		t.Fatalf("persisted purpose = %q, want site-assets", got.Purpose)
 	}
 	if resp.Msg.GetFileId() != fileID.String() {
 		t.Fatalf("response file_id = %q, want persisted id %q", resp.Msg.GetFileId(), fileID.String())

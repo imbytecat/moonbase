@@ -61,6 +61,7 @@ func (s *StorageService) PresignAvatarUpload(
 		ObjectKey:   key,
 		ContentType: req.Msg.GetContentType(),
 		UploadedBy:  id.UserID,
+		Purpose:     storage.PurposeAvatars,
 	})
 	if err != nil {
 		return nil, s.internal(ctx, "record avatar file", err)
@@ -92,6 +93,7 @@ func (s *StorageService) PresignSiteAssetUpload(
 		ObjectKey:   key,
 		ContentType: req.Msg.GetContentType(),
 		UploadedBy:  id.UserID,
+		Purpose:     storage.PurposeSiteAssets,
 	})
 	if err != nil {
 		return nil, s.internal(ctx, "record site asset file", err)
