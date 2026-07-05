@@ -11,7 +11,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - `docker compose up -d` —— Postgres 18（与默认 DSN 匹配）+ 可选 SeaweedFS（S3 演示）+ mailpit（SMTP，收件箱 :8025）。Seed 仅在 users 表为空时运行——若集成测试报 "invalid credentials"，重置：`docker compose down && docker volume rm moonbase_pgdata && docker compose up -d`。
 - `moon run :dev` —— web :5173 + server :8080；迁移 + seed（`admin`/`admin123`）在启动时自动应用。
 - 调用形式为 `moon run <project>:<task>`；项目：`proto`、`server`、`web`、`api-client`。
-- `moon run :check` = 全仓库 lint/格式化闸门；`moon run :fix` = 自动修复孪生任务；`moon ci` = 对受影响项目 build/test/check。
+- **改完代码的本地验证序列固定为 `moon run :fix && moon run :test`**——不要自行发明 `go build`/`go vet`/`go test` 组合（moon 有缓存，未变更项目近乎免费）。`moon run :check`（只读闸门）供 CI 与 pre-commit 钩子使用，日常无需手动执行；`moon ci` = 对受影响项目 build/test/check。
 - 单个 Go 测试：`cd apps/server && go test ./... -run TestName`。单个 web 测试：`cd apps/web && pnpm run test <file>`。
 - Go 集成测试需要 `MOONBASE_DATABASE_URL='postgres://postgres:postgres@localhost:5432/app?sslmode=disable'`（没有则静默跳过）；邮件流测试还需要 mailpit（未启动时跳过）。
 
@@ -117,6 +117,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 ## Lint 与 git 钩子
 
 - 每个项目的只读闸门是 `check`，写侧孪生是 `fix`。后端 = golangci-lint v2（`.golangci.yml`）经 `go run`；前端 = Biome（`biome.json`：2 空格、单引号、无分号、宽度 100；格式化 + linter + import 排序；自动跳过生成文件）。Proto = buf lint + format。
+- **不要**单独运行 `go vet`、`go fmt`、`gofmt`、`goimports`——它们已是 golangci-lint v2 的子集（`default: standard` 含 govet；formatters 含 gofmt/goimports），裸跑既冗余又可能与 `.golangci.yml` 配置不一致。本地质量环路只有一条命令：`moon run :fix`。
 - **Pre-commit 钩子**（自动同步；用 `moon sync hooks` 安装一次）：`moon run :fix` → `git update-index --again`（重新暂存修复）→ `moon run :check`，全部 `--affected --status=staged`。只有不可修复的错误才拦截。
 - **Commit-msg 钩子**：`pnpm exec commitlint` 强制 Conventional Commits，要求**中文主题**（`subject-zh` 自定义规则）+ 一个 `scope-enum`（项目名 + `deps`/`ci`/`agents`），在 `commitlint.config.mjs` 里从 `.moon/workspace.yml` 的 `projects` 动态读取。
 - 仓库移动后 golangci-lint 报错文件路径不对 = 缓存过期：`go run …/golangci-lint/v2/cmd/golangci-lint@<v> cache clean`。
