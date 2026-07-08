@@ -15,6 +15,7 @@ import (
 	"github.com/rs/cors"
 
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/captcha"
@@ -39,7 +40,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/rpc"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 	"github.com/imbytecat/moonbase/server/internal/web"
@@ -54,7 +54,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	settingsStore := settings.NewStore(repo)
 	s3 := storage.NewClient(settingsStore)
 	mailer := mail.NewClient(settingsStore.Email)
-	smser := sms.NewClient(settingsStore)
+	smser := sms.NewClient(settingsStore.Sms)
 	chatter := llm.NewClient(settingsStore)
 	captchaVerifier := captcha.NewClient(settingsStore)
 	oauthFlow := oauth.NewClient(settingsStore)

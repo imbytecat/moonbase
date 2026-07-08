@@ -6,10 +6,10 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/sms"
 )
 
 func (s *SystemService) smsOps() integrationOps[systemcodec.SmsProfile] {

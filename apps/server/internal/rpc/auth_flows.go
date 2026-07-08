@@ -12,12 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/repository"
-	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
 

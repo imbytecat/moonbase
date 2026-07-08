@@ -33,8 +33,6 @@ github.com/alibabacloud-go/darabonba-encode-util v0.0.2 h1:1uJGrbsGEVqWcWxrS9MyC
 github.com/alibabacloud-go/darabonba-encode-util v0.0.2/go.mod h1:JiW9higWHYXm7F4PKuMgEUETNZasrDM6vqVr/Can7H8=
 github.com/alibabacloud-go/darabonba-map v0.0.2 h1:qvPnGB4+dJbJIxOOfawxzF3hzMnIpjmafa0qOTp6udc=
 github.com/alibabacloud-go/darabonba-map v0.0.2/go.mod h1:28AJaX8FOE/ym8OUFWga+MtEzBunJwQGceGQlvaPGPc=
-github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.2 h1:xu7UZuLUQsgCPJA02c2DEvIWjIZVh44KlDvPwuzqolo=
-github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.2/go.mod h1:CsqHkHPpAKL64jl/fChR249EL0abYEIDWmlwFYgo7/E=
 github.com/alibabacloud-go/darabonba-signature-util v0.0.7 h1:UzCnKvsjPFzApvODDNEYqBHMFt1w98wC7FOo0InLyxg=
 github.com/alibabacloud-go/darabonba-signature-util v0.0.7/go.mod h1:oUzCYV2fcCH797xKdL6BDH8ADIHlzrtKVjeRtunBNTQ=
 github.com/alibabacloud-go/darabonba-string v1.0.2 h1:E714wms5ibdzCqGeYJ9JCFywE5nDyvIXIIQbZVFkkqo=
@@ -43,8 +41,6 @@ github.com/alibabacloud-go/debug v0.0.0-20190504072949-9472017b5c68/go.mod h1:6p
 github.com/alibabacloud-go/debug v1.0.0/go.mod h1:8gfgZCCAC3+SCzjWtY053FrOcd4/qlH6IHTI4QyICOc=
 github.com/alibabacloud-go/debug v1.0.1 h1:MsW9SmUtbb1Fnt3ieC6NNZi6aEwrXfDksD4QA6GSbPg=
 github.com/alibabacloud-go/debug v1.0.1/go.mod h1:8gfgZCCAC3+SCzjWtY053FrOcd4/qlH6IHTI4QyICOc=
-github.com/alibabacloud-go/dysmsapi-20170525/v5 v5.6.0 h1:xJwU7B3ZjXvjL8EIpaLI5hP5TuxTfaWSJnBVga2D8Ms=
-github.com/alibabacloud-go/dysmsapi-20170525/v5 v5.6.0/go.mod h1:p0Bmq314NZfsFuQtxI2libnnlnjWSXQyfWMadk/078g=
 github.com/alibabacloud-go/endpoint-util v1.1.0 h1:r/4D3VSw888XGaeNpP994zDUaxdgTSHBbVfZlzf6b5Q=
 github.com/alibabacloud-go/endpoint-util v1.1.0/go.mod h1:O5FuCALmCKs2Ff7JFJMudHs0I5EBgecXXxZRyswlEjE=
 github.com/alibabacloud-go/openapi-util v0.1.0 h1:0z75cIULkDrdEhkLWgi9tnLe+KhAFE/r5Pb3312/eAY=
@@ -296,11 +292,6 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.93/go.mod h1:r5r4xbfxSaeR04b166HGsBa/R4U3SueirEUpXGuw+Q0=
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.127 h1:/Z1234g1ixp6dR5YR8+CHYKcf6A3HgOWiJjBU96vvng=
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.127/go.mod h1:r5r4xbfxSaeR04b166HGsBa/R4U3SueirEUpXGuw+Q0=
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.3.93 h1:+HmyErvypBJGp0sxVM+e9g9/MtqKZoWXzZtndpHRUwo=
-github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.3.93/go.mod h1:TAQeguxskl7xDfyGWDJyUGuy1NfG2lyLEuALJQ6x1zE=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/gjson v1.18.0 h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=
 github.com/tidwall/gjson v1.18.0/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=

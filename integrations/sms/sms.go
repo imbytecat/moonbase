@@ -18,9 +18,9 @@ import (
 	tcsms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/phone"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/phone"
-	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
 // SMS purposes are code, not data: each is a fixed slot the application
@@ -36,6 +36,10 @@ const (
 var Purposes = integration.Catalog{PurposeVerification}
 
 var ErrNotConfigured = fmt.Errorf("sms is not configured")
+
+type Config = kitsettings.Integration[systemcodec.SmsProfile]
+
+type Loader func(ctx context.Context) (Config, error)
 
 // Sender delivers a verification code to an E.164 phone number, addressed by
 // purpose. SendTemplateWith delivers arbitrary template content (cloud SMS
@@ -83,23 +87,23 @@ func ProfileUsable(p systemcodec.SmsProfile) bool {
 
 // Usable reports whether the purpose resolves to a usable profile — shared
 // with GetAuthConfig capability flags.
-func Usable(cfg settings.Sms, purpose string) bool {
+func Usable(cfg Config, purpose string) bool {
 	p, ok := cfg.ProfileFor(purpose)
 	return ok && ProfileUsable(p)
 }
 
 type Client struct {
-	store *settings.Store
+	load Loader
 }
 
-func NewClient(store *settings.Store) *Client {
-	return &Client{store: store}
+func NewClient(load Loader) *Client {
+	return &Client{load: load}
 }
 
 var _ Sender = (*Client)(nil)
 
 func (c *Client) SendCode(ctx context.Context, purpose, e164, code string) error {
-	cfg, err := c.store.Sms(ctx)
+	cfg, err := c.load(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,10 +140,11 @@ func sendAliyun(cfg systemcodec.AliyunSmsConfig, templateCode, e164, content str
 		target = national
 	}
 
+	endpoint := "dysmsapi.aliyuncs.com"
 	client, err := dysmsapi.NewClient(&openapiutil.Config{
 		AccessKeyId:     &cfg.AccessKeyId,
 		AccessKeySecret: &cfg.AccessKeySecret,
-		Endpoint:        ptr("dysmsapi.aliyuncs.com"),
+		Endpoint:        &endpoint,
 	})
 	if err != nil {
 		return fmt.Errorf("create sms client: %w", err)
@@ -208,5 +213,3 @@ func sendTencent(ctx context.Context, cfg systemcodec.TencentSmsConfig, template
 	}
 	return nil
 }
-
-func ptr[T any](v T) *T { return &v }

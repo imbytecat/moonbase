@@ -4,4 +4,5 @@ use (
 	./apps/server
 	./integrationkit
 	./integrations/email
+	./integrations/sms
 )

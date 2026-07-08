@@ -14,11 +14,11 @@ import (
 	"github.com/nyaruka/phonenumbers"
 
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	"github.com/imbytecat/moonbase/server/integrations/sms"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 

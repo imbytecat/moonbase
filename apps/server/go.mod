@@ -11,8 +11,6 @@ require (
 	connectrpc.com/validate v0.6.0
 	github.com/agentine/sawmill v0.1.0
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.2
-	github.com/alibabacloud-go/dysmsapi-20170525/v5 v5.6.0
 	github.com/altcha-org/altcha-lib-go v1.0.0
 	github.com/anthropics/anthropic-sdk-go v1.56.0
 	github.com/coreos/go-oidc/v3 v3.19.0
@@ -31,8 +29,6 @@ require (
 	github.com/samber/slog-multi v1.8.0
 	github.com/smartwalle/alipay/v3 v3.2.29
 	github.com/spf13/viper v1.21.0
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.127
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.3.93
 	github.com/wechatpay-apiv3/wechatpay-go v0.2.21
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0

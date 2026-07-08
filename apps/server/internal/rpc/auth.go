@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/captcha"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
@@ -25,7 +26,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
