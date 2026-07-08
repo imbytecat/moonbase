@@ -17,7 +17,7 @@ import (
 	tcprofile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	tcsms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
@@ -33,7 +33,7 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeVerification}
+var Purposes = integration.Catalog{PurposeVerification}
 
 var ErrNotConfigured = fmt.Errorf("sms is not configured")
 
@@ -49,7 +49,7 @@ type Sender interface {
 
 type sendFunc = func(ctx context.Context, p systemcodec.SmsProfile, templateCode, e164, content string) error
 
-var drivers = channel.Registry[systemcodec.SmsProfile, sendFunc]{
+var drivers = integration.Registry[systemcodec.SmsProfile, sendFunc]{
 	"aliyun": {
 		Usable: func(p systemcodec.SmsProfile) bool {
 			a := p.Aliyun

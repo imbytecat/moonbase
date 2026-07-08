@@ -11,8 +11,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) captchaOps() channelOps[systemcodec.CaptchaProfile] {
-	return channelOps[systemcodec.CaptchaProfile]{
+func (s *SystemService) captchaOps() integrationOps[systemcodec.CaptchaProfile] {
+	return integrationOps[systemcodec.CaptchaProfile]{
 		name:        "captcha",
 		load:        s.settings.Captcha,
 		save:        s.settings.SetCaptcha,

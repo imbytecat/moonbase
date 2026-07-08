@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/paymentcatalog"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
@@ -36,7 +36,7 @@ import (
 const PurposeCheckout = "checkout"
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeCheckout}
+var Purposes = integration.Catalog{PurposeCheckout}
 
 // CredentialKind tells the checkout how to consume a created payment.
 type CredentialKind string
@@ -169,7 +169,7 @@ type payOps struct {
 	parseNotify func(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error)
 }
 
-var drivers = channel.Registry[systemcodec.PaymentProfile, payOps]{
+var drivers = integration.Registry[systemcodec.PaymentProfile, payOps]{
 	"alipay": {
 		Usable: alipayUsable,
 		Ops: payOps{

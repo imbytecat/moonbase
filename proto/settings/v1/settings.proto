@@ -2,7 +2,7 @@ syntax = "proto3";
 
 // Package settings.v1 is the BUSINESS settings surface: product-behavior
 // toggles editable by business admins (settings.read / settings.write).
-// Infrastructure channels (S3, CAPTCHA, SMTP, SMS) are deliberately NOT here —
+// Infrastructure integrations (S3, CAPTCHA, SMTP, SMS) are deliberately NOT here —
 // they live in system.v1 behind the separate system.* permissions, because
 // they carry secrets and are operated by a different persona.
 package settings.v1;

@@ -11,8 +11,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) llmOps() channelOps[systemcodec.LlmProfile] {
-	return channelOps[systemcodec.LlmProfile]{
+func (s *SystemService) llmOps() integrationOps[systemcodec.LlmProfile] {
+	return integrationOps[systemcodec.LlmProfile]{
 		name:        "model",
 		load:        s.settings.Llm,
 		save:        s.settings.SetLlm,

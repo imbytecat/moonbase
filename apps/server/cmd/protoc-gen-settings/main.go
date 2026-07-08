@@ -31,7 +31,7 @@ const (
 )
 
 // systemcodec is where the generated storage structs + codecs live; it is the
-// single source of truth for channel profile shapes.
+// single source of truth for integration profile shapes.
 const systemcodecImportPath = "github.com/imbytecat/moonbase/server/internal/systemcodec"
 
 func main() {
@@ -166,7 +166,7 @@ func genCodec(g *protogen.GeneratedFile, m *protogen.Message) {
 	g.P("type ", codecType, " struct{}")
 	g.P()
 	g.P("// ", codecVar, " maps ", name, " to and from its wire message and owns the")
-	g.P("// write-only-secret rule for this channel.")
+	g.P("// write-only-secret rule for this integration.")
 	g.P("var ", codecVar, " = ", codecType, "{}")
 	g.P()
 

@@ -1,21 +1,21 @@
-// Package channel holds the two primitives every infrastructure channel
-// (storage, captcha, email, sms, llm, oauth, payment) is built from:
-// a code-defined purpose Catalog and a provider-keyed driver Registry. Each
-// channel package declares its purposes and drivers with these types so the
-// shared vocabulary (known purpose, usable profile, provider names) is
-// implemented exactly once — only the per-channel Ops shape differs.
-package channel
+// Package integration holds the two primitives every infrastructure
+// integration (storage, captcha, email, sms, llm, oauth, payment) is built
+// from: a code-defined purpose Catalog and a provider-keyed driver Registry.
+// Each integration package declares its purposes and drivers with these types
+// so the shared vocabulary (known purpose, usable profile, provider names) is
+// implemented exactly once — only the per-integration Ops shape differs.
+package integration
 
 import (
 	"maps"
 	"slices"
 )
 
-// Catalog is a channel's purpose list, served to the admin UI in display
+// Catalog is an integration's purpose list, served to the admin UI in display
 // order. Purposes are code, not data: each is a fixed slot the application
-// addresses the channel through, and operators bind each one to connection
-// profiles at runtime. Adding a feature that uses a channel = adding a
-// purpose to that channel's catalog.
+// addresses the integration through, and operators bind each one to connection
+// profiles at runtime. Adding a feature that uses an integration = adding a
+// purpose to that integration's catalog.
 type Catalog []string
 
 // Known reports whether key is in the catalog — binding writes validate
@@ -30,9 +30,9 @@ type Provider interface {
 	ProviderName() string
 }
 
-// Driver pairs a provider's usable-check with its channel-specific ops (the
-// send/verify/complete/... function or bundle). Ops signatures are
-// deliberately DIFFERENT per channel — only this wrapper shape is shared.
+// Driver pairs a provider's usable-check with its integration-specific ops
+// (the send/verify/complete/... function or bundle). Ops signatures are
+// deliberately DIFFERENT per integration — only this wrapper shape is shared.
 type Driver[P Provider, Ops any] struct {
 	// Usable reports whether the profile carries everything the provider
 	// needs; every action gates on it.

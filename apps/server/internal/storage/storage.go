@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -31,7 +31,7 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeAvatars, PurposeSiteAssets}
+var Purposes = integration.Catalog{PurposeAvatars, PurposeSiteAssets}
 
 // Visibility is a static property of a purpose (public / private), fixed in
 // code — never stored on file rows nor editable by admins. Public means reads
@@ -89,7 +89,7 @@ type storageOps struct {
 	test       func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile) error
 }
 
-var drivers = channel.Registry[systemcodec.StorageProfile, storageOps]{
+var drivers = integration.Registry[systemcodec.StorageProfile, storageOps]{
 	"s3": {
 		Usable: func(p systemcodec.StorageProfile) bool {
 			return p.S3.Endpoint != "" && p.S3.Bucket != "" && p.S3.AccessKeyId != ""

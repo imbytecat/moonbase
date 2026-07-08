@@ -90,7 +90,7 @@ var authzRules = map[string]auth.Rule{
 	settingsv1connect.SettingsServiceUpdateSettingsProcedure: {Permission: "settings.write"},
 	settingsv1connect.SettingsServiceGetSiteInfoProcedure:    {Public: true},
 
-	// system.v1 — infrastructure channels (secrets); separate persona from
+	// system.v1 — infrastructure integrations (secrets); separate persona from
 	// business settings, hence separate permissions.
 	systemv1connect.SystemServiceGetSystemSettingsProcedure:     {Permission: "system.read"},
 	systemv1connect.SystemServiceCreateStorageProfileProcedure:  {Permission: "system.write"},

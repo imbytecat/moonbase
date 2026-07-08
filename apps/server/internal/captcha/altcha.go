@@ -1,6 +1,6 @@
 // The built-in "altcha" driver serves ALTCHA proof-of-work challenges
 // (https://altcha.org): the official altcha-lib-go implements the protocol;
-// this file only glues it to the channel model — a public challenge
+// this file only glues it to the integration model — a public challenge
 // endpoint, the settings-stored HMAC key, and a replay cache (the library
 // verifies solutions but replay protection is the caller's job per the
 // ALTCHA docs). No external service — it works on air-gapped networks.

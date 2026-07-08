@@ -11,8 +11,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) storageOps() channelOps[systemcodec.StorageProfile] {
-	return channelOps[systemcodec.StorageProfile]{
+func (s *SystemService) storageOps() integrationOps[systemcodec.StorageProfile] {
+	return integrationOps[systemcodec.StorageProfile]{
 		name:        "storage",
 		load:        s.settings.Storage,
 		save:        s.settings.SetStorage,

@@ -10,10 +10,10 @@ package moonbase.v1;
 import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MessageOptions {
-  // profile marks a message as an infrastructure-channel connection profile.
-  // protoc-gen-settings emits a storage struct for it (dropping every sibling
-  // <field>_set flag, which is wire-only) plus a codec that maps the message
-  // to and from that struct and enforces write-only secrets.
+  // profile marks a message as an infrastructure-integration connection
+  // profile. protoc-gen-settings emits a storage struct for it (dropping every
+  // sibling <field>_set flag, which is wire-only) plus a codec that maps the
+  // message to and from that struct and enforces write-only secrets.
   bool profile = 50001;
 }
 

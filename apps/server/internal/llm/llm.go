@@ -15,7 +15,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaioption "github.com/openai/openai-go/v3/option"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -30,7 +30,7 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeChat}
+var Purposes = integration.Catalog{PurposeChat}
 
 // ErrNotConfigured signals that the purpose is unbound or its profile is
 // incomplete; callers map it to a friendly "not configured" RPC error.
@@ -46,7 +46,7 @@ type Chatter interface {
 
 type completeFunc = func(ctx context.Context, p systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error)
 
-var drivers = channel.Registry[systemcodec.LlmProfile, completeFunc]{
+var drivers = integration.Registry[systemcodec.LlmProfile, completeFunc]{
 	"openai": {
 		Usable: func(p systemcodec.LlmProfile) bool {
 			return p.Openai.ApiKey != "" && p.Openai.Model != ""

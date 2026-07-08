@@ -12,8 +12,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) smsOps() channelOps[systemcodec.SmsProfile] {
-	return channelOps[systemcodec.SmsProfile]{
+func (s *SystemService) smsOps() integrationOps[systemcodec.SmsProfile] {
+	return integrationOps[systemcodec.SmsProfile]{
 		name:        "sms",
 		load:        s.settings.Sms,
 		save:        s.settings.SetSms,

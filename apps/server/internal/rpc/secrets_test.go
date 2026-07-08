@@ -12,7 +12,7 @@ import (
 )
 
 // TestKeepSecretsPreservesEveryMaskedField is the guardrail behind every
-// channel's keepSecrets: a secret field is DETECTED behaviorally (set on
+// integration's keepSecrets: a secret field is DETECTED behaviorally (set on
 // create, masked out of the response), then an update carrying an empty
 // value for it must keep the stored value. Adding a secret field to a proto
 // profile without wiring its keepSecrets branch silently wipes stored

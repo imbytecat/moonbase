@@ -11,8 +11,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) paymentOps() channelOps[systemcodec.PaymentProfile] {
-	return channelOps[systemcodec.PaymentProfile]{
+func (s *SystemService) paymentOps() integrationOps[systemcodec.PaymentProfile] {
+	return integrationOps[systemcodec.PaymentProfile]{
 		name:        "payment",
 		load:        s.settings.Payment,
 		save:        s.settings.SetPayment,

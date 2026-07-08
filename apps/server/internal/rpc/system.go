@@ -17,12 +17,12 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
-// SystemService manages infrastructure channels (system.*). Every channel is
-// profile-based and shares the channelOps lifecycle (system_channel.go) with
-// per-channel proto mapping in system_<channel>.go; every channel has
-// purpose bindings (oauth login and payment purposes are multi-valued, the
-// rest single-valued). Secrets are
-// write-only over the wire; testable channels have a test RPC so operators
+// SystemService manages infrastructure integrations (system.*). Every
+// integration is profile-based and shares the integrationOps lifecycle
+// (system_integration.go) with per-integration proto mapping in
+// system_<integration>.go; every integration has purpose bindings (oauth login
+// and payment purposes are multi-valued, the rest single-valued). Secrets are
+// write-only over the wire; testable integrations have a test RPC so operators
 // can validate config before relying on it.
 type SystemService struct {
 	settings      *settings.Store
@@ -107,8 +107,9 @@ func (s *SystemService) snapshot(ctx context.Context) (*systemv1.GetSystemSettin
 	}, nil
 }
 
-// testFailureMessage keeps "not configured" friendly and passes real channel
-// errors through (they're operator-facing diagnostics, not secrets).
+// testFailureMessage keeps "not configured" friendly and passes real
+// integration errors through (they're operator-facing diagnostics, not
+// secrets).
 func testFailureMessage(err, notConfigured error, friendly string) string {
 	if errors.Is(err, notConfigured) {
 		return friendly

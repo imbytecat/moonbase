@@ -417,7 +417,7 @@ func (s *AuthService) GetAuthConfig(
 	return connect.NewResponse(out), nil
 }
 
-// verifyCaptcha maps channel state to RPC errors: unbound purpose = pass,
+// verifyCaptcha maps integration state to RPC errors: unbound purpose = pass,
 // bad/missing token = invalid_argument (fail closed once the purpose is bound).
 func (s *AuthService) verifyCaptcha(ctx context.Context, token, remoteAddr string) error {
 	ip, _, _ := net.SplitHostPort(remoteAddr)

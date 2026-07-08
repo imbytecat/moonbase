@@ -13,8 +13,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) oauthOps() channelOps[systemcodec.OauthProfile] {
-	return channelOps[systemcodec.OauthProfile]{
+func (s *SystemService) oauthOps() integrationOps[systemcodec.OauthProfile] {
+	return integrationOps[systemcodec.OauthProfile]{
 		name:        "login provider",
 		load:        s.settings.Oauth,
 		save:        s.settings.SetOauth,

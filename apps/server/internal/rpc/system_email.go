@@ -11,8 +11,8 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-func (s *SystemService) emailOps() channelOps[systemcodec.EmailProfile] {
-	return channelOps[systemcodec.EmailProfile]{
+func (s *SystemService) emailOps() integrationOps[systemcodec.EmailProfile] {
+	return integrationOps[systemcodec.EmailProfile]{
 		name:        "email",
 		load:        s.settings.Email,
 		save:        s.settings.SetEmail,

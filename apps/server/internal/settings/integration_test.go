@@ -7,10 +7,10 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
-// TestChannelLookups pins the pure resolution logic behind every channel:
-// profile lookup, single- and multi-valued purpose binding, order preservation,
-// deleted-target skipping, and reverse binding lookup.
-func TestChannelLookups(t *testing.T) {
+// TestIntegrationLookups pins the pure resolution logic behind every
+// integration: profile lookup, single- and multi-valued purpose binding, order
+// preservation, deleted-target skipping, and reverse binding lookup.
+func TestIntegrationLookups(t *testing.T) {
 	ch := Storage{
 		Profiles: []systemcodec.StorageProfile{
 			{Id: "a", Provider: "local"},

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -25,7 +25,7 @@ var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")
 const PurposeLogin = "login"
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeLogin}
+var Purposes = integration.Catalog{PurposeLogin}
 
 // ExternalIdentity is the provider-agnostic result of a code exchange: a
 // stable subject plus display info for the identity row. ProviderKey is the
@@ -65,7 +65,7 @@ type oauthOps struct {
 	exchange func(ctx context.Context, p systemcodec.OauthProfile, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error)
 }
 
-var drivers = channel.Registry[systemcodec.OauthProfile, oauthOps]{
+var drivers = integration.Registry[systemcodec.OauthProfile, oauthOps]{
 	"oidc": {
 		Usable: func(p systemcodec.OauthProfile) bool {
 			o := p.Oidc

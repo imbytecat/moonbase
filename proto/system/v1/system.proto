@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// Package system.v1 is the SYSTEM settings surface: infrastructure channels
+// Package system.v1 is the SYSTEM settings surface: infrastructure integrations
 // (file storage, CAPTCHA, email, SMS, LLM, third-party login) configured by
 // platform operators behind system.read / system.write. Every secret is
 // write-only over the wire: reads mask it (empty + *_set=true), an empty
@@ -343,7 +343,7 @@ message AnthropicLlmConfig {
   bool api_key_set = 4;
 }
 
-// One third-party login connection. Unlike other channels there are no
+// One third-party login connection. Unlike other integrations there are no
 // purpose bindings: every enabled profile shows on the login page
 // simultaneously. key is the operator-chosen stable identifier — it names
 // the profile in identity records and the browser flow URL
@@ -401,7 +401,7 @@ message WechatOauthConfig {
 }
 
 // A third-party-login purpose is a fixed, code-defined slot like every other
-// channel purpose; "login" is multi-valued — every bound profile shows on the
+// integration purpose; "login" is multi-valued — every bound profile shows on the
 // sign-in page simultaneously.
 message OauthBinding {
   string purpose = 1;

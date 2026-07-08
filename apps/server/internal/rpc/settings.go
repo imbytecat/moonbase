@@ -23,7 +23,7 @@ import (
 )
 
 // SettingsService is the BUSINESS settings surface (settings.*). The
-// infrastructure channels live in SystemService behind system.*.
+// infrastructure integrations live in SystemService behind system.*.
 type SettingsService struct {
 	settings *settings.Store
 	repo     repository.Querier

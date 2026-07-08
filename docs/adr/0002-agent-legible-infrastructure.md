@@ -1,5 +1,7 @@
 # 基础设施不变量为 AI agent 优化：确定性生成 / 类型优先于可被糊弄的测试与反射
 
+> **状态**：部分被 ADR-0005 超越。本 ADR 的 *agent-legibility 内核*（proto 单一真源＝决策 2、provider 派发零反射且字面可 grep＝决策 4、integration 作完整布线范例＝决策 6）**仍然在 force**；被超越的只有「模板 cherry-pick、diff 可移植」这一可移植性约束——integration（原 channel）自 2026-07 起抽成 go.work 独立模块。go-plugin / 运行时插件 / schema 驱动运行时表单**仍被本 ADR 排除**。见 ADR-0005。
+
 ## 背景
 
 本仓库的代码主要由 AI coding agent 读写。到 2026 年中，一手材料已把「可读性」从风格偏好升级为**可测的性能特征**，并给出稳定的工程结论：

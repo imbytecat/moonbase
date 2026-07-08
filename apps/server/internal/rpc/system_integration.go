@@ -8,28 +8,29 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-// channelOps is the one implementation behind every profile-based channel's
-// Create/Update/Delete/Bind RPCs (storage, captcha, email, sms, llm). Only
-// the profile payload differs per channel; the lifecycle rules are shared:
-// create assigns the id, update keeps stored secrets when the wire value is
-// empty, delete refuses while bound, bind validates the purpose catalog.
-type channelOps[P settings.Profile[P]] struct {
+// integrationOps is the one implementation behind every profile-based
+// integration's Create/Update/Delete/Bind RPCs (storage, captcha, email, sms,
+// llm). Only the profile payload differs per integration; the lifecycle rules
+// are shared: create assigns the id, update keeps stored secrets when the wire
+// value is empty, delete refuses while bound, bind validates the purpose
+// catalog.
+type integrationOps[P settings.Profile[P]] struct {
 	name        string
-	load        func(context.Context) (settings.Channel[P], error)
-	save        func(context.Context, settings.Channel[P]) error
-	purposes    channel.Catalog
+	load        func(context.Context) (settings.Integration[P], error)
+	save        func(context.Context, settings.Integration[P]) error
+	purposes    integration.Catalog
 	keepSecrets func(updated, stored P) P
 }
 
-func (o channelOps[P]) errNotFound() error {
+func (o integrationOps[P]) errNotFound() error {
 	return connect.NewError(connect.CodeNotFound, fmt.Errorf("%s profile not found", o.name))
 }
 
-func (o channelOps[P]) create(ctx context.Context, s *SystemService, in P) (P, error) {
+func (o integrationOps[P]) create(ctx context.Context, s *SystemService, in P) (P, error) {
 	cfg, err := o.load(ctx)
 	if err != nil {
 		var zero P
@@ -44,7 +45,7 @@ func (o channelOps[P]) create(ctx context.Context, s *SystemService, in P) (P, e
 	return profile, nil
 }
 
-func (o channelOps[P]) update(ctx context.Context, s *SystemService, in P) (P, error) {
+func (o integrationOps[P]) update(ctx context.Context, s *SystemService, in P) (P, error) {
 	cfg, err := o.load(ctx)
 	if err != nil {
 		var zero P
@@ -66,7 +67,7 @@ func (o channelOps[P]) update(ctx context.Context, s *SystemService, in P) (P, e
 	return zero, o.errNotFound()
 }
 
-func (o channelOps[P]) delete(ctx context.Context, s *SystemService, id string) error {
+func (o integrationOps[P]) delete(ctx context.Context, s *SystemService, id string) error {
 	cfg, err := o.load(ctx)
 	if err != nil {
 		return s.internal(ctx, "load "+o.name+" settings", err)
@@ -95,10 +96,10 @@ func (o channelOps[P]) delete(ctx context.Context, s *SystemService, id string) 
 }
 
 // bindMany is the one binding write: every id must resolve, an empty list
-// unbinds. Single-valued channels pass ≤1 id; multi-valued ones (oauth
+// unbinds. Single-valued integrations pass ≤1 id; multi-valued ones (oauth
 // login) pass the full ordered selection.
-func (o channelOps[P]) bindMany(ctx context.Context, s *SystemService, purpose string, profileIDs []string) (settings.Channel[P], error) {
-	var zero settings.Channel[P]
+func (o integrationOps[P]) bindMany(ctx context.Context, s *SystemService, purpose string, profileIDs []string) (settings.Integration[P], error) {
+	var zero settings.Integration[P]
 	if !o.purposes.Known(purpose) {
 		return zero, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("unknown %s purpose %q", o.name, purpose))
@@ -123,7 +124,7 @@ func (o channelOps[P]) bindMany(ctx context.Context, s *SystemService, purpose s
 	return cfg, nil
 }
 
-func (o channelOps[P]) bind(ctx context.Context, s *SystemService, purpose, profileID string) (settings.Channel[P], error) {
+func (o integrationOps[P]) bind(ctx context.Context, s *SystemService, purpose, profileID string) (settings.Integration[P], error) {
 	ids := []string{}
 	if profileID != "" {
 		ids = []string{profileID}
@@ -134,7 +135,7 @@ func (o channelOps[P]) bind(ctx context.Context, s *SystemService, purpose, prof
 // resolveTestProfile implements the shared test-RPC convention: pass a
 // profile to test unsaved form values (empty secrets fall back to the stored
 // profile with the same id), or a profile id to test a stored profile as-is.
-func (o channelOps[P]) resolveTestProfile(ctx context.Context, s *SystemService, in *P, id string) (P, error) {
+func (o integrationOps[P]) resolveTestProfile(ctx context.Context, s *SystemService, in *P, id string) (P, error) {
 	var zero P
 	cfg, err := o.load(ctx)
 	if err != nil {

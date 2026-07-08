@@ -2,6 +2,32 @@
 
 Go 后端领域。领域词汇的权威真源是 `proto/`；本文件只收录本上下文里**需要被消歧或对齐**的术语，引用而非重造 proto 定义。
 
+## Language — 集成（Integration / Provider / Driver / Seam / Plugin / Domain）
+
+**integration（集成）**：
+一类基础设施关注点（storage / captcha / email / sms / llm / oauth / payment），统一走 profile CRUD + purpose 绑定。integration 是**关注点**，不是某个 provider 的实现，也不是它背后的持久表。（原称 channel/通道；因非通用总称且在 Go 里撞一等概念 `chan`，交叉验证后更名 integration——见 ADR-0005 术语；旧 ADR/代码里的 channel/通道 **等同** integration。）见 ADR-0003（工件归域不归 integration）、ADR-0005（integration 抽成独立模块）。
+_Avoid_: channel（撞 Go `chan`，且暗示只限通讯/支付）、service 泛指；把单个 provider 或某张表叫 integration。
+
+**provider（提供商 / 厂商身份）**：
+一个外部厂商的**身份 = 选择键**（`alipay` / `s3` / `smtp`），即 registry 的 map key（`ProviderName()`）。provider 与 driver 是**同一事物的两面**——provider 是身份，driver 是它在本系统里的实现——**不是两个概念**。
+_Avoid_: 把 provider 当成独立于 driver 的东西；照 Terraform 用法拿 provider 指整个 integration / 实现体。
+
+**driver（驱动）**：
+一个 provider 的**无状态**实现，藏在 integration 的 seam 之后，独占该 provider 的怪癖。driver **不碰 DB**；持久工件归消费它的 domain（见 ADR-0003）。它是可被抽成独立 Go 模块的单元（ADR-0005）。「支付 driver」是它在 payment integration 的特例。
+_Avoid_: plugin（见下）、adapter、handler。
+
+**seam（缝）**：
+integration 暴露给 base、driver 藏于其后的接口：storage 的 `ObjectStore`、captcha 的 `Verifier`、email/sms 的 `Sender`、llm 的 `Chatter`、oauth 的 `Flow`、payment 的 `Gateway`。base 只认 seam，不认具体 provider。
+_Avoid_: interface 泛指、port。
+
+**plugin（插件）— 保留词，当前系统没有**：
+特指**进程外、独立编译、运行时加载**的扩展（hashicorp/go-plugin 那种）。moonbase **刻意不做**（与 ADR-0002 决策 4 冲突）；编译期 driver registry **不是** plugin，go.work 多模块也**不是** plugin。除非在 go-plugin 语境，别用「插件 / 插件体系」称呼 driver / registry / 模块。见 ADR-0005 非目标。
+_Avoid_: 用「插件 / 插件体系」指代编译期 driver registry 或 integration 模块。
+
+**domain（域）**：
+一个持久工件及其生命周期义务的归属方。integration 的产出若是持久工件（`files`、`payment_orders`），工件与表归 domain，**不归 integration**（ADR-0003）。domain 表留在 base，integration 模块零建表（ADR-0005）。
+_Avoid_: 把 integration 当 domain；把 domain 表塞进 integration 模块。
+
 ## Language — 文件（File）
 
 **file（文件）**：

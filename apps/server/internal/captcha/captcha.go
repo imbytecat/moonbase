@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -29,7 +29,7 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeAuth}
+var Purposes = integration.Catalog{PurposeAuth}
 
 type Verifier interface {
 	// Enabled reports whether the purpose resolves to a fully-configured
@@ -47,7 +47,7 @@ type captchaOps struct {
 	verify  func(c *Client, ctx context.Context, p systemcodec.CaptchaProfile, token, remoteIP string) error
 }
 
-var drivers = channel.Registry[systemcodec.CaptchaProfile, captchaOps]{
+var drivers = integration.Registry[systemcodec.CaptchaProfile, captchaOps]{
 	"turnstile": {
 		Usable: func(p systemcodec.CaptchaProfile) bool {
 			return p.Turnstile.SiteKey != "" && p.Turnstile.SecretKey != ""

@@ -2,10 +2,11 @@
 // settings table (JSONB values). Every key ships defaults, so a fresh
 // database needs no seeding: a missing row reads as the zero config.
 //
-// Infrastructure channels share ONE shape — Channel[P]: named connection
-// profiles plus purpose → profile bindings. Only the profile payload P
-// differs per channel; each driver inside P keeps its own config struct
-// (an SMTP server and a REST API have nothing in common but the seam).
+// Infrastructure integrations share ONE shape — Integration[P]: named
+// connection profiles plus purpose → profile bindings. Only the profile
+// payload P differs per integration; each driver inside P keeps its own
+// config struct (an SMTP server and a REST API have nothing in common but
+// the seam).
 package settings
 
 import (
@@ -78,32 +79,32 @@ type Site struct {
 	IcpBeian      string `json:"icpBeian"`
 }
 
-// identifiable lets Channel look profiles up by id without knowing the
+// identifiable lets Integration look profiles up by id without knowing the
 // payload type.
 type identifiable interface {
 	ProfileID() string
 }
 
-// Profile is the full generic surface a channel profile exposes: identity
-// for Channel lookups, the provider wire value for driver registries, and a
-// value-typed id setter for generic create flows.
+// Profile is the full generic surface an integration profile exposes:
+// identity for Integration lookups, the provider wire value for driver
+// registries, and a value-typed id setter for generic create flows.
 type Profile[P any] interface {
 	identifiable
 	ProviderName() string
 	WithID(id string) P
 }
 
-// Channel is the one shape every profile-based infrastructure channel
+// Integration is the one shape every profile-based infrastructure integration
 // shares: operators register any number of named connection profiles and
 // bind each code-defined purpose to one or more of them. Most purposes are
 // single-valued (the Bind RPC enforces one id); third-party login is the
 // multi-valued case (every bound profile is offered simultaneously).
-type Channel[P identifiable] struct {
+type Integration[P identifiable] struct {
 	Profiles []P                 `json:"profiles"`
 	Bindings map[string][]string `json:"bindings"`
 }
 
-func (c Channel[P]) Profile(id string) (P, bool) {
+func (c Integration[P]) Profile(id string) (P, bool) {
 	for _, p := range c.Profiles {
 		if p.ProfileID() == id {
 			return p, true
@@ -114,7 +115,7 @@ func (c Channel[P]) Profile(id string) (P, bool) {
 }
 
 // ProfileFor resolves a single-valued purpose to its bound profile.
-func (c Channel[P]) ProfileFor(purpose string) (P, bool) {
+func (c Integration[P]) ProfileFor(purpose string) (P, bool) {
 	ids := c.Bindings[purpose]
 	if len(ids) == 0 {
 		var zero P
@@ -125,7 +126,7 @@ func (c Channel[P]) ProfileFor(purpose string) (P, bool) {
 
 // ProfilesFor resolves a multi-valued purpose to its bound profiles, in
 // binding order; ids pointing at deleted profiles are skipped.
-func (c Channel[P]) ProfilesFor(purpose string) []P {
+func (c Integration[P]) ProfilesFor(purpose string) []P {
 	ids := c.Bindings[purpose]
 	out := make([]P, 0, len(ids))
 	for _, id := range ids {
@@ -136,7 +137,7 @@ func (c Channel[P]) ProfilesFor(purpose string) []P {
 	return out
 }
 
-func (c Channel[P]) Bound(id string) (string, bool) {
+func (c Integration[P]) Bound(id string) (string, bool) {
 	for purpose, ids := range c.Bindings {
 		for _, bound := range ids {
 			if bound == id {
@@ -147,21 +148,21 @@ func (c Channel[P]) Bound(id string) (string, bool) {
 	return "", false
 }
 
-type Storage = Channel[systemcodec.StorageProfile]
+type Storage = Integration[systemcodec.StorageProfile]
 
-type Captcha = Channel[systemcodec.CaptchaProfile]
+type Captcha = Integration[systemcodec.CaptchaProfile]
 
 // Email is the outbound-email channel. Its profile and config shapes are
 // generated from proto by protoc-gen-settings, so they live in systemcodec.
-type Email = Channel[systemcodec.EmailProfile]
+type Email = Integration[systemcodec.EmailProfile]
 
-type Sms = Channel[systemcodec.SmsProfile]
+type Sms = Integration[systemcodec.SmsProfile]
 
-type Llm = Channel[systemcodec.LlmProfile]
+type Llm = Integration[systemcodec.LlmProfile]
 
-type OAuth = Channel[systemcodec.OauthProfile]
+type OAuth = Integration[systemcodec.OauthProfile]
 
-type Payment = Channel[systemcodec.PaymentProfile]
+type Payment = Integration[systemcodec.PaymentProfile]
 
 const (
 	PaymentAuthPublicKey    = "public_key"
@@ -228,7 +229,7 @@ func fileIDParam(id string) pgtype.UUID {
 }
 
 func (s *Store) Storage(ctx context.Context) (Storage, error) {
-	return getChannel[systemcodec.StorageProfile](ctx, s, keyStorage)
+	return getIntegration[systemcodec.StorageProfile](ctx, s, keyStorage)
 }
 
 func (s *Store) SetStorage(ctx context.Context, v Storage) error {
@@ -236,7 +237,7 @@ func (s *Store) SetStorage(ctx context.Context, v Storage) error {
 }
 
 func (s *Store) Captcha(ctx context.Context) (Captcha, error) {
-	return getChannel[systemcodec.CaptchaProfile](ctx, s, keyCaptcha)
+	return getIntegration[systemcodec.CaptchaProfile](ctx, s, keyCaptcha)
 }
 
 func (s *Store) SetCaptcha(ctx context.Context, v Captcha) error {
@@ -244,7 +245,7 @@ func (s *Store) SetCaptcha(ctx context.Context, v Captcha) error {
 }
 
 func (s *Store) Email(ctx context.Context) (Email, error) {
-	return getChannel[systemcodec.EmailProfile](ctx, s, keyEmail)
+	return getIntegration[systemcodec.EmailProfile](ctx, s, keyEmail)
 }
 
 func (s *Store) SetEmail(ctx context.Context, v Email) error {
@@ -252,7 +253,7 @@ func (s *Store) SetEmail(ctx context.Context, v Email) error {
 }
 
 func (s *Store) Sms(ctx context.Context) (Sms, error) {
-	return getChannel[systemcodec.SmsProfile](ctx, s, keySms)
+	return getIntegration[systemcodec.SmsProfile](ctx, s, keySms)
 }
 
 func (s *Store) SetSms(ctx context.Context, v Sms) error {
@@ -260,7 +261,7 @@ func (s *Store) SetSms(ctx context.Context, v Sms) error {
 }
 
 func (s *Store) Llm(ctx context.Context) (Llm, error) {
-	return getChannel[systemcodec.LlmProfile](ctx, s, keyLlm)
+	return getIntegration[systemcodec.LlmProfile](ctx, s, keyLlm)
 }
 
 func (s *Store) SetLlm(ctx context.Context, v Llm) error {
@@ -268,7 +269,7 @@ func (s *Store) SetLlm(ctx context.Context, v Llm) error {
 }
 
 func (s *Store) Oauth(ctx context.Context) (OAuth, error) {
-	return getChannel[systemcodec.OauthProfile](ctx, s, keyOauth)
+	return getIntegration[systemcodec.OauthProfile](ctx, s, keyOauth)
 }
 
 func (s *Store) SetOauth(ctx context.Context, v OAuth) error {
@@ -276,15 +277,15 @@ func (s *Store) SetOauth(ctx context.Context, v OAuth) error {
 }
 
 func (s *Store) Payment(ctx context.Context) (Payment, error) {
-	return getChannel[systemcodec.PaymentProfile](ctx, s, keyPayment)
+	return getIntegration[systemcodec.PaymentProfile](ctx, s, keyPayment)
 }
 
 func (s *Store) SetPayment(ctx context.Context, v Payment) error {
 	return s.set(ctx, keyPayment, v)
 }
 
-func getChannel[P identifiable](ctx context.Context, s *Store, key string) (Channel[P], error) {
-	var v Channel[P]
+func getIntegration[P identifiable](ctx context.Context, s *Store, key string) (Integration[P], error) {
+	var v Integration[P]
 	if err := s.get(ctx, key, &v); err != nil {
 		return v, err
 	}

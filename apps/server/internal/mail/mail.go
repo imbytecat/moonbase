@@ -17,7 +17,7 @@ import (
 
 	gomail "github.com/wneessen/go-mail"
 
-	"github.com/imbytecat/moonbase/server/internal/channel"
+	"github.com/imbytecat/moonbase/server/internal/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
@@ -32,7 +32,7 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = channel.Catalog{PurposeAuth}
+var Purposes = integration.Catalog{PurposeAuth}
 
 var ErrNotConfigured = fmt.Errorf("email is not configured")
 
@@ -45,7 +45,7 @@ type Sender interface {
 
 type sendFunc = func(c *Client, ctx context.Context, p systemcodec.EmailProfile, to, subject, textBody string) error
 
-var drivers = channel.Registry[systemcodec.EmailProfile, sendFunc]{
+var drivers = integration.Registry[systemcodec.EmailProfile, sendFunc]{
 	"smtp": {
 		Usable: func(p systemcodec.EmailProfile) bool { return p.Smtp.Host != "" },
 		Ops:    (*Client).sendSmtp,
