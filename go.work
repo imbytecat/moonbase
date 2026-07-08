@@ -5,5 +5,6 @@ use (
 	./integrationkit
 	./integrations/captcha
 	./integrations/email
+	./integrations/llm
 	./integrations/sms
 )

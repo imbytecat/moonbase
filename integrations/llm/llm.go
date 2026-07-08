@@ -16,8 +16,8 @@ import (
 	openaioption "github.com/openai/openai-go/v3/option"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
 // AI purposes are code, not data: each is a fixed slot the application calls
@@ -35,6 +35,10 @@ var Purposes = integration.Catalog{PurposeChat}
 // ErrNotConfigured signals that the purpose is unbound or its profile is
 // incomplete; callers map it to a friendly "not configured" RPC error.
 var ErrNotConfigured = fmt.Errorf("ai model is not configured")
+
+type Config = kitsettings.Integration[systemcodec.LlmProfile]
+
+type Loader func(ctx context.Context) (Config, error)
 
 // Chatter is the semantic seam business code depends on: one prompt in, one
 // completion out, addressed by purpose. Streaming/tool use can extend this
@@ -73,23 +77,23 @@ func ProfileUsable(p systemcodec.LlmProfile) bool {
 }
 
 // Usable reports whether the purpose resolves to a usable profile.
-func Usable(cfg settings.Llm, purpose string) bool {
+func Usable(cfg Config, purpose string) bool {
 	p, ok := cfg.ProfileFor(purpose)
 	return ok && ProfileUsable(p)
 }
 
 type Client struct {
-	store *settings.Store
+	load Loader
 }
 
-func NewClient(store *settings.Store) *Client {
-	return &Client{store: store}
+func NewClient(load Loader) *Client {
+	return &Client{load: load}
 }
 
 var _ Chatter = (*Client)(nil)
 
 func (c *Client) Complete(ctx context.Context, purpose, systemPrompt, userPrompt string) (string, error) {
-	cfg, err := c.store.Llm(ctx)
+	cfg, err := c.load(ctx)
 	if err != nil {
 		return "", err
 	}

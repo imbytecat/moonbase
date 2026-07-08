@@ -6,8 +6,8 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrations/llm"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
-	"github.com/imbytecat/moonbase/server/internal/llm"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 

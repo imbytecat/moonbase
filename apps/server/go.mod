@@ -11,7 +11,6 @@ require (
 	connectrpc.com/validate v0.6.0
 	github.com/agentine/sawmill v0.1.0
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/anthropics/anthropic-sdk-go v1.56.0
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/dbos-inc/dbos-transact-golang v0.18.0
 	github.com/google/uuid v1.6.0
@@ -20,7 +19,6 @@ require (
 	github.com/mcosta74/pgx-slog v0.4.1
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/nyaruka/phonenumbers v1.8.0
-	github.com/openai/openai-go/v3 v3.41.0
 	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/prometheus/client_golang v1.23.2

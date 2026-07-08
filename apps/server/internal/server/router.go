@@ -16,6 +16,7 @@ import (
 
 	"github.com/imbytecat/moonbase/server/integrations/captcha"
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	"github.com/imbytecat/moonbase/server/integrations/llm"
 	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
@@ -32,7 +33,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/gen/user/v1/userv1connect"
 	"github.com/imbytecat/moonbase/server/internal/gen/workflow/v1/workflowv1connect"
 	"github.com/imbytecat/moonbase/server/internal/handler"
-	"github.com/imbytecat/moonbase/server/internal/llm"
 	"github.com/imbytecat/moonbase/server/internal/metrics"
 	"github.com/imbytecat/moonbase/server/internal/notification"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
@@ -55,7 +55,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	s3 := storage.NewClient(settingsStore)
 	mailer := mail.NewClient(settingsStore.Email)
 	smser := sms.NewClient(settingsStore.Sms)
-	chatter := llm.NewClient(settingsStore)
+	chatter := llm.NewClient(settingsStore.Llm)
 	captchaVerifier := captcha.NewClient(settingsStore)
 	oauthFlow := oauth.NewClient(settingsStore)
 	notifier := notification.NewProducer(repo)
