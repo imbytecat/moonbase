@@ -64,8 +64,6 @@ github.com/aliyun/credentials-go v1.3.1/go.mod h1:8jKYhQuDawt8x2+fusqa1Y6mPxemTs
 github.com/aliyun/credentials-go v1.3.6/go.mod h1:1LxUuX7L5YrZUWzBrRyk0SwSdH4OmPrib8NVePL3fxM=
 github.com/aliyun/credentials-go v1.4.5 h1:O76WYKgdy1oQYYiJkERjlA2dxGuvLRrzuO2ScrtGWSk=
 github.com/aliyun/credentials-go v1.4.5/go.mod h1:Jm6d+xIgwJVLVWT561vy67ZRP4lPTQxMbEYRuT2Ti1U=
-github.com/altcha-org/altcha-lib-go v1.0.0 h1:7oPti0aUS+YCep8nwt5b9g4jYfCU55ZruWESL8G9K5M=
-github.com/altcha-org/altcha-lib-go v1.0.0/go.mod h1:I8ESLVWR9C58uvGufB/AJDPhaSU4+4Oh3DLpVtgwDAk=
 github.com/anthropics/anthropic-sdk-go v1.56.0 h1:idVU14wOZ06D0GBNEvuhn927xXmBVEquo0469iDwLsc=
 github.com/anthropics/anthropic-sdk-go v1.56.0/go.mod h1:3EfIfmFqxH6rbiLcIP4tPFyXL/IHakx2wDG4OU+TIEI=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=

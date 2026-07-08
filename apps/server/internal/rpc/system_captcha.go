@@ -6,7 +6,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/captcha"
+	"github.com/imbytecat/moonbase/server/integrations/captcha"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )

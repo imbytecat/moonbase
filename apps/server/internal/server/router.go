@@ -14,11 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
 
+	"github.com/imbytecat/moonbase/server/integrations/captcha"
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
-	"github.com/imbytecat/moonbase/server/internal/captcha"
 	"github.com/imbytecat/moonbase/server/internal/config"
 	"github.com/imbytecat/moonbase/server/internal/gen/audit/v1/auditv1connect"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"

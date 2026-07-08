@@ -9,9 +9,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	"github.com/imbytecat/moonbase/server/integrations/captcha"
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/integrations/sms"
-	"github.com/imbytecat/moonbase/server/internal/captcha"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/llm"
 	"github.com/imbytecat/moonbase/server/internal/oauth"

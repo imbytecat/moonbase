@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
 // CAPTCHA purposes are code, not data: each is a fixed slot the application
@@ -30,6 +30,13 @@ const (
 
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = integration.Catalog{PurposeAuth}
+
+type Config = kitsettings.Integration[systemcodec.CaptchaProfile]
+
+type Store interface {
+	Captcha(ctx context.Context) (Config, error)
+	CaptchaAltchaKey(ctx context.Context) ([]byte, error)
+}
 
 type Verifier interface {
 	// Enabled reports whether the purpose resolves to a fully-configured
@@ -90,7 +97,7 @@ func ProfileUsable(p systemcodec.CaptchaProfile) bool {
 
 // Widget returns the provider name and public site key the login page needs
 // to render the challenge for a purpose; ok=false means pass-through.
-func Widget(cfg settings.Captcha, purpose string) (provider, siteKey string, ok bool) {
+func Widget(cfg Config, purpose string) (provider, siteKey string, ok bool) {
 	p, found := cfg.ProfileFor(purpose)
 	if !found {
 		return "", "", false
@@ -103,12 +110,12 @@ func Widget(cfg settings.Captcha, purpose string) (provider, siteKey string, ok 
 }
 
 type Client struct {
-	store        *settings.Store
+	store        Store
 	http         *http.Client
 	altchaReplay *replayCache
 }
 
-func NewClient(store *settings.Store) *Client {
+func NewClient(store Store) *Client {
 	return &Client{
 		store:        store,
 		http:         &http.Client{Timeout: 10 * time.Second},

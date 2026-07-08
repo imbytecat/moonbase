@@ -3,6 +3,7 @@ go 1.26
 use (
 	./apps/server
 	./integrationkit
+	./integrations/captcha
 	./integrations/email
 	./integrations/sms
 )

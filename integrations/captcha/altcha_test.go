@@ -8,36 +8,27 @@ import (
 	"testing"
 
 	altcha "github.com/altcha-org/altcha-lib-go"
-	"github.com/jackc/pgx/v5"
 
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/repository"
-	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-type fakeQuerier struct {
-	repository.Querier
-	values map[string]json.RawMessage
+type fakeStore struct {
+	cfg Config
+	key []byte
 }
 
-func (f *fakeQuerier) GetSetting(_ context.Context, key string) (repository.Setting, error) {
-	raw, ok := f.values[key]
-	if !ok {
-		return repository.Setting{}, pgx.ErrNoRows
-	}
-	return repository.Setting{Key: key, Value: raw}, nil
+func (f fakeStore) Captcha(context.Context) (Config, error) {
+	return f.cfg, nil
 }
 
-func (f *fakeQuerier) UpsertSetting(_ context.Context, arg repository.UpsertSettingParams) error {
-	f.values[arg.Key] = arg.Value
-	return nil
+func (f fakeStore) CaptchaAltchaKey(context.Context) ([]byte, error) {
+	return f.key, nil
 }
 
 func newAltchaTestClient(t *testing.T) *Client {
 	t.Helper()
-	store := settings.NewStore(&fakeQuerier{values: map[string]json.RawMessage{}})
-	client := NewClient(store)
-	cfg := settings.Captcha{
+	cfg := kitsettings.Integration[systemcodec.CaptchaProfile]{
 		Profiles: []systemcodec.CaptchaProfile{{
 			Id:       "p1",
 			Name:     "altcha",
@@ -46,10 +37,7 @@ func newAltchaTestClient(t *testing.T) *Client {
 		}},
 		Bindings: map[string][]string{PurposeAuth: {"p1"}},
 	}
-	if err := store.SetCaptcha(t.Context(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	return client
+	return NewClient(fakeStore{cfg: cfg, key: []byte("test-altcha-hmac-key")})
 }
 
 func solveAltchaChallenge(t *testing.T, client *Client) string {
@@ -111,8 +99,7 @@ func TestAltchaRejectsWrongSolution(t *testing.T) {
 }
 
 func TestAltchaChallengeUnboundPurposeIs404(t *testing.T) {
-	store := settings.NewStore(&fakeQuerier{values: map[string]json.RawMessage{}})
-	client := NewClient(store)
+	client := NewClient(fakeStore{key: []byte("test-altcha-hmac-key")})
 
 	rec := httptest.NewRecorder()
 	client.ServeAltchaChallenge(rec, httptest.NewRequest("GET", "/captcha/altcha/challenge?purpose=auth", nil))

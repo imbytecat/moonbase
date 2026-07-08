@@ -11,7 +11,6 @@ require (
 	connectrpc.com/validate v0.6.0
 	github.com/agentine/sawmill v0.1.0
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/altcha-org/altcha-lib-go v1.0.0
 	github.com/anthropics/anthropic-sdk-go v1.56.0
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/dbos-inc/dbos-transact-golang v0.18.0
