@@ -5,10 +5,10 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
-	"github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 func (s *SystemService) emailOps() integrationOps[systemcodec.EmailProfile] {

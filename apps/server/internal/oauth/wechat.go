@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // WeChat Open Platform website-application QR login. The oddities drivers

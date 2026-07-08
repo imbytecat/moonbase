@@ -32,7 +32,7 @@ const (
 
 // systemcodec is where the generated storage structs + codecs live; it is the
 // single source of truth for integration profile shapes.
-const systemcodecImportPath = "github.com/imbytecat/moonbase/server/internal/systemcodec"
+const systemcodecImportPath = "github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 
 func main() {
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {

@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/paymentcatalog"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // PurposeCheckout is the demo checkout slot. Adding a feature that charges =

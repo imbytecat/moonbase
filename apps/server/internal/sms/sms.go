@@ -17,10 +17,10 @@ import (
 	tcprofile "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	tcsms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // SMS purposes are code, not data: each is a fixed slot the application

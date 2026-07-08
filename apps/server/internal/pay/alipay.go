@@ -10,8 +10,8 @@ import (
 
 	"github.com/smartwalle/alipay/v3"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // Alipay method ids are the official API-method names, matched by the driver's

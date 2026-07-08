@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // End to end over the real wire (ADR-0004 last cell): a private-purpose file

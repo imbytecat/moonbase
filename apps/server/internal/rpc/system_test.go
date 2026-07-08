@@ -10,13 +10,13 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/llm"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	stg "github.com/imbytecat/moonbase/server/internal/storage"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // memSettingsQuerier is an in-memory settings table: enough Querier surface

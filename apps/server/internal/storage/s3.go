@@ -10,7 +10,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 func (c *Client) s3PresignPut(ctx context.Context, cfg systemcodec.StorageProfile, _, key, contentType string, expires time.Duration) (string, error) {

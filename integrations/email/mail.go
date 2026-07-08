@@ -1,10 +1,10 @@
-// Package mail sends email through connection profiles configured in system
+// Package email sends email through connection profiles configured in system
 // settings. Each provider is a driver behind the Sender seam with its own
 // config shape: SMTP (wneessen/go-mail; net/smtp is frozen upstream) and the
 // Cloudflare Email Service REST API. Profiles are bound to code-defined
 // purposes; clients are built per send so config changes apply without a
 // restart.
-package mail
+package email
 
 import (
 	"bytes"
@@ -17,9 +17,9 @@ import (
 
 	gomail "github.com/wneessen/go-mail"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
-	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // Email purposes are code, not data: each is a fixed slot the application
@@ -35,6 +35,10 @@ const (
 var Purposes = integration.Catalog{PurposeAuth}
 
 var ErrNotConfigured = fmt.Errorf("email is not configured")
+
+type Config = kitsettings.Integration[systemcodec.EmailProfile]
+
+type Loader func(ctx context.Context) (Config, error)
 
 // Sender is the semantic seam business code depends on: recipient, subject
 // and body in, addressed by purpose.
@@ -71,24 +75,24 @@ func ProfileUsable(p systemcodec.EmailProfile) bool {
 
 // Usable reports whether the purpose resolves to a usable profile — shared
 // with GetAuthConfig capability flags.
-func Usable(cfg settings.Email, purpose string) bool {
+func Usable(cfg Config, purpose string) bool {
 	p, ok := cfg.ProfileFor(purpose)
 	return ok && ProfileUsable(p)
 }
 
 type Client struct {
-	store *settings.Store
-	http  *http.Client
+	load Loader
+	http *http.Client
 }
 
-func NewClient(store *settings.Store) *Client {
-	return &Client{store: store, http: &http.Client{Timeout: 30 * time.Second}}
+func NewClient(load Loader) *Client {
+	return &Client{load: load, http: &http.Client{Timeout: 30 * time.Second}}
 }
 
 var _ Sender = (*Client)(nil)
 
 func (c *Client) Send(ctx context.Context, purpose, to, subject, textBody string) error {
-	cfg, err := c.store.Email(ctx)
+	cfg, err := c.load(ctx)
 	if err != nil {
 		return err
 	}

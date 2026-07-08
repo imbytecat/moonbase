@@ -23,7 +23,7 @@ tasks:
       - '/buf.lock'
     outputs:
       - '/apps/server/internal/gen'
-      - '/apps/server/internal/systemcodec'
+      - '/integrationkit/systemcodec'
       - '/packages/api-client/src/gen'
 
   # Read-only gate (composite): buf lint + format check. Named `check` so

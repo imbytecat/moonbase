@@ -16,11 +16,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/captcha"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
-	"github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/repository"

@@ -17,7 +17,7 @@ import (
 
 	altcha "github.com/altcha-org/altcha-lib-go"
 
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // The local driver stores objects on the server's own filesystem. There is

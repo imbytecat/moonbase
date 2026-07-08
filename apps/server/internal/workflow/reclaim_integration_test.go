@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/database"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // The sweep reclaims exactly the files that are unattached AND older than the

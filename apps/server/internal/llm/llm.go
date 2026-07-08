@@ -15,9 +15,9 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaioption "github.com/openai/openai-go/v3/option"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // AI purposes are code, not data: each is a fixed slot the application calls

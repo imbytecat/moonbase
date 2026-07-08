@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // TestIntegrationLookups pins the pure resolution logic behind every

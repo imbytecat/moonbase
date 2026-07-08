@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")

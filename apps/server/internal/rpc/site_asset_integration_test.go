@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
@@ -17,7 +18,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // End to end: replacing the site logo moves the 'site'/'logo' attachment to the

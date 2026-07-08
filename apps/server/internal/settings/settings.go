@@ -19,8 +19,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/repository"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 const (
@@ -79,74 +80,9 @@ type Site struct {
 	IcpBeian      string `json:"icpBeian"`
 }
 
-// identifiable lets Integration look profiles up by id without knowing the
-// payload type.
-type identifiable interface {
-	ProfileID() string
-}
+type Profile[P any] = kitsettings.Profile[P]
 
-// Profile is the full generic surface an integration profile exposes:
-// identity for Integration lookups, the provider wire value for driver
-// registries, and a value-typed id setter for generic create flows.
-type Profile[P any] interface {
-	identifiable
-	ProviderName() string
-	WithID(id string) P
-}
-
-// Integration is the one shape every profile-based infrastructure integration
-// shares: operators register any number of named connection profiles and
-// bind each code-defined purpose to one or more of them. Most purposes are
-// single-valued (the Bind RPC enforces one id); third-party login is the
-// multi-valued case (every bound profile is offered simultaneously).
-type Integration[P identifiable] struct {
-	Profiles []P                 `json:"profiles"`
-	Bindings map[string][]string `json:"bindings"`
-}
-
-func (c Integration[P]) Profile(id string) (P, bool) {
-	for _, p := range c.Profiles {
-		if p.ProfileID() == id {
-			return p, true
-		}
-	}
-	var zero P
-	return zero, false
-}
-
-// ProfileFor resolves a single-valued purpose to its bound profile.
-func (c Integration[P]) ProfileFor(purpose string) (P, bool) {
-	ids := c.Bindings[purpose]
-	if len(ids) == 0 {
-		var zero P
-		return zero, false
-	}
-	return c.Profile(ids[0])
-}
-
-// ProfilesFor resolves a multi-valued purpose to its bound profiles, in
-// binding order; ids pointing at deleted profiles are skipped.
-func (c Integration[P]) ProfilesFor(purpose string) []P {
-	ids := c.Bindings[purpose]
-	out := make([]P, 0, len(ids))
-	for _, id := range ids {
-		if p, ok := c.Profile(id); ok {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func (c Integration[P]) Bound(id string) (string, bool) {
-	for purpose, ids := range c.Bindings {
-		for _, bound := range ids {
-			if bound == id {
-				return purpose, true
-			}
-		}
-	}
-	return "", false
-}
+type Integration[P kitsettings.Profile[P]] = kitsettings.Integration[P]
 
 type Storage = Integration[systemcodec.StorageProfile]
 
@@ -284,7 +220,7 @@ func (s *Store) SetPayment(ctx context.Context, v Payment) error {
 	return s.set(ctx, keyPayment, v)
 }
 
-func getIntegration[P identifiable](ctx context.Context, s *Store, key string) (Integration[P], error) {
+func getIntegration[P kitsettings.Profile[P]](ctx context.Context, s *Store, key string) (Integration[P], error) {
 	var v Integration[P]
 	if err := s.get(ctx, key, &v); err != nil {
 		return v, err

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
 
+	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/captcha"
@@ -31,7 +32,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/gen/workflow/v1/workflowv1connect"
 	"github.com/imbytecat/moonbase/server/internal/handler"
 	"github.com/imbytecat/moonbase/server/internal/llm"
-	"github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/metrics"
 	"github.com/imbytecat/moonbase/server/internal/notification"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
@@ -53,7 +53,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	repo := repository.New(pool)
 	settingsStore := settings.NewStore(repo)
 	s3 := storage.NewClient(settingsStore)
-	mailer := mail.NewClient(settingsStore)
+	mailer := mail.NewClient(settingsStore.Email)
 	smser := sms.NewClient(settingsStore)
 	chatter := llm.NewClient(settingsStore)
 	captchaVerifier := captcha.NewClient(settingsStore)

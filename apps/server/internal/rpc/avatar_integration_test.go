@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
@@ -15,7 +16,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // End to end over the real wire: replacing an avatar moves the caller's single

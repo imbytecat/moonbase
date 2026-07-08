@@ -9,8 +9,8 @@ import (
 
 	"github.com/smartwalle/alipay/v3"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 func TestYuanRendersCents(t *testing.T) {

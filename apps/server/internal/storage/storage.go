@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/internal/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 // Storage purposes are code, not data: each is a fixed slot the application

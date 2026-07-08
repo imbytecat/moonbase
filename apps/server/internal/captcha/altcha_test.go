@@ -10,9 +10,9 @@ import (
 	altcha "github.com/altcha-org/altcha-lib-go"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
-	"github.com/imbytecat/moonbase/server/internal/systemcodec"
 )
 
 type fakeQuerier struct {
