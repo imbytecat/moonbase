@@ -12,9 +12,9 @@ import (
 	"github.com/imbytecat/moonbase/server/integrations/captcha"
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/integrations/llm"
+	"github.com/imbytecat/moonbase/server/integrations/oauth"
 	"github.com/imbytecat/moonbase/server/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
-	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/pay"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )

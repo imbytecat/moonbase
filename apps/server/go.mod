@@ -11,7 +11,6 @@ require (
 	connectrpc.com/validate v0.6.0
 	github.com/agentine/sawmill v0.1.0
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/dbos-inc/dbos-transact-golang v0.18.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -32,7 +31,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
 	go.uber.org/goleak v1.3.0
-	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.44.0
 	golang.org/x/text v0.38.0
 	google.golang.org/protobuf v1.36.11

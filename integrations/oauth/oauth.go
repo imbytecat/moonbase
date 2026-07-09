@@ -14,8 +14,8 @@ import (
 	"net/url"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
-	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
 var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")
@@ -26,6 +26,10 @@ const PurposeLogin = "login"
 
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = integration.Catalog{PurposeLogin}
+
+type Config = kitsettings.Integration[systemcodec.OauthProfile]
+
+type Loader func(ctx context.Context) (Config, error)
 
 // ExternalIdentity is the provider-agnostic result of a code exchange: a
 // stable subject plus display info for the identity row. ProviderKey is the
@@ -107,7 +111,7 @@ type ProviderOption struct {
 
 // UsableProviders lists login options ready to offer: the profiles bound to
 // the login purpose, in binding order, filtered to fully-configured drivers.
-func UsableProviders(cfg settings.OAuth) []ProviderOption {
+func UsableProviders(cfg Config) []ProviderOption {
 	bound := cfg.ProfilesFor(PurposeLogin)
 	out := make([]ProviderOption, 0, len(bound))
 	for _, p := range bound {
@@ -119,11 +123,11 @@ func UsableProviders(cfg settings.OAuth) []ProviderOption {
 }
 
 type Client struct {
-	store *settings.Store
+	load Loader
 }
 
-func NewClient(store *settings.Store) *Client {
-	return &Client{store: store}
+func NewClient(load Loader) *Client {
+	return &Client{load: load}
 }
 
 var _ Flow = (*Client)(nil)
@@ -132,7 +136,7 @@ var _ Flow = (*Client)(nil)
 // be bound to the login purpose — unbinding retires the /api/oauth/{key}/...
 // endpoints, the same gate the login page uses.
 func (c *Client) profileFor(ctx context.Context, key string) (systemcodec.OauthProfile, error) {
-	cfg, err := c.store.Oauth(ctx)
+	cfg, err := c.load(ctx)
 	if err != nil {
 		return systemcodec.OauthProfile{}, err
 	}
