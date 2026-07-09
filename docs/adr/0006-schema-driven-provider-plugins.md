@@ -1,6 +1,6 @@
 # schema 驱动的 provider 插件化：config 形状归 driver、base 一套通用引擎守密钥
 
-> **状态**：accepted。**超越 ADR-0002 决策 2/3 中关于 per-provider config 的部分**（config 形状不再进中央 proto，改由 driver 的运行时 schema 拥有）；**保留 ADR-0002 决策 1/4/6 内核**（掩码仍是不可糊弄的单点不变量、provider 派发仍编译期可 grep、integration 仍是完整布线范例）。**在 provider 粒度拉动 ADR-0005 的「schema 驱动运行时表单」触发器**。go-plugin / 运行时加载仍缓做。
+> **状态**：accepted。**超越 ADR-0002 决策 2/3 中关于 per-provider config 的部分**（config 形状不再进中央 proto，改由 driver 的运行时 schema 拥有）；**保留 ADR-0002 决策 1/4/6 内核**（掩码仍是不可糊弄的单点不变量、provider 派发仍编译期可 grep、integration 仍是完整布线范例）。**在 provider 粒度拉动 ADR-0005 的「schema 驱动运行时表单」触发器**。go-plugin / 运行时加载仍缓做。**已部分修订**：布局见 ADR-0007（integrations 收敛为单一模块，替代本文「布局与模块路径」的每-integration 独立 module）；schema 表单与前端 i18n 的张力由 ADR-0008 以「放弃 i18n、全站中文」了结（driver 的 `label`/`help` 直接写中文）。
 
 ## 背景
 
@@ -16,6 +16,7 @@
 ## 决定
 
 - **config 形状归 driver，以运行时 schema 描述；config 值在 wire 上走 `google.protobuf.Struct`（opaque）。** 每个 driver 发布一份 schema（字段 key/type + 结构标志 `secret`/`immutable`/`required` + 校验），语义只有 driver 懂。
+- **OAuth 的流程 slug 是 `config.key` 这个 schema 字段，且标 `immutable`。** 它被 `user_identities.provider` 与 `/api/oauth/{key}/...` 流程 URL 引用；一旦创建，改名会让既有身份记录和外部回调入口失稳，所以稳定性属于 driver config 的字段约束，而不是顶层 `Profile` 字段。
 - **base 拥有唯一一套 schema 驱动的通用引擎**：`Mask` / `Merge` / `Validate` / `Usable`，全按 schema 标志工作。**掩码是单点、可审计的不变量，driver 绝不实现掩码**——任一 driver 写错都无法泄凭证。这是 ADR-0002 决策 1（不可表达 > 可糊弄）+ 决策 3（机械映射集中）的延续，只是实现从「生成」换成「schema 驱动引擎」。
 - **drop-in 单元 = provider/driver**。加一个 provider = 实现 `Schema()` + `Ops` 并注册，**零 proto、零前端、零核心**。**integration 是核心已知的有界集合**，保留带类型的 per-integration RPC + 权限 + seam；加一整类 integration 仍是有意的核心动作。
 - **descriptor 与 base↔driver seam 照 Terraform provider schema/协议塑形**（`Sensitive`≈`Secret`、`ForceNew`≈`Immutable`、`Required`）。因 go-plugin 与 Terraform 同源，将来 P1 = 把进程内 registry 调用换成 gRPC，**base 引擎一行不改**。
