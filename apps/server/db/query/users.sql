@@ -34,7 +34,6 @@ UPDATE users
 SET email      = coalesce(lower(sqlc.narg('email')), email),
     name       = coalesce(sqlc.narg('name'), name),
     is_active  = coalesce(sqlc.narg('is_active'), is_active),
-    locale     = coalesce(sqlc.narg('locale'), locale),
     updated_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;

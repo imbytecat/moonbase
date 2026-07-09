@@ -433,16 +433,14 @@ func (s *AuthService) UpdateProfile(
 ) (*connect.Response[authv1.UpdateProfileResponse], error) {
 	id := auth.IdentityFromContext(ctx)
 	user, err := s.repo.UpdateUser(ctx, repository.UpdateUserParams{
-		ID:     id.UserID,
-		Name:   textArg(req.Msg.Name),
-		Locale: textArg(req.Msg.Locale),
+		ID:   id.UserID,
+		Name: textArg(req.Msg.Name),
 	})
 	if err != nil {
 		return nil, s.internal(ctx, "update profile", err)
 	}
 	updated := *id
 	updated.Name = user.Name
-	updated.Locale = user.Locale
 	// The avatar is a file reference, not a user-row column: only touch it when
 	// the client sends the field, transferring the attachment to the new file.
 	if req.Msg.AvatarFileId != nil {
@@ -538,7 +536,6 @@ func (s *AuthService) currentUser(ctx context.Context, id *auth.Identity) *authv
 		Phone:         id.Phone,
 		EmailVerified: id.EmailVerified,
 		Permissions:   perms,
-		Locale:        id.Locale,
 	}
 	if id.AvatarFileID != "" {
 		out.AvatarUrl = "/f/" + id.AvatarFileID

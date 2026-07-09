@@ -14,7 +14,6 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	userv1 "github.com/imbytecat/moonbase/server/internal/gen/user/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/user/v1/userv1connect"
-	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/notification"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 )
@@ -263,8 +262,8 @@ func (s *UserService) notifyRoleChange(ctx context.Context, userID uuid.UUID) {
 	if err := s.notifier.Publish(ctx, userID, notification.Message{
 		Category: notification.CategoryAccount,
 		Link:     "/profile",
-		TitleKey: i18n.NotifRoleChangedTitle,
-		BodyKey:  i18n.NotifRoleChangedBody,
+		Title:    "你的角色已更新",
+		Body:     "管理员更新了你的账号角色，你的权限可能已变化。",
 	}); err != nil {
 		s.logger.WarnContext(ctx, "notify role change failed", "error", err)
 	}

@@ -1,9 +1,8 @@
 // Package notification is the producer side of the in-app inbox (站内信): the
 // domain that owns an event calls Publish to drop a message into a user's
-// inbox. Title/body are stored already-rendered, so the producer localizes to
-// EACH recipient's own language at publish time (a fan-out to admins who
-// differ in locale gets each their own language). Reading the inbox lives in
-// internal/rpc; this half only writes.
+// inbox. The whole app is Simplified Chinese, so callers pass finished title
+// and body text and the producer stores it verbatim. Reading the inbox lives
+// in internal/rpc; this half only writes.
 package notification
 
 import (
@@ -13,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 )
 
@@ -27,16 +25,13 @@ const (
 	CategoryWorkflow = "workflow"
 )
 
-// Message is a localizable notification: a category, an optional in-app deep
-// link, and i18n keys (+ args) for title and body. The producer renders the
-// keys in each recipient's locale, so callers pass keys, never rendered text.
+// Message is a notification: a category, an optional in-app deep link, and the
+// already-rendered title and body.
 type Message struct {
-	Category  string
-	Link      string
-	TitleKey  string
-	TitleArgs []any
-	BodyKey   string
-	BodyArgs  []any
+	Category string
+	Link     string
+	Title    string
+	Body     string
 }
 
 // Publisher delivers a notification to one user, or fans it out to everyone
@@ -58,35 +53,30 @@ func NewProducer(repo repository.Querier) *Producer {
 var _ Publisher = (*Producer)(nil)
 
 func (p *Producer) Publish(ctx context.Context, userID uuid.UUID, msg Message) error {
-	locale, err := p.repo.GetUserLocale(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("notification recipient locale: %w", err)
-	}
-	return p.insert(ctx, userID, locale, msg)
+	return p.insert(ctx, userID, msg)
 }
 
 func (p *Producer) PublishToPermission(ctx context.Context, permission string, msg Message) error {
-	recipients, err := p.repo.ListUserLocalesForPermission(ctx, permission)
+	recipients, err := p.repo.ListUsersForPermission(ctx, permission)
 	if err != nil {
 		return fmt.Errorf("notification recipients for %q: %w", permission, err)
 	}
 	// Best-effort per recipient: one failed insert must not drop the others.
 	var errs []error
-	for _, r := range recipients {
-		if err := p.insert(ctx, r.ID, r.Locale, msg); err != nil {
+	for _, userID := range recipients {
+		if err := p.insert(ctx, userID, msg); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (p *Producer) insert(ctx context.Context, userID uuid.UUID, storedLocale string, msg Message) error {
-	loc := i18n.Resolve(storedLocale, "")
+func (p *Producer) insert(ctx context.Context, userID uuid.UUID, msg Message) error {
 	return p.repo.InsertNotification(ctx, repository.InsertNotificationParams{
 		UserID:   userID,
 		Category: msg.Category,
-		Title:    i18n.T(loc, msg.TitleKey, msg.TitleArgs...),
-		Body:     i18n.T(loc, msg.BodyKey, msg.BodyArgs...),
+		Title:    msg.Title,
+		Body:     msg.Body,
 		Link:     msg.Link,
 	})
 }

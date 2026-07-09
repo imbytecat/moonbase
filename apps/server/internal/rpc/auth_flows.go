@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -15,10 +16,19 @@ import (
 	"github.com/imbytecat/moonbase/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
-	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/verify"
+)
+
+const (
+	emailVerifySubject = "验证你的邮箱"
+	emailVerifyBody    = "你好 %s，\n\n点击下方链接验证你的邮箱地址，链接 24 小时内有效。\n\n%s\n"
+	emailResetSubject  = "重置你的密码"
+	emailResetBody     = "你好 %s，\n\n点击下方链接设置新密码，链接 1 小时内有效。如果这不是你本人操作，请忽略此邮件。\n\n%s\n"
+	emailCodeSubject   = "你的验证码"
+	emailCodeBody      = "你的验证码是 %s，5 分钟内有效。\n"
+	emailCodeBodyNamed = "你好 %s，\n\n你的验证码是 %s，5 分钟内有效。\n"
 )
 
 var errChannelUnavailable = connect.NewError(connect.CodeFailedPrecondition,
@@ -42,9 +52,8 @@ func (s *AuthService) SendVerificationEmail(
 		return nil, s.verifyIssueError(ctx, "issue email verify token", err)
 	}
 	link := s.publicURL + "/verify-email?token=" + url.QueryEscape(token)
-	loc := i18n.Resolve(user.Locale, req.Header().Get("Accept-Language"))
-	if err := s.mailer.Send(ctx, mail.PurposeAuth, user.Email, i18n.T(loc, i18n.AuthVerifyEmailSubject),
-		i18n.T(loc, i18n.AuthVerifyEmailBody, user.Name, link)); err != nil {
+	if err := s.mailer.Send(ctx, mail.PurposeAuth, user.Email, emailVerifySubject,
+		fmt.Sprintf(emailVerifyBody, user.Name, link)); err != nil {
 		if errors.Is(err, mail.ErrNotConfigured) {
 			return nil, errChannelUnavailable
 		}
@@ -102,9 +111,8 @@ func (s *AuthService) RequestPasswordReset(
 		return resp, nil
 	}
 	link := s.publicURL + "/reset-password?token=" + url.QueryEscape(token)
-	loc := i18n.Resolve(user.Locale, req.Header().Get("Accept-Language"))
-	if err := s.mailer.Send(ctx, mail.PurposeAuth, user.Email, i18n.T(loc, i18n.AuthResetPasswordSubject),
-		i18n.T(loc, i18n.AuthResetPasswordBody, user.Name, link)); err != nil {
+	if err := s.mailer.Send(ctx, mail.PurposeAuth, user.Email, emailResetSubject,
+		fmt.Sprintf(emailResetBody, user.Name, link)); err != nil {
 		s.logger.ErrorContext(ctx, "send reset email failed", "error", err)
 	}
 	return resp, nil
@@ -357,9 +365,8 @@ func (s *AuthService) SendEmailRegisterCode(
 	if err != nil {
 		return nil, s.verifyIssueError(ctx, "issue email register code", err)
 	}
-	loc := i18n.Resolve("", req.Header().Get("Accept-Language"))
-	if err := s.mailer.Send(ctx, mail.PurposeAuth, email, i18n.T(loc, i18n.AuthCodeSubject),
-		i18n.T(loc, i18n.AuthCodeBody, code)); err != nil {
+	if err := s.mailer.Send(ctx, mail.PurposeAuth, email, emailCodeSubject,
+		fmt.Sprintf(emailCodeBody, code)); err != nil {
 		if errors.Is(err, mail.ErrNotConfigured) {
 			return nil, errChannelUnavailable
 		}
@@ -386,9 +393,8 @@ func (s *AuthService) SendEmailBindCode(
 	if err != nil {
 		return nil, s.verifyIssueError(ctx, "issue email bind code", err)
 	}
-	loc := i18n.Resolve(id.Locale, req.Header().Get("Accept-Language"))
-	if err := s.mailer.Send(ctx, mail.PurposeAuth, email, i18n.T(loc, i18n.AuthCodeSubject),
-		i18n.T(loc, i18n.AuthCodeBodyNamed, id.Name, code)); err != nil {
+	if err := s.mailer.Send(ctx, mail.PurposeAuth, email, emailCodeSubject,
+		fmt.Sprintf(emailCodeBodyNamed, id.Name, code)); err != nil {
 		if errors.Is(err, mail.ErrNotConfigured) {
 			return nil, errChannelUnavailable
 		}

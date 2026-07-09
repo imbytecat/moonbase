@@ -27,7 +27,6 @@ type Identity struct {
 	Name          string
 	AvatarFileID  string
 	Phone         string
-	Locale        string
 	EmailVerified bool
 	Permissions   map[string]struct{}
 }

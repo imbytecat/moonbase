@@ -6,24 +6,18 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/internal/i18n"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 )
 
-// fakeRepo embeds Querier so only the three methods the producer touches are
+// fakeRepo embeds Querier so only the two methods the producer touches are
 // implemented; anything else would panic, proving they are never called.
 type fakeRepo struct {
 	repository.Querier
-	locales  map[uuid.UUID]string
-	byPerm   map[string][]repository.ListUserLocalesForPermissionRow
+	byPerm   map[string][]uuid.UUID
 	inserted []repository.InsertNotificationParams
 }
 
-func (f *fakeRepo) GetUserLocale(_ context.Context, id uuid.UUID) (string, error) {
-	return f.locales[id], nil
-}
-
-func (f *fakeRepo) ListUserLocalesForPermission(_ context.Context, perm string) ([]repository.ListUserLocalesForPermissionRow, error) {
+func (f *fakeRepo) ListUsersForPermission(_ context.Context, perm string) ([]uuid.UUID, error) {
 	return f.byPerm[perm], nil
 }
 
@@ -32,36 +26,36 @@ func (f *fakeRepo) InsertNotification(_ context.Context, arg repository.InsertNo
 	return nil
 }
 
-func TestPublishRendersInRecipientLocale(t *testing.T) {
+func TestPublishStoresMessage(t *testing.T) {
 	u := uuid.New()
-	f := &fakeRepo{locales: map[uuid.UUID]string{u: "en"}}
+	f := &fakeRepo{}
 	if err := NewProducer(f).Publish(context.Background(), u, Message{
 		Category: CategorySystem,
-		TitleKey: i18n.AuthCodeSubject,
+		Title:    "你的验证码",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.inserted) != 1 || f.inserted[0].Title != "Your verification code" {
-		t.Fatalf("inserted = %+v, want one en-titled row", f.inserted)
+	if len(f.inserted) != 1 || f.inserted[0].Title != "你的验证码" {
+		t.Fatalf("inserted = %+v, want one titled row", f.inserted)
 	}
 }
 
-func TestPublishToPermissionLocalizesPerRecipient(t *testing.T) {
-	zh, en := uuid.New(), uuid.New()
-	f := &fakeRepo{byPerm: map[string][]repository.ListUserLocalesForPermissionRow{
-		"system.read": {{ID: zh, Locale: "zh-CN"}, {ID: en, Locale: "en"}},
+func TestPublishToPermissionFansOut(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	f := &fakeRepo{byPerm: map[string][]uuid.UUID{
+		"system.read": {a, b},
 	}}
 	if err := NewProducer(f).PublishToPermission(context.Background(), "system.read", Message{
 		Category: CategorySystem,
-		TitleKey: i18n.AuthCodeSubject,
+		Title:    "你的验证码",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	titles := map[uuid.UUID]string{}
+	got := map[uuid.UUID]string{}
 	for _, ins := range f.inserted {
-		titles[ins.UserID] = ins.Title
+		got[ins.UserID] = ins.Title
 	}
-	if titles[zh] != "你的验证码" || titles[en] != "Your verification code" {
-		t.Fatalf("per-recipient titles = %v", titles)
+	if got[a] != "你的验证码" || got[b] != "你的验证码" {
+		t.Fatalf("fan-out titles = %v", got)
 	}
 }

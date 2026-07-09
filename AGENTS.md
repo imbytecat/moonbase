@@ -2,7 +2,7 @@
 
 moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`moon run proto:generate` 同时重新生成 Go 服务端（`apps/server`）与 TS 客户端（`packages/api-client`），后者由 React 19 SPA（`apps/web`）消费。字段/RPC 错配是**编译错误**，不是运行时惊喜。工具链由 **proto** 锁定（`.prototools`：go/node/pnpm/moon），任务由 **moon** v2 编排，包管理器 **pnpm**。
 
-它作为一个管理系统**模板交付，而非框架**：下游项目复制本仓库、各自演化，并通过 `git remote add template` 把修复挑拣（cherry-pick）回来。由此带来的、会改变你工作方式的后果：保持 channel 包不引入业务代码（保证 diff 可移植）；**不要**抽取共享 Go 库、拆分微服务，或添加 semver/向后兼容垫片——没有任何外部依赖此代码，所以 settings 结构体的变更可以合理地把旧行零读（zero-read）。驱动注册表**就是**插件系统（编译期，`database/sql` 风格）。
+它作为一个管理系统**模板交付，而非框架**：下游项目复制本仓库、各自演化，并通过 `git remote add template` 把修复挑拣（cherry-pick）回来。由此带来的、会改变你工作方式的后果：保持 integration 子包不引入业务代码（保证 diff 可移植）；**不要**抽取共享 Go 库、拆分微服务，或添加 semver/向后兼容垫片——没有任何外部依赖此代码，所以 settings 结构体的变更可以合理地把旧行零读（zero-read）。驱动注册表**就是**插件系统（编译期，`database/sql` 风格）。
 
 **第三方库原则：应上尽上，差异过大不硬上。** 成熟前沿的库/最佳实践优先于手搓——省维护精力、保持逻辑清晰、把精力留给业务；但与需求实在有差异时不硬套。两个方向都要留下理据：采用了写清为什么（如 `coreos/go-oidc` 之于 OIDC），否决了也写清评估过什么、为何不值（如微信扫码手写 3 次调用——否决 silenceper/PowerWeChat；local 存储 handler ~120 行标准库——否决 gocloud.dev，SignedURL 之外 serve 的活它一行不省）。判据是**净收益**：库替你扛掉的怪癖/协议面，要大于它带来的依赖面。
 
@@ -43,16 +43,16 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 移除一个域 = 反向操作 + 一个把已存 `role_permissions` 映射到后继键的迁移（键存在角色行里）+ `rm` 掉孤立的 sqlc 产物。
 
-## 给现有通道新增一个 provider
+## 给现有 integration 新增一个 provider
 
-1. 在该 channel 包里新增 provider schema（通常是 `schema.go`）：用 `integrationkit/schema` 描述字段、密钥、不可变字段、必填、枚举/数组选项和 UI 文案。**不要改 `proto/system/v1/system.proto` 来加 provider 专属消息**；wire 上只有通用 `system.v1.Profile.config`。
-2. 在 channel 包的驱动注册表加一条驱动条目，注册 provider key + schema + driver factory。驱动从 `kitsettings.GenericProfile.Config` 解码自己的配置结构；只有接缝方法（Send/Verify/Complete/...）共享，字段形状归 provider 自己所有。
-3. 密钥保留、掩码和不可变字段由 `channelOps` 按 schema 统一处理：读侧在 `Profile.config` 中返回掩码占位，更新时空密钥保留已存值，不可变字段（如 OAuth `key`）保持旧值。
+1. 在该 integration 子包里新增 provider schema（通常是 `schema.go`）：用 `integrations/core/schema` 描述字段、密钥、不可变字段、必填、枚举/数组选项和 UI 文案。**不要改 `proto/system/v1/system.proto` 来加 provider 专属消息**；wire 上只有通用 `system.v1.Profile.config`。
+2. 在 integration 子包的驱动注册表加一条驱动条目，注册 provider key + schema + driver factory。驱动从 `kitsettings.GenericProfile.Config` 解码自己的配置结构；只有接缝方法（Send/Verify/Complete/...）共享，字段形状归 provider 自己所有。
+3. 密钥保留、掩码和不可变字段由 `integrationOps` 按 schema 统一处理：读侧在 `Profile.config` 中返回掩码占位，更新时空密钥保留已存值，不可变字段（如 OAuth `key`）保持旧值。
 4. Web：通用 `SchemaProfileForm` 消费 `Describe*Providers` 返回的 schema 渲染表单。只有新增字段类型或特殊交互时才扩展 `schema-profile-form.tsx`；普通 provider 只需要 Go schema + 必要的用户文案。
 
-若改为新增一个用途（PURPOSE）= 一个常量 + channel 包里的 `Purposes` 目录条目 + 一个 `PURPOSE_LABELS` 条目 + web 文案。
+若改为新增一个用途（PURPOSE）= 一个常量 + integration 子包里的 `Purposes` 目录条目 + 一个 `PURPOSE_LABELS` 条目 + web 文案。
 
-新增一整个 channel = 以上全部，外加 `settings.Integration[kitsettings.GenericProfile]` 的 Store getter/setter、通道 catalog、`system_<channel>.go` 的标准 `channelOps` 接线、`Describe<Channel>Providers` RPC，以及一个 web 面板入口。
+新增一整个 channel = 以上全部，外加 `settings.Integration[kitsettings.GenericProfile]` 的 Store getter/setter、通道 catalog、`system_<integration>.go` 的标准 `integrationOps` 接线、`Describe<Integration>Providers` RPC，以及一个 web 面板入口。
 
 ## Settings = 两个后端面（web 呈现为一个）
 
@@ -61,7 +61,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - web 把两者都呈现在 `/settings/*` 下（按权限过滤的分组）；这个拆分存在于 proto/权限里，而非导航里。
 - **密钥在 wire 上只写**：读取 `Profile.config` 时按 schema 掩码；更新时的空值保留已存密钥；驱动只看到合并后的真实配置。
 - **Settings 存储是 JSONB，无迁移**（`internal/settings`）：结构体形状变更会静默地把旧行零读——重置 dev 卷或重新录入配置（真实部署也一样）。缺失的行读作零配置，所以无需 seeding。
-- **统一的通道模型**：`settings.Integration[kitsettings.GenericProfile]`（Profiles + Bindings `map[string][]string`）；`channelOps`（`internal/rpc/system_channel.go`）是每个通道 Create/Update/Delete/Bind/Describe 背后唯一的生命周期。每通道文件只接线 catalog、schema、driver registry 和测试动作。
+- **统一的通道模型**：`settings.Integration[kitsettings.GenericProfile]`（Profiles + Bindings `map[string][]string`）；`integrationOps`（`internal/rpc/system_integration.go`）是每个通道 Create/Update/Delete/Bind/Describe 背后唯一的生命周期。每通道文件只接线 catalog、schema、driver registry 和测试动作。
 - **绑定即激活** —— 任何地方都**没有**每档案的 `enabled` 标志（它会造出一个"已绑定但被禁用"、语义未定义的状态，如被静默禁用的 CAPTCHA）。要暂停就解绑。
 - **用途目录是代码**：每个通道导出一个 `channel.Catalog`（`storage.Purposes`、`mail.Purposes`……）。业务代码按用途寻址通道，绝不用档案 id：`mail.Sender.Send(ctx, purpose, …)`。未绑定的用途 → `ErrNotConfigured`（CAPTCHA 例外 = 直通，让全新安装仍可登录）；删除已绑定的档案 = FailedPrecondition。多值用途（oauth 的 `login`、所有 payment）携带 `profile_ids` 并扇出；其余为单值。
 - **驱动 = 一个接缝（seam）背后的每 provider 配置形状**：provider schema 描述自己的 `Profile.config` 字段；只有接缝（Send/Verify/Complete/……）共享。绝不要把 provider 参数摊平成通道级共享字段。
@@ -76,7 +76,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - **审计**（`internal/audit` + audit.v1）：一个拦截器接缝记录每个会改动的一元 RPC——处理器从不写审计行。请求载荷**从不**存储（密钥即便对审计轨迹也保持只写）；只读的 RPC 面；经 `MOONBASE_AUDIT_RETENTION_DAYS` 的每小时保留清道夫（默认 180，0 = 永久）。
 - **工作流**（`internal/workflow` + workflow.v1）：DBOS 是一个**库**，把检查点写入**同一** Postgres 的 `dbos` schema，并在启动时续跑被中断的运行。工作流是注册的**代码**；nil 引擎（单元测试）会让工作流 RPC 回 FailedPrecondition。
 - **支付**是唯一带数据平面的通道：迁移出来的 `payment_orders` 表拥有状态机；每次结算写入都用 SQL 状态守卫（`WHERE status IN (...)`），所以被重放的 provider 回调和并发同步是幂等的。回调是朴素的 `POST /api/payment/notify/{provider}/{profile}`，由驱动的签名校验鉴权（无会话）。**method 是 provider 范围内的官方产品 id**（支付宝 API method `precreate`/`page_pay`/`wap_pay`/`create`/`app_pay`；微信 trade_type `native`/`h5`/`jsapi`/`app`）——**不是**一个共享三元组：每个驱动声明一个 `pay.Method` 目录（id + `CredentialKind` qr/redirect/params + 必需的 `Inputs`），一个档案在 `Profile.config.methods` 为其中一个子集签约（空 = 全部 → `pay.Offered`），收银台只提供那些，前端在 `src/lib/payments.ts` 镜像该目录、并按 `order.credentialKind` 渲染。支付宝 `create`（小程序 JSAPI）需要 `op_app_id`，否则下单失败。
-- **通知 + 出站 i18n**（`internal/notification` + notification.v1；`internal/i18n`）：每用户的站内信收件箱。业务代码经 `notification.Publisher` 接缝通知——`Publish(userID,…)` / `PublishToPermission(perm,…)`（向持有某权限者扇出）——**绝不**直接写 `notifications` 行；读侧是自限定范围的 RPC（authz `{}` + `IdentityFromContext`，所以用户只看到自己的）。出站文本（收件箱标题/正文、验证/重置/验证码邮件）经 `internal/i18n` 本地化（`Resolve`：`user.locale` → 请求 `Accept-Language` → 默认 `zh-CN`），并**按收件人**已渲染地存储/发送——但 RPC 错误消息在服务端**不**本地化（它们保持为代码，由 SPA 人性化展示）。SPA 固定 `zh-CN`，不再根据 `user.locale` 切换，也没有匿名语言切换器。
+- **通知**（`internal/notification` + notification.v1）：每用户的站内信收件箱。业务代码经 `notification.Publisher` 接缝通知——`Publish(userID,…)` / `PublishToPermission(perm,…)`（向持有某权限者扇出）——**绝不**直接写 `notifications` 行；读侧是自限定范围的 RPC（authz `{}` + `IdentityFromContext`，所以用户只看到自己的）。出站文本（收件箱标题/正文、验证/重置/验证码邮件）**直接写中文常量**——全站中文，无 i18n 层（见 ADR-0008）；RPC 错误消息在服务端保持为代码，由 SPA 人性化展示。
 
 ## 认证与 RBAC
 

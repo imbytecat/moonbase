@@ -27,8 +27,6 @@ message CurrentUser {
   string username = 8;
   // True when a confirmed TOTP factor guards this account.
   bool totp_enabled = 9;
-  // BCP-47 language preference (e.g. "zh-CN"); empty = browser default.
-  string locale = 10;
 }
 
 message LoginRequest {
@@ -167,8 +165,6 @@ message UpdateProfileRequest {
   // File id returned by storage.v1 PresignAvatarUpload after the client
   // uploads directly to storage. Empty string clears the avatar.
   optional string avatar_file_id = 2 [(buf.validate.field).string.max_len = 36];
-  // BCP-47 language tag; empty string clears back to browser default.
-  optional string locale = 3 [(buf.validate.field).string.max_len = 35];
 }
 
 message UpdateProfileResponse {

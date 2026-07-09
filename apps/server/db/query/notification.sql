@@ -2,13 +2,9 @@
 INSERT INTO notifications (user_id, category, title, body, link)
 VALUES ($1, $2, $3, $4, $5);
 
--- name: GetUserLocale :one
-SELECT locale FROM users WHERE id = $1;
-
--- Recipients of a permission (through any role, or the '*' admin wildcard),
--- with each one's locale so the producer renders title/body per recipient.
--- name: ListUserLocalesForPermission :many
-SELECT DISTINCT u.id, u.locale
+-- Recipients of a permission (through any role, or the '*' admin wildcard).
+-- name: ListUsersForPermission :many
+SELECT DISTINCT u.id
 FROM users u
 JOIN user_roles ur ON ur.user_id = u.id
 JOIN role_permissions rp ON rp.role_id = ur.role_id

@@ -17,7 +17,6 @@ SELECT
     u.name,
     coalesce(u.avatar_file_id::text, '')::text AS avatar_file_id,
     u.phone,
-    u.locale,
     (u.email_verified_at IS NOT NULL)::bool AS email_verified,
     coalesce(
         array_agg(DISTINCT rp.permission) FILTER (WHERE rp.permission IS NOT NULL),
