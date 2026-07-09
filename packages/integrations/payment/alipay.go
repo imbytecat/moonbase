@@ -10,7 +10,7 @@ import (
 
 	"github.com/smartwalle/alipay/v3"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // Alipay method ids are the official API-method names, matched by the driver's

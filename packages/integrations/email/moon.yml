@@ -1,6 +1,0 @@
-$schema: '../../../.moon/cache/schemas/project.json'
-
-layer: 'library'
-stack: 'backend'
-language: 'go'
-dependsOn: ['integrations-core']

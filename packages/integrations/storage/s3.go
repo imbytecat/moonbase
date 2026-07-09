@@ -10,7 +10,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 func s3PresignPut(_ LocalRuntime, ctx context.Context, cfg kitsettings.GenericProfile, _, key, contentType string, expires time.Duration) (string, error) {

@@ -21,7 +21,7 @@ import (
 	"github.com/wechatpay-apiv3/wechatpay-go/services/refunddomestic"
 	"github.com/wechatpay-apiv3/wechatpay-go/utils"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // WeChat method ids are the official APIv3 trade types, matched by the driver's

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // TestIntegrationLookups pins the pure resolution logic behind every

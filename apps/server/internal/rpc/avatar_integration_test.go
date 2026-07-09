@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"

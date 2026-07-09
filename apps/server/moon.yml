@@ -5,13 +5,7 @@ stack: 'backend'
 language: 'go'
 dependsOn:
   - 'proto'
-  - 'integrations-captcha'
-  - 'integrations-email'
-  - 'integrations-llm'
-  - 'integrations-oauth'
-  - 'integrations-payment'
-  - 'integrations-sms'
-  - 'integrations-storage'
+  - 'integrations'
 
 # CGO off → pure-Go static builds that work everywhere (incl. Windows, where
 # goose's modernc sqlite needs no C compiler). goose reads the connection from

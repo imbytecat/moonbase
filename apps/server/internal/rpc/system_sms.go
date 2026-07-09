@@ -7,9 +7,9 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
-	"github.com/imbytecat/moonbase/packages/integrations/sms"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"

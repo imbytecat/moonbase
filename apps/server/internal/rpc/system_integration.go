@@ -8,7 +8,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 

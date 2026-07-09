@@ -5,8 +5,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/imbytecat/moonbase/packages/integrations/captcha"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/captcha"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )

@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // The local driver stores objects on the server's own filesystem. There is

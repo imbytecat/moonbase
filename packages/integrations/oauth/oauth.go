@@ -15,9 +15,9 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")

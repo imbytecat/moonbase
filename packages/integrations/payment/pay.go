@@ -24,9 +24,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // PurposeCheckout is the demo checkout slot. Adding a feature that charges =

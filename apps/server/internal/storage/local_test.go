@@ -14,8 +14,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
-	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )

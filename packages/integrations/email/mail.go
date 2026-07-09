@@ -19,9 +19,9 @@ import (
 
 	gomail "github.com/wneessen/go-mail"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 // Email purposes are code, not data: each is a fixed slot the application

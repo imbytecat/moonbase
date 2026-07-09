@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/packages/integrations/sms"
+	"github.com/imbytecat/moonbase/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/repository"

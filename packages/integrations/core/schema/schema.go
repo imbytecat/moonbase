@@ -115,15 +115,15 @@ func (s Schema) Validate(cfg map[string]any) error {
 			continue
 		}
 		if slices.ContainsFunc(s.Fields, func(f Field) bool { return key == f.Key+setSuffix }) {
-			return fmt.Errorf("schema: %q is read-only", key)
+			return fmt.Errorf("配置字段 %q 创建后不可修改", key)
 		}
-		return fmt.Errorf("schema: unknown field %q", key)
+		return fmt.Errorf("未知配置字段 %q", key)
 	}
 	for _, f := range s.Fields {
 		v := cfg[f.Key]
 		if isEmpty(v) {
 			if f.Required {
-				return fmt.Errorf("schema: %q is required", f.Key)
+				return fmt.Errorf("配置字段 %q 为必填项", f.Key)
 			}
 			continue
 		}
@@ -139,28 +139,28 @@ func validateValue(f Field, v any) error {
 	case String, Text, Enum:
 		str, ok := v.(string)
 		if !ok {
-			return fmt.Errorf("schema: %q must be a string", f.Key)
+			return fmt.Errorf("配置字段 %q 必须是字符串", f.Key)
 		}
 		return validateString(f, str)
 	case Int:
 		n, ok := number(v)
 		if !ok {
-			return fmt.Errorf("schema: %q must be an integer", f.Key)
+			return fmt.Errorf("配置字段 %q 必须是整数", f.Key)
 		}
 		if f.Min != 0 && n < f.Min || f.Max != 0 && n > f.Max {
-			return fmt.Errorf("schema: %q must be between %d and %d", f.Key, f.Min, f.Max)
+			return fmt.Errorf("配置字段 %q 必须在 %d 到 %d 之间", f.Key, f.Min, f.Max)
 		}
 	case Bool:
 		if _, ok := v.(bool); !ok {
-			return fmt.Errorf("schema: %q must be a boolean", f.Key)
+			return fmt.Errorf("配置字段 %q 必须是布尔值", f.Key)
 		}
 	case Strings:
 		values, ok := stringSlice(v)
 		if !ok {
-			return fmt.Errorf("schema: %q must be a string array", f.Key)
+			return fmt.Errorf("配置字段 %q 必须是字符串数组", f.Key)
 		}
 		if f.Unique && duplicates(values) {
-			return fmt.Errorf("schema: %q must contain unique values", f.Key)
+			return fmt.Errorf("配置字段 %q 不能包含重复值", f.Key)
 		}
 		for _, str := range values {
 			if err := validateString(f, str); err != nil {
@@ -168,26 +168,26 @@ func validateValue(f Field, v any) error {
 			}
 		}
 	default:
-		return fmt.Errorf("schema: %q has unknown type %q", f.Key, f.Type)
+		return fmt.Errorf("配置字段 %q 使用了未知类型 %q", f.Key, f.Type)
 	}
 	return nil
 }
 
 func validateString(f Field, str string) error {
 	if f.MaxLen > 0 && len(str) > f.MaxLen {
-		return fmt.Errorf("schema: %q exceeds %d characters", f.Key, f.MaxLen)
+		return fmt.Errorf("配置字段 %q 不能超过 %d 个字符", f.Key, f.MaxLen)
 	}
 	if f.Pattern != "" {
 		re, err := regexp.Compile(f.Pattern)
 		if err != nil {
-			return fmt.Errorf("schema: %q has invalid pattern", f.Key)
+			return fmt.Errorf("配置字段 %q 的格式规则无效", f.Key)
 		}
 		if !re.MatchString(str) {
-			return fmt.Errorf("schema: %q does not match required pattern", f.Key)
+			return fmt.Errorf("配置字段 %q 格式不正确", f.Key)
 		}
 	}
 	if len(f.Options) > 0 && !slices.Contains(f.Options, str) {
-		return fmt.Errorf("schema: %q must be one of %v", f.Key, f.Options)
+		return fmt.Errorf("配置字段 %q 必须是 %v 之一", f.Key, f.Options)
 	}
 	return nil
 }

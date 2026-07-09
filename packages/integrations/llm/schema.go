@@ -1,17 +1,17 @@
 package llm
 
-import "github.com/imbytecat/moonbase/packages/integrations/core/schema"
+import "github.com/imbytecat/moonbase/integrations/core/schema"
 
 var (
 	openAISchema = schema.Schema{Fields: []schema.Field{
-		{Key: "baseUrl", Label: "Base URL", Type: schema.String, MaxLen: 512},
-		{Key: "apiKey", Label: "API key", Type: schema.String, Secret: true, Required: true, MaxLen: 256},
-		{Key: "model", Label: "Model", Type: schema.String, Required: true, MaxLen: 128},
+		{Key: "baseUrl", Label: "接口地址", Type: schema.String, MaxLen: 512},
+		{Key: "apiKey", Label: "API 密钥", Type: schema.String, Secret: true, Required: true, MaxLen: 256},
+		{Key: "model", Label: "模型", Type: schema.String, Required: true, MaxLen: 128},
 	}}
 
 	anthropicSchema = schema.Schema{Fields: []schema.Field{
-		{Key: "baseUrl", Label: "Base URL", Type: schema.String, MaxLen: 512},
-		{Key: "apiKey", Label: "API key", Type: schema.String, Secret: true, Required: true, MaxLen: 256},
-		{Key: "model", Label: "Model", Type: schema.String, Required: true, MaxLen: 128},
+		{Key: "baseUrl", Label: "接口地址", Type: schema.String, MaxLen: 512},
+		{Key: "apiKey", Label: "API 密钥", Type: schema.String, Secret: true, Required: true, MaxLen: 256},
+		{Key: "model", Label: "模型", Type: schema.String, Required: true, MaxLen: 128},
 	}}
 )

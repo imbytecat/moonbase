@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"

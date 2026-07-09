@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
+	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 

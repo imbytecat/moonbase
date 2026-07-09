@@ -5,8 +5,8 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 func Schemas() map[string]schema.Schema {

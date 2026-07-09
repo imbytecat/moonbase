@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"

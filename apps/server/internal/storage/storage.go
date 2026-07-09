@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
-	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 

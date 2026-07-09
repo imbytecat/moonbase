@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
-	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
-	payment "github.com/imbytecat/moonbase/packages/integrations/payment"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
+	"github.com/imbytecat/moonbase/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	payment "github.com/imbytecat/moonbase/integrations/payment"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 

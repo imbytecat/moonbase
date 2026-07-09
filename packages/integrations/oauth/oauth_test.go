@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 func TestClientAuthorizeURLUsesBoundUsableProfile(t *testing.T) {

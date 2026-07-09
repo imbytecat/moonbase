@@ -9,7 +9,7 @@ import (
 
 	altcha "github.com/altcha-org/altcha-lib-go"
 
-	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 type fakeStore struct {
