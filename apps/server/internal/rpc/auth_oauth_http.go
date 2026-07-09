@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/server/integrations/oauth"
+	"github.com/imbytecat/moonbase/packages/integrations/oauth"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 )

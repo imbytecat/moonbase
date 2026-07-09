@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	mail "github.com/imbytecat/moonbase/server/integrations/email"
-	"github.com/imbytecat/moonbase/server/integrations/sms"
+	mail "github.com/imbytecat/moonbase/packages/integrations/email"
+	"github.com/imbytecat/moonbase/packages/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/i18n"

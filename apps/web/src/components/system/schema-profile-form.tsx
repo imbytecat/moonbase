@@ -23,7 +23,7 @@ export function schemaInitialConfig(
       out[field.key] = Boolean(value)
     } else if (field.type === 'int') {
       out[field.key] = typeof value === 'number' ? value : 0
-    } else if (field.key === 'methods') {
+    } else if (field.type === 'string_array') {
       out[field.key] = stringsOf(value)
     } else {
       out[field.key] = typeof value === 'string' ? value : ''
@@ -45,7 +45,7 @@ export function schemaProfileToProto(
       config[field.key] = Boolean(value)
     } else if (field.type === 'int') {
       config[field.key] = typeof value === 'number' ? value : 0
-    } else if (field.key === 'methods') {
+    } else if (field.type === 'string_array') {
       config[field.key] = stringsOf(value)
     } else {
       config[field.key] = typeof value === 'string' ? value : ''
@@ -87,7 +87,7 @@ function fieldControl(field: FieldDescriptor, secretSet: boolean, disabled: bool
       />
     )
   }
-  if (field.key === 'methods') {
+  if (field.type === 'string_array') {
     return (
       <Select
         mode="multiple"

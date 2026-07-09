@@ -13,8 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/nyaruka/phonenumbers"
 
-	mail "github.com/imbytecat/moonbase/server/integrations/email"
-	"github.com/imbytecat/moonbase/server/integrations/sms"
+	mail "github.com/imbytecat/moonbase/packages/integrations/email"
+	"github.com/imbytecat/moonbase/packages/integrations/sms"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	"github.com/imbytecat/moonbase/server/internal/repository"

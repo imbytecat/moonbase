@@ -7,9 +7,9 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/schema"
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrations/sms"
+	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	"github.com/imbytecat/moonbase/packages/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -181,6 +181,10 @@ func fieldDescriptors(sch schema.Schema) []*systemv1.FieldDescriptor {
 			Options:   f.Options,
 			Help:      f.Help,
 			MaxLen:    int32(f.MaxLen),
+			Pattern:   f.Pattern,
+			Min:       int32(f.Min),
+			Max:       int32(f.Max),
+			Unique:    f.Unique,
 		}
 	}
 	return out

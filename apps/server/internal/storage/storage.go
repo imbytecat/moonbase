@@ -10,13 +10,12 @@ package storage
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/integration"
-	"github.com/imbytecat/moonbase/server/integrationkit/schema"
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	"github.com/imbytecat/moonbase/packages/integrations/core/integration"
+	"github.com/imbytecat/moonbase/packages/integrations/core/schema"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -60,6 +59,13 @@ func VisibilityOf(purpose string) Visibility {
 	return visibilityByPurpose[purpose]
 }
 
+func (c *Client) VisibilityOf(purpose string) storageint.Visibility {
+	if VisibilityOf(purpose) == VisibilityPublic {
+		return storageint.VisibilityPublic
+	}
+	return storageint.VisibilityPrivate
+}
+
 // ErrNotConfigured signals that the purpose is unbound or its profile is
 // incomplete; callers map it to a friendly "storage not configured" RPC error.
 var ErrNotConfigured = fmt.Errorf("file storage is not configured")
@@ -85,55 +91,15 @@ type ConnectionTester interface {
 // handler re-resolves purpose → profile → directory at request time, so
 // rebinding a purpose never leaves stale URLs pointing at the wrong
 // directory).
-type storageOps struct {
-	presignPut func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key, contentType string, expires time.Duration) (string, error)
-	resolveURL func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key string, expires time.Duration) (string, error)
-	delete     func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key string) error
-	test       func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile) error
-}
-
-type driver struct {
-	schema schema.Schema
-	ops    storageOps
-}
-
-var drivers = map[string]driver{
-	"s3": {
-		schema: s3Schema,
-		ops: storageOps{
-			presignPut: (*Client).s3PresignPut,
-			resolveURL: (*Client).s3ResolveURL,
-			delete:     (*Client).s3Delete,
-			test:       (*Client).s3Test,
-		},
-	},
-	"local": {
-		schema: localSchema,
-		ops: storageOps{
-			presignPut: (*Client).localPresignPut,
-			resolveURL: (*Client).localResolveURL,
-			delete:     (*Client).localDelete,
-			test:       (*Client).localTest,
-		},
-	},
-}
-
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
+func Schemas() map[string]schema.Schema { return storageint.Schemas() }
 
 // Providers lists the registered driver names, sorted.
 func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
+	return storageint.Providers()
 }
 
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return storageint.ProfileUsable(p)
 }
 
 type Client struct {
@@ -142,6 +108,14 @@ type Client struct {
 
 func NewClient(store *settings.Store) *Client {
 	return &Client{store: store}
+}
+
+func (c *Client) LocalSignedURL(ctx context.Context, method, purpose, key string, expires time.Duration) (string, error) {
+	secret, err := c.store.StorageSignKey(ctx)
+	if err != nil {
+		return "", err
+	}
+	return storageint.SignedURL(secret, method, purpose, key, expires), nil
 }
 
 var (
@@ -154,7 +128,7 @@ func (c *Client) PresignPut(ctx context.Context, purpose, key, contentType strin
 	if err != nil {
 		return "", err
 	}
-	return ops.presignPut(c, ctx, cfg, purpose, key, contentType, expires)
+	return ops.PresignPut(c, ctx, cfg, purpose, key, contentType, expires)
 }
 
 func (c *Client) ResolveURL(ctx context.Context, purpose, key string, expires time.Duration) (string, error) {
@@ -162,7 +136,7 @@ func (c *Client) ResolveURL(ctx context.Context, purpose, key string, expires ti
 	if err != nil {
 		return "", err
 	}
-	return ops.resolveURL(c, ctx, cfg, purpose, key, expires)
+	return ops.ResolveURL(c, ctx, cfg, purpose, key, expires)
 }
 
 func (c *Client) Delete(ctx context.Context, purpose, key string) error {
@@ -170,29 +144,29 @@ func (c *Client) Delete(ctx context.Context, purpose, key string) error {
 	if err != nil {
 		return err
 	}
-	return ops.delete(c, ctx, cfg, purpose, key)
+	return ops.Delete(c, ctx, cfg, purpose, key)
 }
 
 func (c *Client) TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error {
-	d, ok := drivers[cfg.Provider]
-	if !ok || !d.schema.Usable(cfg.Config) {
+	d, ok := storageint.DriverFor(cfg.Provider)
+	if !ok || !d.Schema.Usable(cfg.Config) {
 		return ErrNotConfigured
 	}
-	return d.ops.test(c, ctx, cfg)
+	return d.Ops.Test(c, ctx, cfg)
 }
 
-func (c *Client) opsFor(ctx context.Context, purpose string) (storageOps, kitsettings.GenericProfile, error) {
+func (c *Client) opsFor(ctx context.Context, purpose string) (storageint.Ops, kitsettings.GenericProfile, error) {
 	st, err := c.store.Storage(ctx)
 	if err != nil {
-		return storageOps{}, kitsettings.GenericProfile{}, err
+		return storageint.Ops{}, kitsettings.GenericProfile{}, err
 	}
 	cfg, ok := st.ProfileFor(purpose)
 	if !ok {
-		return storageOps{}, cfg, ErrNotConfigured
+		return storageint.Ops{}, cfg, ErrNotConfigured
 	}
-	d, ok := drivers[cfg.Provider]
-	if !ok || !d.schema.Usable(cfg.Config) {
-		return storageOps{}, cfg, ErrNotConfigured
+	d, ok := storageint.DriverFor(cfg.Provider)
+	if !ok || !d.Schema.Usable(cfg.Config) {
+		return storageint.Ops{}, cfg, ErrNotConfigured
 	}
-	return d.ops, cfg, nil
+	return d.Ops, cfg, nil
 }

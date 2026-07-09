@@ -2,10 +2,12 @@ go 1.26
 
 use (
 	./apps/server
-	./integrationkit
-	./integrations/captcha
-	./integrations/email
-	./integrations/llm
-	./integrations/oauth
-	./integrations/sms
+	./packages/integrations/captcha
+	./packages/integrations/core
+	./packages/integrations/email
+	./packages/integrations/llm
+	./packages/integrations/oauth
+	./packages/integrations/payment
+	./packages/integrations/sms
+	./packages/integrations/storage
 )

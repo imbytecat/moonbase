@@ -5,8 +5,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	mail "github.com/imbytecat/moonbase/server/integrations/email"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	mail "github.com/imbytecat/moonbase/packages/integrations/email"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )

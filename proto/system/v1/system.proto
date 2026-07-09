@@ -82,9 +82,13 @@ message FieldDescriptor {
   bool secret = 4;
   bool immutable = 5;
   bool required = 6;
-  repeated string options = 7; // allowed values when type == enum
+  repeated string options = 7; // allowed values when type == enum or string_array
   string help = 8;
   int32 max_len = 9;
+  string pattern = 10;
+  int32 min = 11;
+  int32 max = 12;
+  bool unique = 13;
 }
 
 // ProviderSchema is a driver's full config schema, in display order.

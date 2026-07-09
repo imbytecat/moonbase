@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -47,7 +47,8 @@ func newFileHandlerFixture(t *testing.T, files map[uuid.UUID]repository.File) (*
 		t.Fatal(err)
 	}
 	cfg, _ := st.ProfileFor(PurposeAvatars)
-	return store, srv, cfgStr(cfg.Config, "directory")
+	directory, _ := cfg.Config["directory"].(string)
+	return store, srv, directory
 }
 
 func TestFileHandlerServesPublicLocalFile(t *testing.T) {

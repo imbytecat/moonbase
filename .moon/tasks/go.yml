@@ -16,6 +16,7 @@ tasks:
       - 'run'
       - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
       - 'run'
+      - '--allow-serial-runners'
     inputs:
       - '**/*.go'
       - 'go.mod'
@@ -31,6 +32,7 @@ tasks:
       - 'run'
       - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
       - 'run'
+      - '--allow-serial-runners'
       - '--fix'
     deps: ['~:fmt']
     options:

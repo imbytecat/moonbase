@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -48,7 +49,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.internal(w, r, "load sign key", err)
 			return
 		}
-		if !verifyLocalSignature(secret, r.Method, purpose, key, exp, r.URL.Query().Get("sig")) {
+		if !storageint.VerifySignature(secret, r.Method, purpose, key, exp, r.URL.Query().Get("sig")) {
 			http.Error(w, "invalid signature", http.StatusForbidden)
 			return
 		}
@@ -64,7 +65,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "storage not configured", http.StatusNotFound)
 		return
 	}
-	path, err := localObjectPath(cfg.Config, key)
+	path, err := storageint.LocalObjectPath(cfg.Config, key)
 	if err != nil {
 		http.Error(w, "invalid object key", http.StatusBadRequest)
 		return

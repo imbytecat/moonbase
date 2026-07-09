@@ -3,7 +3,15 @@ $schema: '../../.moon/cache/schemas/project.json'
 layer: 'application'
 stack: 'backend'
 language: 'go'
-dependsOn: ['proto']
+dependsOn:
+  - 'proto'
+  - 'integrations-captcha'
+  - 'integrations-email'
+  - 'integrations-llm'
+  - 'integrations-oauth'
+  - 'integrations-payment'
+  - 'integrations-sms'
+  - 'integrations-storage'
 
 # CGO off → pure-Go static builds that work everywhere (incl. Windows, where
 # goose's modernc sqlite needs no C compiler). goose reads the connection from

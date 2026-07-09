@@ -14,7 +14,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -143,7 +144,7 @@ func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/files/{purpose}/{key...}", handler)
 
-	signed, err := client.localSignedURL(t.Context(), http.MethodGet, privatePurpose, "u1/pic.png", time.Minute)
+	signed, err := client.LocalSignedURL(t.Context(), http.MethodGet, privatePurpose, "u1/pic.png", time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,10 +197,10 @@ func TestLocalResolveURLPublicPurposeIsUnsignedAndStable(t *testing.T) {
 
 func TestLocalObjectPathRejectsTraversal(t *testing.T) {
 	cfg := map[string]any{"directory": "/srv/data"}
-	if _, err := localObjectPath(cfg, "../etc/passwd"); err == nil {
+	if _, err := storageint.LocalObjectPath(cfg, "../etc/passwd"); err == nil {
 		t.Fatal("path traversal must be rejected")
 	}
-	if _, err := localObjectPath(cfg, "avatars/u1/pic.png"); err != nil {
+	if _, err := storageint.LocalObjectPath(cfg, "avatars/u1/pic.png"); err != nil {
 		t.Fatalf("legit key rejected: %v", err)
 	}
 }

@@ -5,6 +5,14 @@ projects:
   server: 'apps/server'
   proto: 'proto'
   api-client: 'packages/api-client'
+  integrations-core: 'packages/integrations/core'
+  integrations-captcha: 'packages/integrations/captcha'
+  integrations-email: 'packages/integrations/email'
+  integrations-llm: 'packages/integrations/llm'
+  integrations-oauth: 'packages/integrations/oauth'
+  integrations-payment: 'packages/integrations/payment'
+  integrations-sms: 'packages/integrations/sms'
+  integrations-storage: 'packages/integrations/storage'
 
 vcs:
   client: 'git'

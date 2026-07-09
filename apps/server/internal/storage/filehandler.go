@@ -11,7 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
+	kitsettings "github.com/imbytecat/moonbase/packages/integrations/core/settings"
+	storageint "github.com/imbytecat/moonbase/packages/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -94,7 +95,7 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // pointless round trip. Files are spiritually immutable (ADR-0003), so the
 // year-long immutable cache is sound.
 func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, config map[string]any, file repository.File) {
-	path, err := localObjectPath(config, file.ObjectKey)
+	path, err := storageint.LocalObjectPath(config, file.ObjectKey)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -131,12 +132,17 @@ func (h *FileHandler) redirect(w http.ResponseWriter, r *http.Request, cfg kitse
 		h.internal(w, r, "resolve url", err)
 		return
 	}
-	if cfgStr(cfg.Config, "publicBaseUrl") != "" {
+	if publicBaseURL(cfg.Config) != "" {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 	} else {
 		w.Header().Set("Cache-Control", "private, no-store")
 	}
 	http.Redirect(w, r, u, http.StatusFound)
+}
+
+func publicBaseURL(config map[string]any) string {
+	s, _ := config["publicBaseUrl"].(string)
+	return s
 }
 
 func (h *FileHandler) internal(w http.ResponseWriter, r *http.Request, op string, err error) {
