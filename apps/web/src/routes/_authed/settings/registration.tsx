@@ -4,7 +4,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Select, Switch, Typography } from 'antd'
 import { useUpdateSettings } from '#lib/business-settings'
 import { requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/settings/registration')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -40,10 +39,8 @@ function RegistrationPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <Typography.Text strong>{m.settingsPage_openRegistration()}</Typography.Text>
-          <div className="text-xs text-(--ant-color-text-tertiary)">
-            {m.settingsPage_openRegistrationHint()}
-          </div>
+          <Typography.Text strong>{'开放注册'}</Typography.Text>
+          <div className="text-xs text-(--ant-color-text-tertiary)">{'允许新用户自助注册'}</div>
         </div>
         <Switch
           checked={data.auth?.registrationEnabled}
@@ -53,24 +50,24 @@ function RegistrationPage() {
       </div>
 
       <div>
-        <Typography.Text strong>{m.settingsPage_signupIdentifiers()}</Typography.Text>
+        <Typography.Text strong>{'注册收集的标识'}</Typography.Text>
         <div className="mb-2 text-xs text-(--ant-color-text-tertiary)">
-          {m.settingsPage_signupIdentifiersHint()}
+          {'注册表单需要用户填写哪些标识，至少保留一项；邮箱和手机号注册时会验证码验证所有权'}
         </div>
         <Select
           mode="multiple"
           className="w-full"
           value={identifiers}
           options={[
-            { value: 'username', label: m.auth_username() },
+            { value: 'username', label: '用户名' },
             {
               value: 'email',
-              label: m.auth_email(),
+              label: '邮箱',
               disabled: !authConfig?.emailEnabled,
             },
             {
               value: 'phone',
-              label: m.auth_phone(),
+              label: '手机号',
               disabled: !authConfig?.smsEnabled,
             },
           ]}
@@ -81,12 +78,12 @@ function RegistrationPage() {
         />
         {authConfig?.emailEnabled ? null : (
           <div className="mt-1 text-xs text-(--ant-color-text-tertiary)">
-            {m.settingsPage_emailNeedsChannel()}
+            {'邮箱注册需要先配置可用的邮件通道'}
           </div>
         )}
         {authConfig?.smsEnabled ? null : (
           <div className="mt-1 text-xs text-(--ant-color-text-tertiary)">
-            {m.settingsPage_phoneNeedsSms()}
+            {'手机号注册需要先配置可用的短信通道'}
           </div>
         )}
       </div>

@@ -12,7 +12,6 @@ import { useState } from 'react'
 import { AuthShell } from '#components/auth-shell'
 import { PhoneInput, phoneRule } from '#components/phone-input'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export interface CompleteSearch {
   ticket: string
@@ -70,18 +69,23 @@ function CompleteOauthSignupPage() {
   })
 
   const sendEmailCode = useMutation(sendEmailRegisterCode, {
-    onSuccess: () => message.success(m.auth_codeSent()),
+    onSuccess: () => message.success('验证码已发送'),
     onError: (err) => setError(humanizeError(err)),
   })
   const sendPhoneCode = useMutation(sendPhoneRegisterCode, {
-    onSuccess: () => message.success(m.auth_codeSent()),
+    onSuccess: () => message.success('验证码已发送'),
     onError: (err) => setError(humanizeError(err)),
   })
 
   return (
-    <AuthShell subtitle={m.auth_oauthCompleteTitle()}>
+    <AuthShell subtitle={'完善账号信息'}>
       {error ? <Alert type="error" title={error} className="mb-4" showIcon /> : null}
-      <Alert type="info" title={m.auth_oauthCompleteHint()} className="mb-4" showIcon />
+      <Alert
+        type="info"
+        title={'微信身份已验证，补充以下信息即可完成注册。'}
+        className="mb-4"
+        showIcon
+      />
 
       <Form
         form={form}
@@ -94,22 +98,18 @@ function CompleteOauthSignupPage() {
           completeMutation.mutate({ ...values, ticket: search.ticket })
         }}
       >
-        <Form.Item
-          name="name"
-          label={m.auth_name()}
-          rules={[{ required: true, message: m.auth_nameRule() }]}
-        >
+        <Form.Item name="name" label={'姓名'} rules={[{ required: true, message: '请输入姓名' }]}>
           <Input autoComplete="name" />
         </Form.Item>
         {collectUsername ? (
           <Form.Item
             name="username"
-            label={m.auth_username()}
+            label={'用户名'}
             rules={[
               {
                 required: true,
                 pattern: /^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/,
-                message: m.auth_usernameRule(),
+                message: '3-32 位，字母开头，可含字母、数字、. _ -',
               },
             ]}
           >
@@ -120,8 +120,8 @@ function CompleteOauthSignupPage() {
           <>
             <Form.Item
               name="email"
-              label={m.auth_email()}
-              rules={[{ required: true, type: 'email', message: m.auth_emailRule() }]}
+              label={'邮箱'}
+              rules={[{ required: true, type: 'email', message: '请输入有效的邮箱地址' }]}
             >
               <Input autoComplete="email" />
             </Form.Item>
@@ -136,7 +136,7 @@ function CompleteOauthSignupPage() {
         ) : null}
         {collectPhone ? (
           <>
-            <Form.Item name="phone" label={m.auth_phone()} rules={[phoneRule()]}>
+            <Form.Item name="phone" label={'手机号'} rules={[phoneRule()]}>
               <PhoneInput allowedRegions={authConfig?.allowedPhoneRegions ?? []} />
             </Form.Item>
             <CodeItem
@@ -150,18 +150,18 @@ function CompleteOauthSignupPage() {
         ) : null}
         <Form.Item
           name="password"
-          label={m.auth_password()}
-          rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+          label={'密码'}
+          rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
         >
           <Input.Password autoComplete="new-password" />
         </Form.Item>
         <Button type="primary" htmlType="submit" block loading={completeMutation.isPending}>
-          {m.auth_register()}
+          {'注册'}
         </Button>
       </Form>
 
       <div className="mt-4 text-center text-sm">
-        <Link to="/login">{m.auth_backToSignIn()}</Link>
+        <Link to="/login">{'返回登录'}</Link>
       </div>
     </AuthShell>
   )
@@ -200,8 +200,8 @@ function CodeItem({
   return (
     <Form.Item
       name={name}
-      label={m.auth_code()}
-      rules={[{ required: true, len: 6, message: m.auth_codeRule() }]}
+      label={'验证码'}
+      rules={[{ required: true, len: 6, message: '请输入 6 位验证码' }]}
     >
       <Input
         maxLength={6}
@@ -214,7 +214,7 @@ function CodeItem({
             disabled={cooldown > 0}
             onClick={sendCode}
           >
-            {cooldown > 0 ? m.auth_resendIn({ seconds: cooldown }) : m.auth_sendCode()}
+            {cooldown > 0 ? `${cooldown}秒后可重发` : '发送验证码'}
           </Button>
         }
       />

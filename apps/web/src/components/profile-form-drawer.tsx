@@ -2,7 +2,6 @@ import { LeftOutlined } from '@ant-design/icons'
 import { App, Button, type FormInstance, Tag } from 'antd'
 import { type ReactNode, useState } from 'react'
 import { FormDrawer } from '#components/form-drawer'
-import { m } from '#paraglide/messages.js'
 
 export interface ProviderOption {
   value: string
@@ -46,18 +45,18 @@ export function ProfileFormDrawer({
       return
     }
     modal.confirm({
-      title: m.common_unsavedTitle(),
-      content: m.common_unsavedContent(),
-      okText: m.common_discard(),
+      title: '放弃未保存的更改？',
+      content: '关闭后已填写的内容将丢失',
+      okText: '放弃更改',
       okButtonProps: { danger: true },
-      cancelText: m.common_keepEditing(),
+      cancelText: '继续编辑',
       onOk: discard,
     })
   }
 
   return (
     <FormDrawer
-      title={isNew ? m.systemPage_addProfile() : m.systemPage_editProfile()}
+      title={isNew ? '添加配置' : '编辑配置'}
       open={open}
       onClose={onClose}
       form={active ? form : undefined}
@@ -71,10 +70,10 @@ export function ProfileFormDrawer({
             </span>
             {isNew ? (
               <Button type="text" size="small" icon={<LeftOutlined />} onClick={backToPicker}>
-                {m.systemPage_changeProvider()}
+                {'重新选择'}
               </Button>
             ) : (
-              <Tag className="!me-0">{m.systemPage_providerLocked()}</Tag>
+              <Tag className="!me-0">{'创建后不可更改'}</Tag>
             )}
           </div>
           {children(active.value)}
@@ -82,7 +81,7 @@ export function ProfileFormDrawer({
       ) : (
         <div className="space-y-3">
           <div className="text-sm text-(--ant-color-text-secondary)">
-            {m.systemPage_pickProviderHint()}
+            {'选择服务类型，创建后不可更改'}
           </div>
           {providers.map((p) => (
             <button

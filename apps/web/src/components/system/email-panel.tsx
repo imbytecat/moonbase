@@ -11,10 +11,9 @@ import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { EmailProfileDrawer } from '#components/system/email-profile-drawer'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  auth: m.systemPage_emailPurposeAuth,
+  auth: () => '账号验证邮件',
 }
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -37,7 +36,7 @@ export function EmailPanel({
   const deleteMutation = useMutation(deleteEmailProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -45,7 +44,7 @@ export function EmailPanel({
   const bindMutation = useMutation(bindEmailPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -62,16 +61,16 @@ export function EmailPanel({
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
         texts={{
-          profilesTitle: m.systemPage_emailProfilesTitle(),
-          profilesHint: m.systemPage_emailProfilesHint(),
-          noProfiles: m.systemPage_emailNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_emailBindingsHint(),
+          profilesTitle: '邮件配置',
+          profilesHint: '可添加多个发信配置，例如验证码专用通道和通知通道',
+          noProfiles: '尚未添加邮件配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每类邮件指定使用的发信配置，未绑定的功能将不可用',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={() => <MailOutlined className="text-lg text-(--ant-color-primary)" />}
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider] ?? p.provider} />}
-        profileDescription={(p) => String(p.config?.fromAddress || m.systemPage_fromAddress())}
+        profileDescription={(p) => String(p.config?.fromAddress || '发件地址')}
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}

@@ -5,7 +5,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Card, Input, Select, Table, Tag, Tooltip } from 'antd'
 import { useState } from 'react'
 import { requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/audit')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -34,12 +33,12 @@ function AuditPage() {
   })
 
   return (
-    <Card title={m.auditPage_title()}>
+    <Card title={'审计日志'}>
       <div className="mb-4 flex flex-wrap gap-2">
         <Select
           allowClear
           className="min-w-40"
-          placeholder={m.auditPage_filterDomain()}
+          placeholder={'按模块筛选'}
           value={domain || undefined}
           onChange={(v) => {
             setDomain(v ?? '')
@@ -50,7 +49,7 @@ function AuditPage() {
         <Input.Search
           allowClear
           className="max-w-80"
-          placeholder={m.auditPage_filterActor()}
+          placeholder={'按操作人 ID 筛选'}
           onSearch={(v) => {
             setActorId(v.trim())
             setPage(0)
@@ -71,20 +70,20 @@ function AuditPage() {
         }}
         columns={[
           {
-            title: m.auditPage_time(),
+            title: '时间',
             key: 'time',
             width: 180,
             render: (_, log) =>
               log.createdAt ? timestampDate(log.createdAt).toLocaleString() : '',
           },
           {
-            title: m.auditPage_actor(),
+            title: '操作人',
             key: 'actor',
             render: (_, log) =>
               log.actorName || (log.actorId ? <code className="text-xs">{log.actorId}</code> : '—'),
           },
           {
-            title: m.auditPage_action(),
+            title: '操作',
             key: 'action',
             render: (_, log) => (
               <Tooltip title={log.action}>
@@ -96,20 +95,16 @@ function AuditPage() {
             ),
           },
           {
-            title: m.auditPage_resource(),
+            title: '资源',
             dataIndex: 'resourceId',
             render: (v: string) => (v ? <code className="text-xs">{v}</code> : '—'),
           },
           {
-            title: m.auditPage_result(),
+            title: '结果',
             dataIndex: 'result',
             width: 120,
             render: (v: string) =>
-              v === 'ok' ? (
-                <Tag color="success">{m.auditPage_resultOk()}</Tag>
-              ) : (
-                <Tag color="error">{v}</Tag>
-              ),
+              v === 'ok' ? <Tag color="success">{'成功'}</Tag> : <Tag color="error">{v}</Tag>,
           },
           { title: 'IP', dataIndex: 'ip', width: 140 },
         ]}

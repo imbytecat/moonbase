@@ -1,7 +1,6 @@
 import type { Rule } from 'antd/es/form'
 import AntdPhoneInput from 'antd-phone-input'
 import type { PhoneNumber } from 'antd-phone-input/types'
-import { m } from '#paraglide/messages.js'
 
 interface PhoneInputProps {
   value?: string
@@ -38,7 +37,7 @@ export function phoneRule(): Rule {
     validator: (_, raw: unknown) => {
       const value = typeof raw === 'string' ? raw : ''
       if (value.length >= 6 && /^\+\d+$/.test(value)) return Promise.resolve()
-      return Promise.reject(new Error(m.auth_phoneRule()))
+      return Promise.reject(new Error('请输入有效的手机号'))
     },
   }
 }

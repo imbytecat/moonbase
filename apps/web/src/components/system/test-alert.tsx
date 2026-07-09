@@ -1,5 +1,4 @@
 import { Alert } from 'antd'
-import { m } from '#paraglide/messages.js'
 
 export type TestState = { ok: boolean; message: string } | undefined
 
@@ -12,7 +11,7 @@ export function TestAlert({ result }: { result: TestState }) {
     <Alert
       className="mb-4"
       type={result.ok ? 'success' : 'error'}
-      title={result.ok ? m.systemPage_testPassed() : m.systemPage_testFailed()}
+      title={result.ok ? '测试通过' : '测试失败'}
       description={result.message || undefined}
       showIcon
     />

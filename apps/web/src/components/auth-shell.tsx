@@ -1,11 +1,8 @@
-import { GlobalOutlined } from '@ant-design/icons'
 import { useQuery } from '@connectrpc/connect-query'
 import { getSiteInfo } from '@moonbase/api-client'
-import { Button, Card, Dropdown, Typography } from 'antd'
+import { Card, Typography } from 'antd'
 import type { ReactNode } from 'react'
-import { LOCALE_LABELS } from '#lib/locale'
 import { siteName } from '#lib/site'
-import { getLocale, locales, setLocale } from '#paraglide/runtime.js'
 
 // Shared shell for the public auth pages (login/register/forgot/reset/verify):
 // centered card, site branding on top, legal footer at the bottom. Brand data
@@ -16,24 +13,6 @@ export function AuthShell({ subtitle, children }: { subtitle?: string; children:
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-(--ant-color-bg-layout) p-4">
-      {locales.length > 1 ? (
-        <Dropdown
-          trigger={['click']}
-          menu={{
-            selectable: true,
-            selectedKeys: [getLocale()],
-            items: locales.map((locale) => ({
-              key: locale,
-              label: LOCALE_LABELS[locale],
-              onClick: () => setLocale(locale),
-            })),
-          }}
-        >
-          <Button type="text" icon={<GlobalOutlined />} className="!absolute top-4 right-4">
-            {LOCALE_LABELS[getLocale()]}
-          </Button>
-        </Dropdown>
-      ) : null}
       <Card className="w-full max-w-md shadow-sm">
         <div className="mb-6 text-center">
           {siteInfo?.logoUrl ? (

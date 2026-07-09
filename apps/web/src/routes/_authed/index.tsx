@@ -23,7 +23,6 @@ import {
 } from 'antd'
 import { useState } from 'react'
 import { hasPermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 import { useThemeMode } from '#providers/theme-mode'
 
 export const Route = createFileRoute('/_authed/')({
@@ -45,10 +44,10 @@ function Dashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <Typography.Title level={3} className="!mb-1">
-              {m.dashboard_title()}
+              {'仪表盘'}
             </Typography.Title>
             <Typography.Paragraph type="secondary" className="!mb-0">
-              {m.dashboard_subtitle()}
+              {'欢迎回来，这里是系统运行概览'}
             </Typography.Paragraph>
           </div>
           {canRead ? (
@@ -57,7 +56,7 @@ function Dashboard() {
               onChange={setDays}
               options={RANGES.map((value) => ({
                 value,
-                label: m.report_lastDays({ days: value }),
+                label: `近 ${value} 天`,
               }))}
             />
           ) : null}
@@ -77,10 +76,10 @@ function ReportBody({
   days: number
 }) {
   const stats = [
-    { title: m.report_totalUsers(), value: data?.totalUsers },
-    { title: m.report_activeUsers(), value: data?.activeUsers },
-    { title: m.report_newUsers(), value: data?.newUsers },
-    { title: m.report_activeSessions(), value: data?.activeSessions },
+    { title: '用户总数', value: data?.totalUsers },
+    { title: '启用用户', value: data?.activeUsers },
+    { title: '新增用户', value: data?.newUsers },
+    { title: '在线会话', value: data?.activeSessions },
   ]
 
   return (
@@ -99,7 +98,7 @@ function ReportBody({
         ))}
       </Row>
 
-      <Card title={m.report_activityTitle()}>
+      <Card title={'活跃趋势'}>
         {data === undefined ? (
           <Skeleton active title={false} paragraph={{ rows: 6 }} />
         ) : (
@@ -109,17 +108,17 @@ function ReportBody({
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>
-          <BreakdownCard title={m.report_usersByRole()} slices={data?.usersByRole} />
+          <BreakdownCard title={'角色分布'} slices={data?.usersByRole} />
         </Col>
         <Col xs={24} lg={8}>
-          <BreakdownCard title={m.report_workflowStatus()} slices={data?.workflowRunsByStatus} />
+          <BreakdownCard title={'工作流状态'} slices={data?.workflowRunsByStatus} />
         </Col>
         <Col xs={24} lg={8}>
-          <BreakdownCard title={m.report_identityProviders()} slices={data?.identitiesByProvider} />
+          <BreakdownCard title={'第三方登录来源'} slices={data?.identitiesByProvider} />
         </Col>
       </Row>
 
-      <Card title={m.report_detailTitle()} styles={{ body: { padding: 0 } }}>
+      <Card title={'每日明细'} styles={{ body: { padding: 0 } }}>
         <DailyDetailTable
           days={days}
           signups={data?.userSignups ?? []}
@@ -163,10 +162,7 @@ function ActivityChart({
   const { token } = theme.useToken()
   const chartTheme = useChartTheme()
 
-  const chartData = [
-    ...fillDaily(days, signups, m.report_signups()),
-    ...fillDaily(days, logins, m.report_logins()),
-  ]
+  const chartData = [...fillDaily(days, signups, '注册'), ...fillDaily(days, logins, '登录')]
 
   return (
     <Line
@@ -216,15 +212,15 @@ function DailyDetailTable({
       pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false }}
       scroll={{ x: 'max-content' }}
       columns={[
-        { title: m.report_date(), dataIndex: 'date' },
+        { title: '日期', dataIndex: 'date' },
         {
-          title: m.report_signups(),
+          title: '注册',
           dataIndex: 'signups',
           align: 'right',
           sorter: (a, b) => a.signups - b.signups,
         },
         {
-          title: m.report_logins(),
+          title: '登录',
           dataIndex: 'logins',
           align: 'right',
           sorter: (a, b) => a.logins - b.logins,

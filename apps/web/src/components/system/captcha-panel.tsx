@@ -20,16 +20,15 @@ import {
   schemaProfileToProto,
 } from '#components/system/schema-profile-form'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  auth: m.systemPage_captchaPurposeAuth,
+  auth: () => '登录与注册',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
   turnstile: () => 'Cloudflare Turnstile',
-  geetest: m.systemPage_providerGeetest,
-  altcha: m.systemPage_providerAltcha,
+  geetest: () => '极验 v4',
+  altcha: () => 'ALTCHA',
 }
 
 export function CaptchaPanel({
@@ -47,7 +46,7 @@ export function CaptchaPanel({
   const deleteMutation = useMutation(deleteCaptchaProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -55,7 +54,7 @@ export function CaptchaPanel({
   const bindMutation = useMutation(bindCaptchaPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -69,20 +68,20 @@ export function CaptchaPanel({
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
         texts={{
-          profilesTitle: m.systemPage_captchaProfilesTitle(),
-          profilesHint: m.systemPage_captchaProfilesHint(),
-          noProfiles: m.systemPage_captchaNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_captchaBindingsHint(),
+          profilesTitle: '验证配置',
+          profilesHint: '可添加多个人机验证配置，按用途选择启用',
+          noProfiles: '尚未添加人机验证配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每个场景指定使用的验证配置，未绑定的场景不启用人机验证',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={() => <SafetyOutlined className="text-lg text-(--ant-color-primary)" />}
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
         profileDescription={(p) =>
           p.provider === 'altcha'
-            ? m.systemPage_altchaDesc()
+            ? '开源工作量证明验证，无需外部服务'
             : String(p.provider === 'geetest' ? p.config?.captchaId : p.config?.siteKey) ||
-              m.systemPage_siteKey()
+              '站点密钥'
         }
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}
@@ -125,14 +124,14 @@ function CaptchaProfileDrawer({
 
   const createMutation = useMutation(createCaptchaProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateCaptchaProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -141,20 +140,20 @@ function CaptchaProfileDrawer({
   const providers: ProviderOption[] = [
     {
       value: 'altcha',
-      label: m.systemPage_providerAltcha(),
-      description: m.systemPage_altchaDesc(),
+      label: 'ALTCHA',
+      description: '开源工作量证明验证，无需外部服务',
       icon: <ThunderboltOutlined className="text-xl text-(--ant-color-success)" />,
     },
     {
       value: 'turnstile',
       label: 'Cloudflare Turnstile',
-      description: m.systemPage_turnstileDesc(),
+      description: 'Cloudflare 提供的隐形人机验证',
       icon: <SafetyOutlined className="text-xl text-(--ant-color-warning)" />,
     },
     {
       value: 'geetest',
-      label: m.systemPage_providerGeetest(),
-      description: m.systemPage_geetestDesc(),
+      label: '极验 v4',
+      description: '极验第四代行为验证',
       icon: <RadarChartOutlined className="text-xl text-(--ant-color-primary)" />,
     },
   ]
@@ -189,10 +188,10 @@ function CaptchaProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_captchaProfileNamePlaceholder()} />
+              <Input placeholder={'如：登录保护'} />
             </Form.Item>
 
             <div className="grid grid-cols-2 gap-4">
@@ -206,7 +205,7 @@ function CaptchaProfileDrawer({
               htmlType="submit"
               loading={createMutation.isPending || updateMutation.isPending}
             >
-              {m.common_save()}
+              {'保存'}
             </Button>
           </Form>
         )

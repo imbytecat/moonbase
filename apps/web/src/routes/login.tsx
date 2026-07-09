@@ -17,7 +17,6 @@ import { CaptchaWidget } from '#components/captcha-widget'
 import { PhoneInput, phoneRule } from '#components/phone-input'
 import { humanizeError } from '#lib/errors'
 import { sessionQueryOptions } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export interface LoginSearch {
   redirect?: string
@@ -101,21 +100,17 @@ function LoginPage() {
     >
       <Form.Item
         name="identifier"
-        label={m.auth_identifier()}
-        rules={[{ required: true, message: m.auth_identifierRule() }]}
+        label={'用户名 / 邮箱 / 手机号'}
+        rules={[{ required: true, message: '请输入用户名、邮箱或手机号' }]}
       >
         <Input autoComplete="username" />
       </Form.Item>
-      <Form.Item
-        name="password"
-        label={m.auth_password()}
-        rules={[{ required: true, message: m.auth_passwordRequired() }]}
-      >
+      <Form.Item name="password" label={'密码'} rules={[{ required: true, message: '请输入密码' }]}>
         <Input.Password autoComplete="current-password" />
       </Form.Item>
       {authConfig?.emailEnabled ? (
         <div className="mb-3 text-end text-sm">
-          <Link to="/forgot-password">{m.auth_forgotPassword()}</Link>
+          <Link to="/forgot-password">{'忘记密码？'}</Link>
         </div>
       ) : null}
       {captcha}
@@ -126,13 +121,13 @@ function LoginPage() {
         loading={passwordLogin.isPending}
         disabled={captchaRequired && !captchaToken}
       >
-        {m.auth_signIn()}
+        {'登录'}
       </Button>
     </Form>
   )
 
   return (
-    <AuthShell subtitle={m.auth_signInTitle()}>
+    <AuthShell subtitle={'登录账号'}>
       {error ? <Alert type="error" title={error} className="mb-4" showIcon /> : null}
 
       {mfaTicket ? (
@@ -145,16 +140,21 @@ function LoginPage() {
             totpLogin.mutate({ mfaTicket, code: values.code })
           }}
         >
-          <Alert type="info" title={m.auth_totpPrompt()} className="mb-4" showIcon />
+          <Alert
+            type="info"
+            title={'请输入身份验证器 App 中的 6 位验证码，或恢复码。'}
+            className="mb-4"
+            showIcon
+          />
           <Form.Item
             name="code"
-            label={m.auth_totpCode()}
-            rules={[{ required: true, min: 6, message: m.auth_codeRule() }]}
+            label={'动态验证码'}
+            rules={[{ required: true, min: 6, message: '请输入 6 位验证码' }]}
           >
             <Input autoComplete="one-time-code" autoFocus maxLength={32} />
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={totpLogin.isPending}>
-            {m.auth_signIn()}
+            {'登录'}
           </Button>
           <Button
             type="text"
@@ -165,7 +165,7 @@ function LoginPage() {
               setError(undefined)
             }}
           >
-            {m.auth_backToSignIn()}
+            {'返回登录'}
           </Button>
         </Form>
       ) : (
@@ -174,10 +174,10 @@ function LoginPage() {
             <Tabs
               centered
               items={[
-                { key: 'password', label: m.auth_passwordLogin(), children: passwordForm },
+                { key: 'password', label: '密码登录', children: passwordForm },
                 {
                   key: 'sms',
-                  label: m.auth_smsLogin(),
+                  label: '短信登录',
                   children: (
                     <SmsLoginForm
                       captchaToken={captchaToken}
@@ -202,7 +202,7 @@ function LoginPage() {
           {(authConfig?.oauthProviders ?? []).length > 0 ? (
             <>
               <Divider plain className="text-xs text-(--ant-color-text-tertiary)">
-                {m.auth_oauthDivider()}
+                {'或使用以下方式登录'}
               </Divider>
               <div className="flex flex-wrap justify-center gap-3">
                 {authConfig?.oauthProviders?.map((opt) => (
@@ -222,8 +222,8 @@ function LoginPage() {
 
           {authConfig?.registrationEnabled ? (
             <div className="mt-4 text-center text-sm">
-              <Typography.Text type="secondary">{m.auth_noAccount()} </Typography.Text>
-              <Link to="/register">{m.auth_createOne()}</Link>
+              <Typography.Text type="secondary">{'还没有账号？'} </Typography.Text>
+              <Link to="/register">{'立即注册'}</Link>
             </div>
           ) : null}
         </>
@@ -255,7 +255,7 @@ function SmsLoginForm({
 
   const sendCode = useMutation(sendSmsLoginCode, {
     onSuccess: () => {
-      message.success(m.auth_codeSent())
+      message.success('验证码已发送')
       setCooldown(60)
       const timer = setInterval(() => {
         setCooldown((s) => {
@@ -269,13 +269,13 @@ function SmsLoginForm({
 
   return (
     <Form form={form} layout="vertical" requiredMark={false} onFinish={onSubmit}>
-      <Form.Item name="phoneNumber" label={m.auth_phone()} rules={[phoneRule()]}>
+      <Form.Item name="phoneNumber" label={'手机号'} rules={[phoneRule()]}>
         <PhoneInput allowedRegions={allowedRegions} />
       </Form.Item>
       <Form.Item
         name="code"
-        label={m.auth_code()}
-        rules={[{ required: true, len: 6, message: m.auth_codeRule() }]}
+        label={'验证码'}
+        rules={[{ required: true, len: 6, message: '请输入 6 位验证码' }]}
       >
         <Input
           maxLength={6}
@@ -292,7 +292,7 @@ function SmsLoginForm({
                 })
               }}
             >
-              {cooldown > 0 ? m.auth_resendIn({ seconds: cooldown }) : m.auth_sendCode()}
+              {cooldown > 0 ? `${cooldown}秒后可重发` : '发送验证码'}
             </Button>
           }
         />
@@ -305,7 +305,7 @@ function SmsLoginForm({
         loading={submitting}
         disabled={captchaRequired && !captchaToken}
       >
-        {m.auth_signIn()}
+        {'登录'}
       </Button>
     </Form>
   )

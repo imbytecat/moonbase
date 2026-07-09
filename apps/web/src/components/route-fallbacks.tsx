@@ -1,21 +1,20 @@
 import { useRouter } from '@tanstack/react-router'
 import { Button, Card, Result, Skeleton } from 'antd'
 import { ForbiddenError } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export function RouteError({ error }: { error: Error }) {
   const router = useRouter()
   if (error instanceof ForbiddenError) {
-    return <Result status="403" title="403" subTitle={m.error_forbidden()} />
+    return <Result status="403" title="403" subTitle={'您没有权限访问此页面'} />
   }
   return (
     <Result
       status="error"
-      title={m.error_somethingWrong()}
-      subTitle={m.error_generic()}
+      title={'出错了'}
+      subTitle={'请求失败，请稍后重试'}
       extra={
         <Button type="primary" onClick={() => router.invalidate()}>
-          {m.common_retry()}
+          {'重试'}
         </Button>
       }
     />
@@ -23,7 +22,7 @@ export function RouteError({ error }: { error: Error }) {
 }
 
 export function RouteNotFound() {
-  return <Result status="404" title="404" subTitle={m.error_notFoundTitle()} />
+  return <Result status="404" title="404" subTitle={'页面不存在'} />
 }
 
 export function RoutePending() {

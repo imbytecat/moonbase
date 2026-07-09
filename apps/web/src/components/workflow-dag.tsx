@@ -11,7 +11,6 @@ import {
 } from '@xyflow/react'
 import { Tag, Typography } from 'antd'
 import { useMemo } from 'react'
-import { m } from '#paraglide/messages.js'
 
 import '@xyflow/react/dist/style.css'
 
@@ -51,7 +50,7 @@ function StepNode({ data }: NodeProps<FlowNode>) {
         </Typography.Text>
         {data.status === 'error' ? (
           <Tag color="red" className="!me-0">
-            {m.workflows_stepFailed()}
+            {'失败'}
           </Tag>
         ) : null}
       </div>

@@ -15,7 +15,6 @@ import {
   schemaProfileToProto,
 } from '#components/system/schema-profile-form'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export function OauthProfileDrawer({
   profile,
@@ -38,14 +37,14 @@ export function OauthProfileDrawer({
 
   const createMutation = useMutation(createOauthProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateOauthProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -54,14 +53,14 @@ export function OauthProfileDrawer({
   const providers: ProviderOption[] = [
     {
       value: 'oidc',
-      label: m.systemPage_oauthOidc(),
-      description: m.systemPage_oauthOidcDesc(),
+      label: '通用 OIDC',
+      description: '通用 OpenID Connect，覆盖 Google、Keycloak、Authentik 等',
       icon: <ApiOutlined className="text-xl text-(--ant-color-primary)" />,
     },
     {
       value: 'wechat',
-      label: m.systemPage_oauthWechat(),
-      description: m.systemPage_oauthWechatDesc(),
+      label: '微信扫码',
+      description: '微信开放平台网站应用扫码登录',
       icon: <WechatOutlined className="text-xl text-(--ant-color-success)" />,
     },
   ]
@@ -99,9 +98,9 @@ export function OauthProfileDrawer({
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
                 name="name"
-                label={m.systemPage_oauthDisplayName()}
-                extra={m.systemPage_oauthDisplayNameHint()}
-                rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+                label={'显示名称'}
+                extra={'登录按钮上显示的文字'}
+                rules={[{ required: true, message: '请输入配置名称' }]}
               >
                 <Input placeholder="Google" />
               </Form.Item>
@@ -110,15 +109,10 @@ export function OauthProfileDrawer({
               ))}
             </div>
             {!isNew ? (
-              <Typography.Paragraph type="secondary">
-                {m.systemPage_oauthKeyImmutable()}
-              </Typography.Paragraph>
+              <Typography.Paragraph type="secondary">{'创建后不可修改'}</Typography.Paragraph>
             ) : null}
 
-            <Form.Item
-              label={m.systemPage_oauthCallbackUrl()}
-              extra={m.systemPage_oauthCallbackHint()}
-            >
+            <Form.Item label={'回调地址'} extra={'在身份服务的应用设置中登记此地址'}>
               <Typography.Text code copyable>
                 {callbackUrl}
               </Typography.Text>
@@ -129,7 +123,7 @@ export function OauthProfileDrawer({
               htmlType="submit"
               loading={createMutation.isPending || updateMutation.isPending}
             >
-              {m.common_save()}
+              {'保存'}
             </Button>
           </Form>
         )

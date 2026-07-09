@@ -14,7 +14,6 @@ import { App, Button, Card, Empty, List, Pagination, Popconfirm, Segmented, Tag 
 import { type ReactNode, useState } from 'react'
 import { humanizeError } from '#lib/errors'
 import { notificationCategory } from '#lib/notifications'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/notifications')({
   component: NotificationsPage,
@@ -50,7 +49,7 @@ function NotificationsPage() {
   const markAll = useMutation(markAllNotificationsRead, {
     onSuccess: () => {
       invalidate()
-      message.success(m.notifications_allRead())
+      message.success('已全部标为已读')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -72,25 +71,21 @@ function NotificationsPage() {
           size="small"
           onClick={() => markRead.mutate({ ids: [n.id] })}
         >
-          {m.notifications_markRead()}
+          {'标为已读'}
         </Button>,
       )
     }
     if (n.link) {
       actions.push(
         <Link key="view" to={n.link}>
-          {m.notifications_view()}
+          {'查看'}
         </Link>,
       )
     }
     actions.push(
-      <Popconfirm
-        key="delete"
-        title={m.notifications_delete()}
-        onConfirm={() => remove.mutate({ id: n.id })}
-      >
+      <Popconfirm key="delete" title={'删除'} onConfirm={() => remove.mutate({ id: n.id })}>
         <Button type="link" size="small" danger>
-          {m.notifications_delete()}
+          {'删除'}
         </Button>
       </Popconfirm>,
     )
@@ -120,14 +115,14 @@ function NotificationsPage() {
 
   return (
     <Card
-      title={m.notifications_title()}
+      title={'消息中心'}
       extra={
         <Button
           loading={markAll.isPending}
           disabled={Number(data?.unread ?? 0) === 0}
           onClick={() => markAll.mutate({})}
         >
-          {m.notifications_markAllRead()}
+          {'全部已读'}
         </Button>
       }
     >
@@ -139,12 +134,12 @@ function NotificationsPage() {
           setPage(0)
         }}
         options={[
-          { label: m.notifications_filterAll(), value: 'all' },
-          { label: m.notifications_filterUnread(), value: 'unread' },
+          { label: '全部', value: 'all' },
+          { label: '未读', value: 'unread' },
         ]}
       />
       {items.length === 0 && !isFetching ? (
-        <Empty description={m.notifications_empty()} />
+        <Empty description={'暂无消息'} />
       ) : (
         <List<NotificationMessage>
           loading={isFetching}

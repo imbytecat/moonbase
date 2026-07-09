@@ -12,7 +12,6 @@ import {
 import type { CurrentUser } from '@moonbase/api-client'
 import { Permission } from '@moonbase/api-client'
 import type { ReactNode } from 'react'
-import { m } from '#paraglide/messages.js'
 import { hasPermission } from './session'
 
 // The settings area is ONE navigation surface over TWO backend domains:
@@ -35,17 +34,17 @@ export interface SettingsGroup {
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
     key: 'general',
-    label: m.settingsNav_general,
+    label: () => '通用',
     items: [
       {
         path: '/settings/site',
-        label: m.settingsNav_site,
+        label: () => '站点信息',
         icon: <IdcardOutlined />,
         permission: Permission.SETTINGS_READ,
       },
       {
         path: '/settings/registration',
-        label: m.settingsNav_registration,
+        label: () => '账号与注册',
         icon: <UserAddOutlined />,
         permission: Permission.SETTINGS_READ,
       },
@@ -53,17 +52,17 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     key: 'communication',
-    label: m.settingsNav_communication,
+    label: () => '通讯渠道',
     items: [
       {
         path: '/settings/email',
-        label: m.systemPage_emailCard,
+        label: () => '邮件服务',
         icon: <MailOutlined />,
         permission: Permission.SYSTEM_READ,
       },
       {
         path: '/settings/sms',
-        label: m.systemPage_smsCard,
+        label: () => '短信服务',
         icon: <MessageOutlined />,
         permission: Permission.SYSTEM_READ,
       },
@@ -71,17 +70,17 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     key: 'identity',
-    label: m.settingsNav_identity,
+    label: () => '身份与安全',
     items: [
       {
         path: '/settings/captcha',
-        label: m.systemPage_captchaCard,
+        label: () => '人机验证',
         icon: <SafetyOutlined />,
         permission: Permission.SYSTEM_READ,
       },
       {
         path: '/settings/oauth',
-        label: m.systemPage_oauthCard,
+        label: () => '第三方登录',
         icon: <WechatOutlined />,
         permission: Permission.SYSTEM_READ,
       },
@@ -89,11 +88,11 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     key: 'payment',
-    label: m.settingsNav_payment,
+    label: () => '支付',
     items: [
       {
         path: '/settings/payment',
-        label: m.systemPage_paymentCard,
+        label: () => '支付渠道',
         icon: <PayCircleOutlined />,
         permission: Permission.SYSTEM_READ,
       },
@@ -101,17 +100,17 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     key: 'infrastructure',
-    label: m.settingsNav_infrastructure,
+    label: () => '基础设施',
     items: [
       {
         path: '/settings/storage',
-        label: m.systemPage_storageCard,
+        label: () => '文件存储',
         icon: <CloudServerOutlined />,
         permission: Permission.SYSTEM_READ,
       },
       {
         path: '/settings/llm',
-        label: m.systemPage_llmCard,
+        label: () => 'AI 模型',
         icon: <RobotOutlined />,
         permission: Permission.SYSTEM_READ,
       },

@@ -11,15 +11,14 @@ import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { SmsProfileDrawer } from '#components/system/sms-profile-drawer'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  verification: m.systemPage_smsPurposeVerification,
+  verification: () => '验证码短信',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
-  aliyun: m.systemPage_providerAliyun,
-  tencent: m.systemPage_providerTencent,
+  aliyun: () => '阿里云短信',
+  tencent: () => '腾讯云短信',
 }
 
 export function SmsPanel({
@@ -37,7 +36,7 @@ export function SmsPanel({
   const deleteMutation = useMutation(deleteSmsProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -45,7 +44,7 @@ export function SmsPanel({
   const bindMutation = useMutation(bindSmsPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -61,16 +60,16 @@ export function SmsPanel({
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
         texts={{
-          profilesTitle: m.systemPage_smsProfilesTitle(),
-          profilesHint: m.systemPage_smsProfilesHint(),
-          noProfiles: m.systemPage_smsNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_smsBindingsHint(),
+          profilesTitle: '短信配置',
+          profilesHint: '可添加多个短信配置，例如国内通道和国际通道',
+          noProfiles: '尚未添加短信配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每类短信指定使用的配置，未绑定的功能将不可用',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={() => <MessageOutlined className="text-lg text-(--ant-color-primary)" />}
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
-        profileDescription={(p) => signOf(p) || m.systemPage_signName()}
+        profileDescription={(p) => signOf(p) || '签名'}
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}

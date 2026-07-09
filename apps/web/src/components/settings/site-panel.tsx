@@ -3,7 +3,6 @@ import { presignSiteAssetUpload, type SiteSettings } from '@moonbase/api-client'
 import { App, Button, Form, Input, Upload } from 'antd'
 import { humanizeError } from '#lib/errors'
 import { uploadToPresignedUrl } from '#lib/upload'
-import { m } from '#paraglide/messages.js'
 
 interface SiteFormValues {
   name: string
@@ -43,10 +42,10 @@ export function SitePanel({
       }
     >
       <div className="grid grid-cols-2 gap-4">
-        <Form.Item name="name" label={m.settingsPage_siteName()}>
-          <Input placeholder={m.common_appName()} />
+        <Form.Item name="name" label={'站点名称'}>
+          <Input placeholder={'Moonbase'} />
         </Form.Item>
-        <Form.Item name="description" label={m.settingsPage_siteDescription()}>
+        <Form.Item name="description" label={'站点简介'}>
           <Input />
         </Form.Item>
       </div>
@@ -54,8 +53,8 @@ export function SitePanel({
       <div className="mb-6 grid grid-cols-2 gap-4">
         <BrandAssetField
           kind="logo"
-          label={m.settingsPage_siteLogo()}
-          hint={m.settingsPage_siteLogoHint()}
+          label={'站点 Logo'}
+          hint={'建议正方形图片，显示在侧边栏和登录页'}
           currentFileId={site?.logoFileId ?? ''}
           accept="image/png,image/jpeg,image/webp,image/svg+xml"
           onUploaded={(fileId) =>
@@ -75,8 +74,8 @@ export function SitePanel({
         />
         <BrandAssetField
           kind="favicon"
-          label={m.settingsPage_siteFavicon()}
-          hint={m.settingsPage_siteFaviconHint()}
+          label={'浏览器图标'}
+          hint={'显示在浏览器标签页，支持 PNG/SVG/ICO'}
           currentFileId={site?.faviconFileId ?? ''}
           accept="image/png,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"
           onUploaded={(fileId) =>
@@ -97,16 +96,16 @@ export function SitePanel({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Form.Item name="copyright" label={m.settingsPage_siteCopyright()}>
+        <Form.Item name="copyright" label={'版权信息'}>
           <Input placeholder="© 2026 Acme Inc." />
         </Form.Item>
-        <Form.Item name="icpBeian" label={m.settingsPage_siteIcp()}>
+        <Form.Item name="icpBeian" label={'ICP 备案号'}>
           <Input />
         </Form.Item>
       </div>
 
       <Button type="primary" htmlType="submit" loading={saving}>
-        {m.common_save()}
+        {'保存'}
       </Button>
     </Form>
   )
@@ -158,13 +157,11 @@ function BrandAssetField({
             return false
           }}
         >
-          <Button loading={presignMutation.isPending}>
-            {currentFileId ? m.settingsPage_replaceAsset() : m.settingsPage_uploadAsset()}
-          </Button>
+          <Button loading={presignMutation.isPending}>{currentFileId ? '更换' : '上传'}</Button>
         </Upload>
         {currentFileId ? (
           <Button type="text" danger onClick={onClear}>
-            {m.settingsPage_clearAsset()}
+            {'移除'}
           </Button>
         ) : null}
       </div>

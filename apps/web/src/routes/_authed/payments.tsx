@@ -40,7 +40,6 @@ import { useState } from 'react'
 import { humanizeError } from '#lib/errors'
 import { methodDesc, methodInputs, methodLabel } from '#lib/payments'
 import { hasPermission, requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/payments')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -61,16 +60,16 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, () => string> = {
-  created: m.payments_statusCreated,
-  paid: m.payments_statusPaid,
-  closed: m.payments_statusClosed,
-  refunding: m.payments_statusRefunding,
-  refunded: m.payments_statusRefunded,
+  created: () => '待支付',
+  paid: () => '已支付',
+  closed: () => '已关闭',
+  refunding: () => '退款中',
+  refunded: () => '已退款',
 }
 
 const PROVIDER_LABELS: Record<string, () => string> = {
-  alipay: m.systemPage_providerAlipay,
-  wechat: m.systemPage_providerWechatPay,
+  alipay: () => '支付宝',
+  wechat: () => '微信支付',
 }
 
 const yuan = (cents: bigint) =>
@@ -96,7 +95,7 @@ function PaymentsPage() {
   const refundMutation = useMutation(refundPaymentOrder, {
     onSuccess: () => {
       void invalidate()
-      message.success(m.payments_refunded())
+      message.success('退款已提交')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -104,7 +103,7 @@ function PaymentsPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <Card
-        title={m.payments_title()}
+        title={'支付订单'}
         extra={
           <div className="flex gap-2">
             <Select
@@ -115,7 +114,7 @@ function PaymentsPage() {
                 setStatus(v)
               }}
               options={[
-                { value: '', label: m.payments_filterAll() },
+                { value: '', label: '全部状态' },
                 ...Object.keys(STATUS_COLORS).map((s) => ({
                   value: s,
                   label: STATUS_LABELS[s]?.() ?? s,
@@ -124,14 +123,14 @@ function PaymentsPage() {
             />
             {canWrite ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-                {m.payments_createDemo()}
+                {'创建演示订单'}
               </Button>
             ) : null}
           </div>
         }
       >
         {data.orders.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={m.payments_empty()} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={'暂无支付订单'} />
         ) : (
           <Table<PaymentOrder>
             rowKey="id"
@@ -147,7 +146,7 @@ function PaymentsPage() {
             }}
             columns={[
               {
-                title: m.payments_colSubject(),
+                title: '商品',
                 dataIndex: 'subject',
                 render: (subject: string, order) => (
                   <div>
@@ -161,13 +160,13 @@ function PaymentsPage() {
                 ),
               },
               {
-                title: m.payments_colAmount(),
+                title: '金额',
                 dataIndex: 'amount',
                 width: 120,
                 render: (amount: bigint) => yuan(amount),
               },
               {
-                title: m.payments_colProvider(),
+                title: '渠道',
                 dataIndex: 'provider',
                 width: 130,
                 render: (provider: string, order) => (
@@ -175,13 +174,13 @@ function PaymentsPage() {
                 ),
               },
               {
-                title: m.payments_method(),
+                title: '支付方式类型',
                 dataIndex: 'method',
                 width: 110,
                 render: (method: string) => methodLabel(method),
               },
               {
-                title: m.payments_colStatus(),
+                title: '状态',
                 dataIndex: 'status',
                 width: 110,
                 render: (s: string) => (
@@ -189,30 +188,30 @@ function PaymentsPage() {
                 ),
               },
               {
-                title: m.payments_colCreated(),
+                title: '创建时间',
                 dataIndex: 'createdAt',
                 width: 180,
                 render: (_: unknown, order) =>
                   order.createdAt ? timestampDate(order.createdAt).toLocaleString() : '—',
               },
               {
-                title: m.payments_colActions(),
+                title: '操作',
                 key: 'actions',
                 width: 160,
                 render: (_: unknown, order) => (
                   <div className="flex gap-2">
                     {canWrite && order.status === 'created' ? (
                       <Button size="small" onClick={() => setCheckoutId(order.id)}>
-                        {m.payments_showQr()}
+                        {'收款码'}
                       </Button>
                     ) : null}
                     {canWrite && order.status === 'paid' ? (
                       <Popconfirm
-                        title={m.payments_confirmRefund()}
+                        title={'全额退款该订单？'}
                         onConfirm={() => refundMutation.mutate({ id: order.id })}
                       >
                         <Button size="small" danger loading={refundMutation.isPending}>
-                          {m.payments_refund()}
+                          {'退款'}
                         </Button>
                       </Popconfirm>
                     ) : null}
@@ -280,7 +279,7 @@ function CreateOrderModal({
 
   return (
     <Modal
-      title={m.payments_createDemo()}
+      title={'创建演示订单'}
       open={open}
       onCancel={onClose}
       onOk={() => form.submit()}
@@ -289,13 +288,16 @@ function CreateOrderModal({
       destroyOnHidden
     >
       {opts.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={m.payments_noOptions()} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={'收银台未绑定任何支付渠道——请先在设置中添加支付配置并绑定收银台'}
+        />
       ) : (
         <Form
           form={form}
           layout="vertical"
           requiredMark={false}
-          initialValues={{ subject: m.payments_demoSubject(), amount: 0.01 }}
+          initialValues={{ subject: '演示商品', amount: 0.01 }}
           onFinish={(values) =>
             createMutation.mutate({
               purpose: 'checkout',
@@ -310,8 +312,8 @@ function CreateOrderModal({
         >
           <Form.Item
             name="profileId"
-            label={m.payments_option()}
-            rules={[{ required: true, message: m.payments_optionRule() }]}
+            label={'支付方式'}
+            rules={[{ required: true, message: '请选择支付方式' }]}
           >
             <Select
               onChange={(v) => {
@@ -326,8 +328,8 @@ function CreateOrderModal({
           </Form.Item>
           <Form.Item
             name="method"
-            label={m.payments_method()}
-            extra={method ? methodDesc(method) : m.payments_pickProfileFirst()}
+            label={'支付方式类型'}
+            extra={method ? methodDesc(method) : '请先选择上方的支付渠道'}
           >
             <Segmented
               disabled={availableMethods.length === 0}
@@ -337,8 +339,8 @@ function CreateOrderModal({
           {inputs.includes('payer_id') ? (
             <Form.Item
               name="payerId"
-              label={m.payments_payerId()}
-              extra={m.payments_payerIdHint()}
+              label={'付款人标识'}
+              extra={'微信 openid 或支付宝买家 ID，需由客户端授权流程获取'}
               rules={[{ required: true }]}
             >
               <Input autoComplete="off" />
@@ -347,16 +349,16 @@ function CreateOrderModal({
           {inputs.includes('return_url') ? (
             <Form.Item
               name="returnUrl"
-              label={m.payments_returnUrl()}
-              extra={m.payments_returnUrlHint()}
+              label={'支付完成回跳地址'}
+              extra={'选填：付款完成后付款人浏览器跳转回的商户页面地址'}
             >
               <Input autoComplete="off" placeholder="https://" />
             </Form.Item>
           ) : null}
-          <Form.Item name="subject" label={m.payments_colSubject()} rules={[{ required: true }]}>
+          <Form.Item name="subject" label={'商品'} rules={[{ required: true }]}>
             <Input maxLength={128} />
           </Form.Item>
-          <Form.Item name="amount" label={m.payments_amountYuan()} rules={[{ required: true }]}>
+          <Form.Item name="amount" label={'金额（元）'} rules={[{ required: true }]}>
             <InputNumber className="w-full" min={0.01} precision={2} prefix="¥" />
           </Form.Item>
         </Form>
@@ -379,7 +381,7 @@ function CheckoutModal({ id, onClose }: { id: string | undefined; onClose: () =>
   const order = data?.order
 
   return (
-    <Modal title={m.payments_checkoutTitle()} open={Boolean(id)} onCancel={onClose} footer={null}>
+    <Modal title={'扫码支付'} open={Boolean(id)} onCancel={onClose} footer={null}>
       {order ? (
         <div className="flex flex-col items-center gap-4 py-4">
           <Typography.Text strong>{order.subject}</Typography.Text>
@@ -408,7 +410,7 @@ function PaymentCredential({ order }: { order: PaymentOrder }) {
       <>
         <QRCode value={order.credential} size={220} />
         <Typography.Text type="secondary" className="text-xs">
-          {order.provider === 'alipay' ? m.payments_scanWithAlipay() : m.payments_scanWithWechat()}
+          {order.provider === 'alipay' ? '请使用支付宝扫码支付' : '请使用微信扫码支付'}
         </Typography.Text>
       </>
     )
@@ -417,10 +419,10 @@ function PaymentCredential({ order }: { order: PaymentOrder }) {
     return (
       <>
         <Button type="primary" href={order.credential} target="_blank">
-          {m.payments_openH5()}
+          {'打开支付页面'}
         </Button>
         <Typography.Text type="secondary" className="text-xs">
-          {m.payments_h5Hint()}
+          {'请在手机浏览器中打开该链接完成支付'}
         </Typography.Text>
       </>
     )
@@ -431,7 +433,7 @@ function PaymentCredential({ order }: { order: PaymentOrder }) {
         {order.credential}
       </pre>
       <Typography.Text type="secondary" className="text-xs">
-        {m.payments_jsapiHint()}
+        {'应用内支付参数需由客户端应用传给支付 SDK 调起，此处仅作展示'}
       </Typography.Text>
     </>
   )

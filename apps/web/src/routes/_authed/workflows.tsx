@@ -24,7 +24,6 @@ import { useState } from 'react'
 import { WorkflowDag } from '#components/workflow-dag'
 import { humanizeError } from '#lib/errors'
 import { hasPermission, requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/workflows')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -66,7 +65,7 @@ function WorkflowsPage() {
     onSuccess: (res) => {
       void invalidate()
       setSelectedId(res.id)
-      message.success(m.workflows_triggered())
+      message.success('工作流已启动')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -74,7 +73,7 @@ function WorkflowsPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <Card
-        title={m.workflows_title()}
+        title={'工作流'}
         extra={
           canWrite ? (
             <Button
@@ -83,13 +82,13 @@ function WorkflowsPage() {
               loading={triggerMutation.isPending}
               onClick={() => triggerMutation.mutate({ name: 'demo' })}
             >
-              {m.workflows_triggerDemo()}
+              {'运行示例工作流'}
             </Button>
           ) : null
         }
       >
         {data.runs.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={m.workflows_empty()} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={'暂无工作流运行记录'} />
         ) : (
           <Table<WorkflowRun>
             rowKey="id"
@@ -103,7 +102,7 @@ function WorkflowsPage() {
             })}
             columns={[
               {
-                title: m.workflows_colName(),
+                title: '名称',
                 dataIndex: 'name',
                 render: (name: string) => (
                   <Typography.Text strong className="text-[13px]">
@@ -112,7 +111,7 @@ function WorkflowsPage() {
                 ),
               },
               {
-                title: m.workflows_colStatus(),
+                title: '状态',
                 dataIndex: 'status',
                 width: 130,
                 render: (status: string) => (
@@ -120,14 +119,14 @@ function WorkflowsPage() {
                 ),
               },
               {
-                title: m.workflows_colCreated(),
+                title: '创建时间',
                 dataIndex: 'createdAt',
                 width: 200,
                 render: (_: unknown, run) =>
                   run.createdAt ? timestampDate(run.createdAt).toLocaleString() : '—',
               },
               {
-                title: m.workflows_colAttempts(),
+                title: '尝试',
                 dataIndex: 'attempts',
                 width: 90,
               },
@@ -180,14 +179,14 @@ function RunDrawer({
   const cancelMutation = useMutation(cancelWorkflowRun, {
     onSuccess: () => {
       invalidateRun()
-      message.success(m.workflows_cancelled())
+      message.success('已取消')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const resumeMutation = useMutation(resumeWorkflowRun, {
     onSuccess: () => {
       invalidateRun()
-      message.success(m.workflows_resumed())
+      message.success('已恢复')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -212,7 +211,7 @@ function RunDrawer({
                 loading={cancelMutation.isPending}
                 onClick={() => cancelMutation.mutate({ id: run.id })}
               >
-                {m.workflows_cancel()}
+                {'取消'}
               </Button>
             ) : null}
             {run.status === 'CANCELLED' || run.status === 'ERROR' ? (
@@ -222,7 +221,7 @@ function RunDrawer({
                 loading={resumeMutation.isPending}
                 onClick={() => resumeMutation.mutate({ id: run.id })}
               >
-                {m.workflows_resume()}
+                {'恢复'}
               </Button>
             ) : null}
           </div>
@@ -244,7 +243,7 @@ function RunDrawer({
           {run.output ? (
             <div>
               <Typography.Text strong className="text-xs">
-                {m.workflows_output()}
+                {'输出'}
               </Typography.Text>
               <pre className="mt-1 overflow-auto rounded-lg bg-(--ant-color-fill-quaternary) p-3 text-xs">
                 {run.output}
@@ -254,7 +253,7 @@ function RunDrawer({
           {run.error ? (
             <div>
               <Typography.Text strong type="danger" className="text-xs">
-                {m.workflows_error()}
+                {'错误'}
               </Typography.Text>
               <pre className="mt-1 overflow-auto rounded-lg bg-(--ant-color-error-bg) p-3 text-xs">
                 {run.error}

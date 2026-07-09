@@ -22,14 +22,13 @@ import {
 } from '#components/system/schema-profile-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  chat: m.systemPage_llmPurposeChat,
+  chat: () => '通用对话',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
-  openai: m.systemPage_llmOpenaiCompatible,
+  openai: () => 'OpenAI 兼容',
   anthropic: () => 'Anthropic',
 }
 
@@ -48,7 +47,7 @@ export function LlmPanel({
   const deleteMutation = useMutation(deleteLlmProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -56,7 +55,7 @@ export function LlmPanel({
   const bindMutation = useMutation(bindLlmPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -72,11 +71,11 @@ export function LlmPanel({
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
         texts={{
-          profilesTitle: m.systemPage_llmProfilesTitle(),
-          profilesHint: m.systemPage_llmProfilesHint(),
-          noProfiles: m.systemPage_llmNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_llmBindingsHint(),
+          profilesTitle: '模型配置',
+          profilesHint: '可添加多个模型配置，例如高性价比的快速模型和更强的推理模型',
+          noProfiles: '尚未添加模型配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每个 AI 功能指定使用的模型配置，未绑定的功能将不可用',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={(p) =>
@@ -87,7 +86,7 @@ export function LlmPanel({
           )
         }
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
-        profileDescription={(p) => modelOf(p) || m.systemPage_llmModel()}
+        profileDescription={(p) => modelOf(p) || '模型'}
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
@@ -130,14 +129,14 @@ function LlmProfileDrawer({
 
   const createMutation = useMutation(createLlmProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateLlmProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -150,14 +149,14 @@ function LlmProfileDrawer({
   const providers: ProviderOption[] = [
     {
       value: 'openai',
-      label: m.systemPage_llmOpenaiCompatible(),
-      description: m.systemPage_llmOpenaiDesc(),
+      label: 'OpenAI 兼容',
+      description: '覆盖绝大多数模型服务：官方、DeepSeek、Qwen、自建等',
       icon: <ThunderboltOutlined className="text-xl text-(--ant-color-primary)" />,
     },
     {
       value: 'anthropic',
       label: 'Anthropic',
-      description: m.systemPage_llmAnthropicDesc(),
+      description: 'Anthropic 原生接口',
       icon: <RobotOutlined className="text-xl text-(--ant-color-warning)" />,
     },
   ]
@@ -192,10 +191,10 @@ function LlmProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_llmProfileNamePlaceholder()} />
+              <Input placeholder={'如：快速模型、推理模型'} />
             </Form.Item>
 
             <div className="grid grid-cols-2 gap-4">
@@ -211,7 +210,7 @@ function LlmProfileDrawer({
                 htmlType="submit"
                 loading={createMutation.isPending || updateMutation.isPending}
               >
-                {m.common_save()}
+                {'保存'}
               </Button>
               <Button
                 loading={testMutation.isPending}
@@ -220,7 +219,7 @@ function LlmProfileDrawer({
                   testMutation.mutate({ profile: toProto(provider, form.getFieldsValue()) })
                 }}
               >
-                {m.systemPage_testLlm()}
+                {'测试对话'}
               </Button>
             </div>
           </Form>

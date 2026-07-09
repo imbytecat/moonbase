@@ -2,7 +2,6 @@ import type { Transport } from '@connectrpc/connect'
 import { createConnectQueryKey, createQueryOptions } from '@connectrpc/connect-query'
 import { type GetSiteInfoResponse, getSiteInfo } from '@moonbase/api-client'
 import type { QueryClient } from '@tanstack/react-query'
-import { m } from '#paraglide/messages.js'
 
 // Site identity is public data (GetSiteInfo has no auth), loaded once in the
 // root route and cached; every branded surface (login card, sidebar, document
@@ -17,7 +16,7 @@ export function siteInfoQueryKey() {
 }
 
 export function siteName(info: GetSiteInfoResponse | undefined): string {
-  return info?.name || m.common_appName()
+  return info?.name || 'Moonbase'
 }
 
 // Syncs the document head with the configured identity: tab title and

@@ -15,7 +15,7 @@ import "moonbase/v1/options.proto";
 // its name with the PAYMENT_METHOD_ prefix dropped and lower-cased
 // (PAYMENT_METHOD_PAGE_PAY -> "page_pay"); the options carry its provider,
 // credential kind (qr / redirect / params) and per-order inputs. Label and
-// description text stay in the client i18n catalog, not here.
+// description text stay in the web Chinese copy catalog, not here.
 enum PaymentMethod {
   PAYMENT_METHOD_UNSPECIFIED = 0;
 

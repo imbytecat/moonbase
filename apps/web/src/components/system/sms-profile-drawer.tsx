@@ -14,15 +14,14 @@ import { PhoneInput } from '#components/phone-input'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PROVIDER_LABELS: Record<string, () => string> = {
-  aliyun: m.systemPage_providerAliyun,
-  tencent: m.systemPage_providerTencent,
+  aliyun: () => '阿里云短信',
+  tencent: () => '腾讯云短信',
 }
 const PROVIDER_DESCS: Record<string, () => string> = {
-  aliyun: m.systemPage_aliyunSmsDesc,
-  tencent: m.systemPage_tencentSmsDesc,
+  aliyun: () => '阿里云短信服务',
+  tencent: () => '腾讯云短信服务',
 }
 
 function fieldControl(f: FieldDescriptor, secretPlaceholder: string) {
@@ -55,14 +54,14 @@ export function SmsProfileDrawer({
 
   const createMutation = useMutation(createSmsProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateSmsProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -121,10 +120,10 @@ export function SmsProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_smsProfileNamePlaceholder()} />
+              <Input placeholder={'如：国内通道、国际通道'} />
             </Form.Item>
 
             <div className="grid grid-cols-2 gap-4">
@@ -136,10 +135,7 @@ export function SmsProfileDrawer({
                   rules={f.required && !f.secret ? [{ required: true }] : []}
                   valuePropName={f.type === 'bool' ? 'checked' : 'value'}
                 >
-                  {fieldControl(
-                    f,
-                    profile?.config?.[`${f.key}_set`] ? m.systemPage_secretUnchanged() : '',
-                  )}
+                  {fieldControl(f, profile?.config?.[`${f.key}_set`] ? '留空保持不变' : '')}
                 </Form.Item>
               ))}
             </div>
@@ -151,7 +147,7 @@ export function SmsProfileDrawer({
                 htmlType="submit"
                 loading={createMutation.isPending || updateMutation.isPending}
               >
-                {m.common_save()}
+                {'保存'}
               </Button>
               <div className="flex-1">
                 <PhoneInput allowedRegions={[]} value={testPhone} onChange={setTestPhone} />
@@ -167,7 +163,7 @@ export function SmsProfileDrawer({
                   })
                 }}
               >
-                {m.systemPage_sendTestSms()}
+                {'发送测试短信'}
               </Button>
             </div>
           </Form>

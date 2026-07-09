@@ -5,7 +5,6 @@ import { Button, Result, Spin } from 'antd'
 import { useEffect } from 'react'
 import { AuthShell } from '#components/auth-shell'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export interface VerifySearch {
   token?: string
@@ -32,11 +31,11 @@ function VerifyEmailPage() {
     content = (
       <Result
         status="error"
-        title={m.auth_verifyFailed()}
+        title={'链接无效或已过期'}
         subTitle={verifyMutation.error ? humanizeError(verifyMutation.error) : undefined}
         extra={
           <Link to="/login">
-            <Button type="primary">{m.auth_backToSignIn()}</Button>
+            <Button type="primary">{'返回登录'}</Button>
           </Link>
         }
       />
@@ -45,10 +44,10 @@ function VerifyEmailPage() {
     content = (
       <Result
         status="success"
-        title={m.auth_verifySuccess()}
+        title={'邮箱验证成功'}
         extra={
           <Link to="/">
-            <Button type="primary">{m.auth_goToApp()}</Button>
+            <Button type="primary">{'进入应用'}</Button>
           </Link>
         }
       />
@@ -57,7 +56,7 @@ function VerifyEmailPage() {
     content = (
       <div className="flex flex-col items-center gap-4 p-8">
         <Spin size="large" />
-        <span className="text-(--ant-color-text-secondary)">{m.auth_verifying()}</span>
+        <span className="text-(--ant-color-text-secondary)">{'正在验证…'}</span>
       </div>
     )
   }

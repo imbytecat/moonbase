@@ -23,14 +23,12 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - `apps/server/internal/gen/` + `packages/api-client/src/gen/` ← `moon run proto:generate`（buf）。经由 `proto:generate` 任务依赖，被 server:build/dev/test/check/fix/release + web:build/typecheck/dev 依赖。
 - `apps/server/internal/repository/` ← `moon run server:generate`（sqlc）。
 - `apps/web/src/routeTree.gen.ts` ← `moon run web:gen`（TanStack Router）。
-- `apps/web/src/paraglide/` ← `moon run web:gen-i18n`（Paraglide，源自 `messages/*.json`；Vite 插件也会在 dev/build 时重新生成）。
 - **air 不监视 `proto/`** —— 改完 `.proto` 后，运行 `moon run proto:generate`（moon 会缓存，未变更时近乎免费）。
 - **sqlc 不做清理**：删掉某个 `db/query/*.sql` 会留下过期的 `internal/repository/*.sql.go`，构建会因被删类型而中断——`rm` 掉那个生成的孪生文件，再重新生成。
 
 ## 护栏测试——测试变红意味着修你漏掉的那一侧，绝不弱化测试
 
 - `internal/server/authz_test.go` —— 每个注册的 RPC 都需要一条授权规则。新增 proto service ⇒ 在此加生成的空导入（blank import）+ 路径前缀，规则写在 `authz.go`。
-- `apps/web/src/lib/messages.test.ts` —— `zh-CN.json` / `en.json` 的键必须保持一致（parity）。
 - `internal/config/config_test.go`（`TestLoadEnvOverrides`）—— 每个配置键都需要一个 viper 默认值，否则其 `MOONBASE_*` 环境变量会被静默忽略。
 
 ## 新增一个 API 域
@@ -41,7 +39,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 4. 在 `internal/rpc/` 实现 service，带一句 `var _ <x>connect.Handler = (*Svc)(nil)` 断言；在 `internal/server/router.go` 注册。
 5. 在 `internal/server/authz.go` 为**每一个** procedure 写授权规则 + 在 `authz_test.go` 加生成的空导入**和**路径前缀。
 6. 新权限：给 `Permission` 枚举（`proto/auth/v1/permission.proto`）加一个值**并**加一条匹配的 `auth.Catalog` 条目（`internal/auth/permissions.go`）——两者漂移时 `TestPermissionEnumMatchesCatalog` 会失败。
-7. Web：在 `src/routes/_authed/` 下加路由，beforeLoad 里用 `requirePermission`；在 `NAV_TREE`（`src/lib/navigation.tsx`）加叶子节点；在 `messages/{zh-CN,en}.json` **两个**文件里加文案；在 `src/lib/permissions.ts` 加一对 `permission_*` 文案。
+7. Web：在 `src/routes/_authed/` 下加路由，beforeLoad 里用 `requirePermission`；在 `NAV_TREE`（`src/lib/navigation.tsx`）加叶子节点；用户可见文案直接写中文；在 `src/lib/permissions.ts` 加一对 `permission_*` 文案。
 
 移除一个域 = 反向操作 + 一个把已存 `role_permissions` 映射到后继键的迁移（键存在角色行里）+ `rm` 掉孤立的 sqlc 产物。
 
@@ -78,7 +76,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - **审计**（`internal/audit` + audit.v1）：一个拦截器接缝记录每个会改动的一元 RPC——处理器从不写审计行。请求载荷**从不**存储（密钥即便对审计轨迹也保持只写）；只读的 RPC 面；经 `MOONBASE_AUDIT_RETENTION_DAYS` 的每小时保留清道夫（默认 180，0 = 永久）。
 - **工作流**（`internal/workflow` + workflow.v1）：DBOS 是一个**库**，把检查点写入**同一** Postgres 的 `dbos` schema，并在启动时续跑被中断的运行。工作流是注册的**代码**；nil 引擎（单元测试）会让工作流 RPC 回 FailedPrecondition。
 - **支付**是唯一带数据平面的通道：迁移出来的 `payment_orders` 表拥有状态机；每次结算写入都用 SQL 状态守卫（`WHERE status IN (...)`），所以被重放的 provider 回调和并发同步是幂等的。回调是朴素的 `POST /api/payment/notify/{provider}/{profile}`，由驱动的签名校验鉴权（无会话）。**method 是 provider 范围内的官方产品 id**（支付宝 API method `precreate`/`page_pay`/`wap_pay`/`create`/`app_pay`；微信 trade_type `native`/`h5`/`jsapi`/`app`）——**不是**一个共享三元组：每个驱动声明一个 `pay.Method` 目录（id + `CredentialKind` qr/redirect/params + 必需的 `Inputs`），一个档案在 `Profile.config.methods` 为其中一个子集签约（空 = 全部 → `pay.Offered`），收银台只提供那些，前端在 `src/lib/payments.ts` 镜像该目录、并按 `order.credentialKind` 渲染。支付宝 `create`（小程序 JSAPI）需要 `op_app_id`，否则下单失败。
-- **通知 + 出站 i18n**（`internal/notification` + notification.v1；`internal/i18n`）：每用户的站内信收件箱。业务代码经 `notification.Publisher` 接缝通知——`Publish(userID,…)` / `PublishToPermission(perm,…)`（向持有某权限者扇出）——**绝不**直接写 `notifications` 行；读侧是自限定范围的 RPC（authz `{}` + `IdentityFromContext`，所以用户只看到自己的）。出站文本（收件箱标题/正文、验证/重置/验证码邮件）经 `internal/i18n` 本地化（`Resolve`：`user.locale` → 请求 `Accept-Language` → 默认 `zh-CN`），并**按收件人**已渲染地存储/发送——但 RPC 错误消息在服务端**不**本地化（它们保持为代码，由 SPA 人性化展示）。`users.locale`（`CurrentUser.locale`）是账号语言；SPA 在登录时经 `setLocale` 应用它（靠重载收敛），公开的认证页带一个匿名切换器。
+- **通知 + 出站 i18n**（`internal/notification` + notification.v1；`internal/i18n`）：每用户的站内信收件箱。业务代码经 `notification.Publisher` 接缝通知——`Publish(userID,…)` / `PublishToPermission(perm,…)`（向持有某权限者扇出）——**绝不**直接写 `notifications` 行；读侧是自限定范围的 RPC（authz `{}` + `IdentityFromContext`，所以用户只看到自己的）。出站文本（收件箱标题/正文、验证/重置/验证码邮件）经 `internal/i18n` 本地化（`Resolve`：`user.locale` → 请求 `Accept-Language` → 默认 `zh-CN`），并**按收件人**已渲染地存储/发送——但 RPC 错误消息在服务端**不**本地化（它们保持为代码，由 SPA 人性化展示）。SPA 固定 `zh-CN`，不再根据 `user.locale` 切换，也没有匿名语言切换器。
 
 ## 认证与 RBAC
 
@@ -123,12 +121,12 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 ## 前端（apps/web）
 
-- **路径别名 `#*` → `./src/*`**，经 package.json 的 `imports`（Node 子路径 import，**不是** tsconfig 的 `paths`）。`["./src/*","./src/*.ts","./src/*.tsx"]` 这个回退数组是**必需**的（TS 按字面解析 `imports`，不猜扩展名）。`#messages/*` → `./messages/*`。用 `#lib/…`、`#components/…`；绝不用 `../`。
+- **路径别名 `#*` → `./src/*`**，经 package.json 的 `imports`（Node 子路径 import，**不是** tsconfig 的 `paths`）。`["./src/*","./src/*.ts","./src/*.tsx"]` 这个回退数组是**必需**的（TS 按字面解析 `imports`，不猜扩展名）。用 `#lib/…`、`#components/…`；绝不用 `../`。
 - **数据层是 ConnectRPC**，而非手写 fetch：传输在 `src/lib/transport.ts`（`baseUrl: '/api'`）；从 `@moonbase/api-client` import 生成的方法引用，用 `@connectrpc/connect-query` 的 `useSuspenseQuery`/`useMutation` 调用。proto 的 `Timestamp` 是一个消息——用 `@bufbuild/protobuf/wkt` 的 `timestampDate()` 渲染，而非 `Date`/字符串。
 - `@connectrpc/connect` 必须是 `apps/web` 的**直接**依赖（仅传递依赖会破坏 `tsc`）。路由 search-param 接口必须被 `export`（未导出 → `routeTree.gen.ts` 里 TS4023）。
 - `vite.config.ts`：`tanstackRouter()` **必须**在 `react()` 之前。dev 服务器把 `/api` 代理到 `:8080`。
-- **tsconfig**：`allowJs: true` 是**必需**的（Paraglide 产出 JSDoc 类型的 `.js`；移除它会把所有 `m.*()` 退化成 `any`）。`noUncheckedIndexedAccess` + `verbatimModuleSyntax` 已开启。
-- **i18n = Paraglide**（基于编译器）：目录 `messages/{zh-CN,en}.json`（扁平键，`{param}`）。所有字符串都是消息函数引用：`m.nav_dashboard()`；未知键或拼错的 param = 编译错误。导航里的 `label` 是消息**引用**（`m.nav_users`，不调用）。`--strategy` 列表同时存在于 `vite.config.ts` 和 `gen:i18n` 脚本里——保持二者一致。用 `humanizeError`（`src/lib/errors.ts`）映射后端错误，绝不用裸的 `err.message`。
+- **tsconfig**：`allowJs: true` 是**必需**的（工具链仍可能消费 JSDoc 类型的 `.js`）。`noUncheckedIndexedAccess` + `verbatimModuleSyntax` 已开启。
+- **全站中文，无前端 i18n 层**：用户可见字符串直接写中文 literal 或中文常量；不要新增 Paraglide、inlang、`messages/*.json` 或语言切换器。用 `humanizeError`（`src/lib/errors.ts`）映射后端错误，绝不用裸的 `err.message`。
 - 会话状态 = GetMe 查询（`src/lib/session.ts`），无 store/context；登录/登出调用 `queryClient.clear()`。认证流 UI 由 `GetAuthConfig`（公开）能力驱动。导航是声明式的 `NAV_TREE`（`src/lib/navigation.tsx`）；settings 有自己的目录（`src/lib/settings-nav.tsx`）。
 - **antd v6 + Tailwind v4** 经 `src/styles.css` 里的 `@layer` 顺序 + `<StyleProvider layer>` 共存——改动任一都会破坏 antd 样式。主题 token 只在 `AntThemeBridge` 定义一次；暗色模式经 `ThemeModeProvider` 同时驱动 Tailwind 的 `.dark` 和 antd 的 `darkAlgorithm`。用朴素的 antd Table/Drawer/Form（无 ProComponents）。要遵守的 antd v6 API 改名：`Drawer width`→`size`、`Alert message`→`title`、`Dropdown dropdownRender`→`popupRender`、`List`→语义化的 `<ul>/<li>`。
 - 图表用 `@ant-design/plots`；主题跟随 `useThemeMode()`。后端时间序列是**稀疏**的（零值日被省略）——在客户端补齐空缺（`fillDaily`）。手机输入：`<PhoneInput allowedRegions>` + `phoneRule()`；值端到端都是 E.164。
@@ -153,7 +151,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - **依赖更新**——本地一次性，无需 CI：`proto outdated --update --latest`（工具链 go/node/pnpm/moon → `.prototools`）、`pnpm update -Lr`（所有工作区 JS），以及在 `apps/server` 里 `go get -u ./... && go mod tidy`（Go 模块）；然后 `moon run :check && moon run :test`。`go run <module>@<ver>` 的工具固定（在每个 `moon.yml`、`.moon/tasks/*.yml`、`buf.gen.yaml` 里）没有标准的本地更新器——某个漂移时手改字符串（少见）；`renovate.json`（自定义 go manager，datasource=go，需要 `'module@vX.Y.Z'` 单引号形状）在有 runner 时可自动化那些 + 其余一切。`go run @version` 保留（buf 从仓库根而非 app 模块运行插件，所以 go.mod 的 `tool` 指令不适用）。可达 CVE（可选）：`moon run server:vuln`（govulncheck）。
 - `Dockerfile`：proto → `.prototools` 工具链 → `moon run server:release` → distroless static（CGO 关）。`compose.yaml` 的 PG18 把卷挂在 `/var/lib/postgresql`（**不是** `…/data`——PG18 移动了数据目录）。
 - 提交：Conventional Commits，**中文主题**，scope = 一个项目名或 `deps`/`ci`/`agents`（由钩子强制）。远端是 Gitea，默认分支 `main`。
-- `.gitignore` 是混合的：根目录只放工作区全局规则；每个项目拥有自己的构建/生成忽略。`apps/web/src/paraglide/` 自我忽略（Paraglide 产出自己的）。新增忽略规则加到拥有它的项目。不要行内 `#` 注释（必须自成一行）。
+- `.gitignore` 是混合的：根目录只放工作区全局规则；每个项目拥有自己的构建/生成忽略。新增忽略规则加到拥有它的项目。不要行内 `#` 注释（必须自成一行）。
 - **README vs AGENTS**：README 是给访客的推介（~90 行）；设计理据、不变量、坑、清单都放**这里**。绝不在两个文件里重复同一事实。
 
 ## Agent skills

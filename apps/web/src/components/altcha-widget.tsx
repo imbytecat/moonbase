@@ -2,10 +2,6 @@ import 'altcha'
 import 'altcha/i18n/zh-cn'
 import { useEffect, useRef } from 'react'
 
-// The built-in ALTCHA proof-of-work widget (web component): fetches its
-// challenge from the public endpoint, solves it in a worker, and reports the
-// base64 payload as the captcha token. Language auto-detects from <html lang>
-// with the zh-CN pack imported to cover both app locales.
 export function AltchaWidget({ onToken }: { onToken: (token: string) => void }) {
   const ref = useRef<HTMLElement & { reset?: () => void }>(null)
 

@@ -12,16 +12,9 @@ import type { CurrentUser } from '@moonbase/api-client'
 import { Permission } from '@moonbase/api-client'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
-import { m } from '#paraglide/messages.js'
 import { hasAnyPermission } from './session'
 import { SETTINGS_PERMISSIONS } from './settings-nav'
 
-// The navigation tree is the single source of truth for the sidebar: leaves
-// carry a route path + optional permission; branches group leaves and vanish
-// automatically when every child is filtered out. Adding a page = one entry;
-// adding a section = wrapping entries in a branch. Rendering, filtering,
-// selection and expansion all derive from this tree. Labels are Paraglide
-// message functions, resolved at render time for the active locale.
 export type NavNode = NavLeaf | NavBranch
 
 interface NavLeaf {
@@ -39,39 +32,39 @@ interface NavBranch {
 }
 
 export const NAV_TREE: NavNode[] = [
-  { path: '/', label: m.nav_dashboard, icon: <DashboardOutlined /> },
+  { path: '/', label: () => '仪表盘', icon: <DashboardOutlined /> },
   {
     path: '/workflows',
-    label: m.nav_workflows,
+    label: () => '工作流',
     icon: <NodeIndexOutlined />,
     permissions: [Permission.WORKFLOW_READ],
   },
   {
     path: '/payments',
-    label: m.nav_payments,
+    label: () => '支付订单',
     icon: <PayCircleOutlined />,
     permissions: [Permission.PAYMENT_READ],
   },
   {
     key: 'access',
-    label: m.nav_access,
+    label: () => '权限管理',
     icon: <SafetyCertificateOutlined />,
     children: [
       {
         path: '/users',
-        label: m.nav_users,
+        label: () => '用户管理',
         icon: <UserOutlined />,
         permissions: [Permission.USER_READ],
       },
       {
         path: '/roles',
-        label: m.nav_roles,
+        label: () => '角色管理',
         icon: <TeamOutlined />,
         permissions: [Permission.ROLE_READ],
       },
       {
         path: '/audit',
-        label: m.nav_audit,
+        label: () => '审计日志',
         icon: <FileSearchOutlined />,
         permissions: [Permission.AUDIT_READ],
       },
@@ -79,7 +72,7 @@ export const NAV_TREE: NavNode[] = [
   },
   {
     path: '/settings',
-    label: m.nav_settings,
+    label: () => '设置',
     icon: <SettingOutlined />,
     permissions: SETTINGS_PERMISSIONS,
   },

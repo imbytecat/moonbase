@@ -3,7 +3,6 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getLocale } from '#paraglide/runtime.js'
 import { RouteError, RouteNotFound, RoutePending } from './components/route-fallbacks'
 import { queryClient } from './lib/query-client'
 import { transport } from './lib/transport'
@@ -12,7 +11,7 @@ import { applyInitialTheme } from './providers/theme-mode'
 import { routeTree } from './routeTree.gen'
 import './styles.css'
 
-document.documentElement.lang = getLocale()
+document.documentElement.lang = 'zh-CN'
 applyInitialTheme()
 
 const router = createRouter({

@@ -1,7 +1,6 @@
 import type { JsonObject, JsonValue } from '@bufbuild/protobuf'
 import type { FieldDescriptor, Profile } from '@moonbase/api-client'
 import { Form, Input, InputNumber, Select, Switch } from 'antd'
-import { m } from '#paraglide/messages.js'
 
 export interface SchemaProfileFormValues {
   readonly name?: string
@@ -83,7 +82,7 @@ function fieldControl(field: FieldDescriptor, secretSet: boolean, disabled: bool
       <Input.Password
         autoComplete="new-password"
         disabled={disabled}
-        placeholder={secretSet ? m.systemPage_secretUnchanged() : ''}
+        placeholder={secretSet ? '留空保持不变' : ''}
       />
     )
   }

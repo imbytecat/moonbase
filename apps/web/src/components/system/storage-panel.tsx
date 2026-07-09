@@ -11,16 +11,15 @@ import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { StorageProfileDrawer } from '#components/system/storage-profile-drawer'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  avatars: m.systemPage_purposeAvatars,
-  'site-assets': m.systemPage_purposeSiteAssets,
+  avatars: () => '用户头像',
+  'site-assets': () => '站点资源',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
-  local: m.systemPage_storageLocal,
-  s3: m.systemPage_storageS3,
+  local: () => '本地存储',
+  s3: () => 'S3 兼容存储',
 }
 
 export function StoragePanel({
@@ -38,7 +37,7 @@ export function StoragePanel({
   const deleteMutation = useMutation(deleteStorageProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -46,7 +45,7 @@ export function StoragePanel({
   const bindMutation = useMutation(bindStoragePurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -56,20 +55,18 @@ export function StoragePanel({
       <ProfileManager
         profiles={profiles.map((p) => ({
           ...p,
-          name:
-            p.name ||
-            (p.provider === 'local' ? m.systemPage_storageLocal() : String(p.config?.bucket ?? '')),
+          name: p.name || (p.provider === 'local' ? '本地存储' : String(p.config?.bucket ?? '')),
         }))}
         bindings={bindings.map((b) => ({
           purpose: b.purpose,
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
         texts={{
-          profilesTitle: m.systemPage_profilesTitle(),
-          profilesHint: m.systemPage_profilesHint(),
-          noProfiles: m.systemPage_noProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_bindingsHint(),
+          profilesTitle: '存储配置',
+          profilesHint: '可添加多个存储配置，例如本地磁盘和云端存储桶，按用途绑定使用',
+          noProfiles: '尚未添加存储配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每类文件指定使用的存储配置，未绑定的功能将不可用',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={(p) =>
@@ -86,16 +83,14 @@ export function StoragePanel({
             <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />
             {p.provider === 's3' ? (
               <Tag color={p.config?.publicBaseUrl ? 'green' : 'default'}>
-                {p.config?.publicBaseUrl
-                  ? m.systemPage_publicBucket()
-                  : m.systemPage_privateBucket()}
+                {p.config?.publicBaseUrl ? '公开' : '私有'}
               </Tag>
             ) : null}
           </>
         )}
         profileDescription={(p) =>
           p.provider === 'local'
-            ? String(p.config?.directory || m.systemPage_storageDefaultDirectory())
+            ? String(p.config?.directory || 'data/storage')
             : `${String(p.config?.endpoint ?? '')} / ${String(p.config?.bucket ?? '')}`
         }
         onAdd={() => setEditing('new')}

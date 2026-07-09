@@ -11,15 +11,14 @@ import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { PaymentProfileDrawer } from '#components/system/payment-profile-drawer'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  checkout: m.systemPage_paymentPurposeCheckout,
+  checkout: () => '收银台',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
-  alipay: m.systemPage_providerAlipay,
-  wechat: m.systemPage_providerWechatPay,
+  alipay: () => '支付宝',
+  wechat: () => '微信支付',
 }
 
 export function PaymentPanel({
@@ -37,7 +36,7 @@ export function PaymentPanel({
   const deleteMutation = useMutation(deletePaymentProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -45,7 +44,7 @@ export function PaymentPanel({
   const bindMutation = useMutation(bindPaymentPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -71,11 +70,11 @@ export function PaymentPanel({
           multiple: true,
         }))}
         texts={{
-          profilesTitle: m.systemPage_paymentProfilesTitle(),
-          profilesHint: m.systemPage_paymentProfilesHint(),
-          noProfiles: m.systemPage_paymentNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_paymentBindingsHint(),
+          profilesTitle: '支付配置',
+          profilesHint: '可添加多个支付渠道，例如支付宝和微信支付，绑定后同时作为收银台选项',
+          noProfiles: '尚未添加支付配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为每个收款场景选择支付渠道，可多选，付款人在收银台自行选择',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={(p) =>

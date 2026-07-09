@@ -18,7 +18,6 @@ import {
 } from '#components/system/schema-profile-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export function StorageProfileDrawer({
   profile,
@@ -40,14 +39,14 @@ export function StorageProfileDrawer({
 
   const createMutation = useMutation(createStorageProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateStorageProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -60,14 +59,14 @@ export function StorageProfileDrawer({
   const providers: ProviderOption[] = [
     {
       value: 'local',
-      label: m.systemPage_storageLocal(),
-      description: m.systemPage_storageLocalDesc(),
+      label: '本地存储',
+      description: '文件保存在服务器磁盘上，零外部依赖，适合单机部署',
       icon: <HddOutlined className="text-xl text-(--ant-color-primary)" />,
     },
     {
       value: 's3',
-      label: m.systemPage_storageS3(),
-      description: m.systemPage_storageS3Desc(),
+      label: 'S3 兼容存储',
+      description: '任何 S3 兼容服务：AWS S3、MinIO、R2 等',
       icon: <CloudServerOutlined className="text-xl text-(--ant-color-warning)" />,
     },
   ]
@@ -102,10 +101,10 @@ export function StorageProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_profileNamePlaceholder()} />
+              <Input placeholder={'如：公开资源、私有文件'} />
             </Form.Item>
 
             <div className="grid grid-cols-2 gap-4">
@@ -121,7 +120,7 @@ export function StorageProfileDrawer({
                 htmlType="submit"
                 loading={createMutation.isPending || updateMutation.isPending}
               >
-                {m.common_save()}
+                {'保存'}
               </Button>
               <Button
                 loading={testMutation.isPending}
@@ -130,7 +129,7 @@ export function StorageProfileDrawer({
                   testMutation.mutate({ profile: toProto(provider, form.getFieldsValue()) })
                 }}
               >
-                {m.systemPage_testConnection()}
+                {'测试连接'}
               </Button>
             </div>
           </Form>

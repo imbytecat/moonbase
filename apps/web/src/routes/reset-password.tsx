@@ -5,7 +5,6 @@ import { Alert, App, Button, Form, Input } from 'antd'
 import { useState } from 'react'
 import { AuthShell } from '#components/auth-shell'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export interface ResetSearch {
   token?: string
@@ -26,14 +25,14 @@ function ResetPasswordPage() {
 
   const resetMutation = useMutation(resetPassword, {
     onSuccess: async () => {
-      message.success(m.auth_resetSuccess())
+      message.success('密码已重置，其他设备已全部退出，请用新密码登录')
       await router.navigate({ to: '/login' })
     },
     onError: (err) => setError(humanizeError(err)),
   })
 
   return (
-    <AuthShell subtitle={m.auth_resetTitle()}>
+    <AuthShell subtitle={'设置新密码'}>
       {error ? <Alert type="error" title={error} className="mb-4" showIcon /> : null}
       {token ? (
         <Form
@@ -47,21 +46,21 @@ function ResetPasswordPage() {
         >
           <Form.Item
             name="newPassword"
-            label={m.auth_newPassword()}
-            rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+            label={'新密码'}
+            rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={resetMutation.isPending}>
-            {m.auth_resetPassword()}
+            {'重置密码'}
           </Button>
         </Form>
       ) : (
-        <Alert type="error" title={m.auth_verifyFailed()} showIcon />
+        <Alert type="error" title={'链接无效或已过期'} showIcon />
       )}
 
       <div className="mt-4 text-center text-sm">
-        <Link to="/login">{m.auth_backToSignIn()}</Link>
+        <Link to="/login">{'返回登录'}</Link>
       </div>
     </AuthShell>
   )

@@ -15,7 +15,6 @@ import {
   schemaProfileToProto,
 } from '#components/system/schema-profile-form'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export function PaymentProfileDrawer({
   profile,
@@ -36,14 +35,14 @@ export function PaymentProfileDrawer({
 
   const createMutation = useMutation(createPaymentProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updatePaymentProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -52,14 +51,14 @@ export function PaymentProfileDrawer({
   const providers: ProviderOption[] = [
     {
       value: 'alipay',
-      label: m.systemPage_providerAlipay(),
-      description: m.systemPage_alipayDesc(),
+      label: '支付宝',
+      description: '支付宝开放平台商户收款（当面付/手机网站/小程序）',
       icon: <AlipayCircleOutlined className="text-xl text-(--ant-color-info)" />,
     },
     {
       value: 'wechat',
-      label: m.systemPage_providerWechatPay(),
-      description: m.systemPage_wechatPayDesc(),
+      label: '微信支付',
+      description: '微信支付商户收款（APIv3：Native/H5/JSAPI）',
       icon: <WechatOutlined className="text-xl text-(--ant-color-success)" />,
     },
   ]
@@ -94,10 +93,10 @@ export function PaymentProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_paymentProfileNamePlaceholder()} />
+              <Input placeholder={'例如：主体 A 支付宝'} />
             </Form.Item>
 
             <div className="grid grid-cols-2 gap-4">
@@ -111,7 +110,7 @@ export function PaymentProfileDrawer({
               htmlType="submit"
               loading={createMutation.isPending || updateMutation.isPending}
             >
-              {m.common_save()}
+              {'保存'}
             </Button>
           </Form>
         )

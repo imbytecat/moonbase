@@ -11,15 +11,14 @@ import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { OauthProfileDrawer } from '#components/system/oauth-profile-drawer'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
-  login: m.systemPage_oauthPurposeLogin,
+  login: () => '登录页',
 }
 
 const PROVIDER_NAMES: Record<string, () => string> = {
   oidc: () => 'OIDC',
-  wechat: m.systemPage_oauthWechat,
+  wechat: () => '微信扫码',
 }
 
 export function OauthPanel({
@@ -37,7 +36,7 @@ export function OauthPanel({
   const deleteMutation = useMutation(deleteOauthProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_profileDeleted())
+      message.success('存储配置已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -45,7 +44,7 @@ export function OauthPanel({
   const bindMutation = useMutation(bindOauthPurpose, {
     onSuccess: () => {
       onChanged()
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -60,11 +59,11 @@ export function OauthPanel({
           multiple: true,
         }))}
         texts={{
-          profilesTitle: m.systemPage_oauthProfilesTitle(),
-          profilesHint: m.systemPage_oauthProfilesHint(),
-          noProfiles: m.systemPage_oauthNoProfiles(),
-          confirmDelete: m.systemPage_confirmDeleteProfile(),
-          bindingsHint: m.systemPage_oauthBindingsHint(),
+          profilesTitle: '登录配置',
+          profilesHint: '可添加多个第三方登录配置，例如企业 SSO 和微信扫码',
+          noProfiles: '尚未添加登录配置',
+          confirmDelete: '删除该存储配置？',
+          bindingsHint: '为登录页指定启用的登录配置，可多选；未绑定的配置将不显示',
         }}
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={(p) =>

@@ -1,8 +1,7 @@
 import { StyleProvider } from '@ant-design/cssinjs'
 import { App as AntApp, ConfigProvider, theme } from 'antd'
 import type { ReactNode } from 'react'
-import { ANTD_LOCALES } from '#lib/locale'
-import { getLocale } from '#paraglide/runtime.js'
+import { ANTD_LOCALE } from '#lib/locale'
 import { ThemeModeProvider, useThemeMode } from './theme-mode'
 
 interface AppProvidersProps {
@@ -15,8 +14,7 @@ interface AppProvidersProps {
  * - The layer order is declared in styles.css.
  * - `ConfigProvider` must be nested inside `StyleProvider` so icon styles also
  *   pick up the layer. `AntApp` enables the static message/notification APIs.
- * - antd locale follows the Paraglide locale; setLocale() reloads the page,
- *   so reading it once per mount is sufficient.
+ * - antd locale is fixed to Simplified Chinese.
  * - Light/dark follows ThemeModeProvider, which also toggles `.dark` on
  *   <html> so Tailwind's dark: variant stays in sync with antd tokens.
  */
@@ -47,7 +45,7 @@ function AntThemeBridge({ children }: AppProvidersProps) {
   return (
     <StyleProvider layer>
       <ConfigProvider
-        locale={ANTD_LOCALES[getLocale()]}
+        locale={ANTD_LOCALE}
         theme={{
           algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
           token: {

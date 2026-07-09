@@ -9,7 +9,7 @@
 // it twice, once per language, into different out dirs):
 //   - lang=go: internal/paymentcatalog, the []Method the pay drivers reference.
 //   - lang=ts: the api-client gen tree, PROVIDER_METHODS + METHOD_INPUTS the
-//     frontend re-exports (label/desc text stays in the client i18n catalog).
+//     frontend re-exports (label/desc text stays in the web Chinese copy catalog).
 //
 // Options are read straight off the descriptor by field number, so this plugin
 // never imports the generated options.pb.go — that would be a bootstrap cycle,

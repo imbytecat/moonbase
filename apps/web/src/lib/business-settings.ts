@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { App } from 'antd'
 import { humanizeError } from '#lib/errors'
 import { siteInfoQueryKey } from '#lib/site'
-import { m } from '#paraglide/messages.js'
 
 export function useUpdateSettings() {
   const { message } = App.useApp()
@@ -20,7 +19,7 @@ export function useUpdateSettings() {
       // Site identity feeds the shell/login/head through the public
       // GetSiteInfo query — refresh it so branding changes apply live.
       void queryClient.invalidateQueries({ queryKey: siteInfoQueryKey() })
-      message.success(m.settingsPage_saved())
+      message.success('设置已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })

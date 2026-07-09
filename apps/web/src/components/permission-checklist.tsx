@@ -8,7 +8,6 @@ import {
   permissionResource,
   permissionResourceLabel,
 } from '#lib/permissions'
-import { m } from '#paraglide/messages.js'
 
 export interface PermissionOption {
   readonly permission: Permission
@@ -80,12 +79,12 @@ export function PermissionChecklist({
         allowClear
         size="small"
         prefix={<SearchOutlined className="text-(--ant-color-text-quaternary)" />}
-        placeholder={m.rolesPage_searchPermissions()}
+        placeholder={'搜索权限'}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
       {visibleGroups.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={m.rolesPage_noPermissionMatch()} />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={'没有匹配的权限'} />
       ) : (
         visibleGroups.map((group) => {
           const permissions = group.items.map((i) => i.permission)

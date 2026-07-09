@@ -1,6 +1,5 @@
 import {
   CloseOutlined,
-  GlobalOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuOutlined,
@@ -10,7 +9,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useSuspenseQuery } from '@connectrpc/connect-query'
-import { getMe, getSiteInfo, logout, updateProfile } from '@moonbase/api-client'
+import { getMe, getSiteInfo, logout } from '@moonbase/api-client'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   createFileRoute,
@@ -21,14 +20,11 @@ import {
   useRouter,
 } from '@tanstack/react-router'
 import { Avatar, Button, Drawer, Dropdown, Layout, Menu } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { NotificationBell } from '#components/notification-bell'
-import { LOCALE_LABELS } from '#lib/locale'
 import { buildMenuItems, NAV_TREE, navStateForPath } from '#lib/navigation'
 import { sessionQueryOptions } from '#lib/session'
 import { siteName } from '#lib/site'
-import { m } from '#paraglide/messages.js'
-import { getLocale, isLocale, locales, setLocale } from '#paraglide/runtime.js'
 import { type ThemeMode, useThemeMode } from '#providers/theme-mode'
 
 export const Route = createFileRoute('/_authed')({
@@ -45,9 +41,9 @@ export const Route = createFileRoute('/_authed')({
 })
 
 const THEME_LABELS: Record<ThemeMode, () => string> = {
-  light: m.theme_light,
-  dark: m.theme_dark,
-  system: m.theme_system,
+  light: () => '浅色',
+  dark: () => '深色',
+  system: () => '跟随系统',
 }
 
 function AuthedLayout() {
@@ -58,17 +54,6 @@ function AuthedLayout() {
   const { data: siteInfo } = useQuery(getSiteInfo)
   const { mode, setMode } = useThemeMode()
   const user = data.user
-
-  const updateLocale = useMutation(updateProfile)
-  // The account's stored locale wins over browser detection once the session
-  // resolves, so language follows the user across devices. setLocale reloads
-  // once; the reloaded page reads the same locale, so it converges (no loop).
-  useEffect(() => {
-    const stored = user?.locale
-    if (stored && isLocale(stored) && stored !== getLocale()) {
-      setLocale(stored)
-    }
-  }, [user?.locale])
 
   const logoutMutation = useMutation(logout, {
     onSettled: async () => {
@@ -196,14 +181,14 @@ function AuthedLayout() {
           <Button
             type="text"
             icon={<MenuOutlined />}
-            aria-label={m.nav_openMenu()}
+            aria-label={'打开导航菜单'}
             onClick={() => setNavOpen(true)}
             className="lg:!hidden"
           />
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            aria-label={m.nav_toggleSidebar()}
+            aria-label={'折叠/展开侧边栏'}
             onClick={toggleCollapsed}
             className="max-lg:!hidden"
           />
@@ -234,12 +219,12 @@ function AuthedLayout() {
                   {
                     key: 'profile',
                     icon: <UserOutlined />,
-                    label: <Link to="/profile">{m.nav_profile()}</Link>,
+                    label: <Link to="/profile">{'个人资料'}</Link>,
                   },
                   {
                     key: 'theme',
                     icon: mode === 'dark' ? <MoonOutlined /> : <SunOutlined />,
-                    label: m.nav_theme(),
+                    label: '外观',
                     children: (['light', 'dark', 'system'] as const).map((value) => ({
                       key: `theme:${value}`,
                       label: THEME_LABELS[value](),
@@ -247,33 +232,12 @@ function AuthedLayout() {
                       onClick: () => setMode(value),
                     })),
                   },
-                  // The language switcher only exists in multi-locale builds —
-                  // with one supported locale there is nothing to switch.
-                  ...(locales.length > 1
-                    ? [
-                        {
-                          key: 'language',
-                          icon: <GlobalOutlined />,
-                          label: m.nav_language(),
-                          children: locales.map((locale) => ({
-                            key: `locale:${locale}`,
-                            label: LOCALE_LABELS[locale],
-                            disabled: getLocale() === locale,
-                            onClick: () =>
-                              updateLocale.mutate(
-                                { locale },
-                                { onSuccess: () => setLocale(locale) },
-                              ),
-                          })),
-                        },
-                      ]
-                    : []),
                   { type: 'divider' as const },
                   {
                     key: 'logout',
                     icon: <LogoutOutlined />,
                     danger: true,
-                    label: m.nav_signOut(),
+                    label: '退出登录',
                     onClick: () => logoutMutation.mutate({}),
                   },
                 ],

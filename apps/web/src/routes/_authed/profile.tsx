@@ -54,7 +54,6 @@ import { SectionNavLayout } from '#components/section-nav-layout'
 import { humanizeError } from '#lib/errors'
 import { sessionQueryKey } from '#lib/session'
 import { uploadToPresignedUrl } from '#lib/upload'
-import { m } from '#paraglide/messages.js'
 
 export interface ProfileSearch {
   tab?: 'account' | 'security'
@@ -85,9 +84,9 @@ function ProfilePage() {
   const invalidateSession = () => queryClient.invalidateQueries({ queryKey: sessionQueryKey() })
 
   const sections: { key: ProfileTab; label: string; icon: ReactNode }[] = [
-    { key: 'profile', label: m.profile_sectionProfile(), icon: <IdcardOutlined /> },
-    { key: 'account', label: m.profile_sectionAccount(), icon: <LinkOutlined /> },
-    { key: 'security', label: m.profile_sectionSecurity(), icon: <SafetyOutlined /> },
+    { key: 'profile', label: '基本资料', icon: <IdcardOutlined /> },
+    { key: 'account', label: '账号绑定', icon: <LinkOutlined /> },
+    { key: 'security', label: '安全设置', icon: <SafetyOutlined /> },
   ]
 
   return (
@@ -144,7 +143,7 @@ function ProfileBasicsCard({
   const profileMutation = useMutation(updateProfile, {
     onSuccess: () => {
       onChanged()
-      message.success(m.profile_profileUpdated())
+      message.success('资料已保存')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -152,7 +151,7 @@ function ProfileBasicsCard({
   const presignMutation = useMutation(presignAvatarUpload)
 
   const sendVerifyMutation = useMutation(sendVerificationEmail, {
-    onSuccess: () => message.success(m.profile_verifyEmailSent()),
+    onSuccess: () => message.success('验证邮件已发送，请查收'),
     onError: (err) => message.error(humanizeError(err)),
   })
 
@@ -165,12 +164,12 @@ function ProfileBasicsCard({
       await uploadToPresignedUrl(presigned.uploadUrl, file)
       profileMutation.mutate({ avatarFileId: presigned.fileId })
     } catch (err) {
-      message.error(err instanceof Error ? humanizeError(err) : m.error_generic())
+      message.error(err instanceof Error ? humanizeError(err) : '请求失败，请稍后重试')
     }
   }
 
   return (
-    <Card title={m.profile_title()}>
+    <Card title={'个人资料'}>
       <div className="mb-6 flex items-center gap-4">
         <Avatar size={64} src={user?.avatarUrl || undefined}>
           {user?.name?.charAt(0).toUpperCase()}
@@ -183,7 +182,7 @@ function ProfileBasicsCard({
             return false
           }}
         >
-          <Button loading={presignMutation.isPending}>{m.profile_changeAvatar()}</Button>
+          <Button loading={presignMutation.isPending}>{'更换头像'}</Button>
         </Upload>
       </div>
 
@@ -194,26 +193,26 @@ function ProfileBasicsCard({
         onFinish={(values: { name: string }) => profileMutation.mutate({ name: values.name })}
       >
         {user?.username ? (
-          <Form.Item label={m.auth_username()}>
+          <Form.Item label={'用户名'}>
             <Input value={user.username} disabled />
           </Form.Item>
         ) : null}
         {user?.email ? (
-          <Form.Item label={m.auth_email()}>
+          <Form.Item label={'邮箱'}>
             <div className="flex items-center gap-2">
               <Input value={user.email} disabled />
               {user.emailVerified ? (
-                <Tag color="green">{m.profile_emailVerified()}</Tag>
+                <Tag color="green">{'已验证'}</Tag>
               ) : (
                 <>
-                  <Tag>{m.profile_emailUnverified()}</Tag>
+                  <Tag>{'未验证'}</Tag>
                   {emailEnabled ? (
                     <Button
                       size="small"
                       loading={sendVerifyMutation.isPending}
                       onClick={() => sendVerifyMutation.mutate({})}
                     >
-                      {m.profile_sendVerifyEmail()}
+                      {'发送验证邮件'}
                     </Button>
                   ) : null}
                 </>
@@ -221,15 +220,11 @@ function ProfileBasicsCard({
             </div>
           </Form.Item>
         ) : null}
-        <Form.Item
-          name="name"
-          label={m.auth_name()}
-          rules={[{ required: true, message: m.auth_nameRule() }]}
-        >
+        <Form.Item name="name" label={'姓名'} rules={[{ required: true, message: '请输入姓名' }]}>
           <Input />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={profileMutation.isPending}>
-          {m.common_save()}
+          {'保存'}
         </Button>
       </Form>
     </Card>
@@ -273,7 +268,10 @@ function AccountBindings({
   if (cards.length === 0) {
     return (
       <Card>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={m.profile_noBindingChannels()} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={'暂无可绑定的渠道——请先在系统设置中配置邮件、短信或第三方登录'}
+        />
       </Card>
     )
   }
@@ -284,12 +282,12 @@ function ChangePasswordCard() {
   const { message } = App.useApp()
 
   const passwordMutation = useMutation(changePassword, {
-    onSuccess: () => message.success(m.profile_passwordChanged()),
+    onSuccess: () => message.success('密码已修改，其他设备已退出登录'),
     onError: (err) => message.error(humanizeError(err)),
   })
 
   return (
-    <Card title={m.profile_changePasswordTitle()}>
+    <Card title={'修改密码'}>
       <Form
         layout="vertical"
         requiredMark={false}
@@ -299,20 +297,20 @@ function ChangePasswordCard() {
       >
         <Form.Item
           name="currentPassword"
-          label={m.profile_currentPassword()}
-          rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+          label={'当前密码'}
+          rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
         >
           <Input.Password autoComplete="current-password" />
         </Form.Item>
         <Form.Item
           name="newPassword"
-          label={m.profile_newPassword()}
-          rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+          label={'新密码'}
+          rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
         >
           <Input.Password autoComplete="new-password" />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={passwordMutation.isPending}>
-          {m.profile_changePassword()}
+          {'修改密码'}
         </Button>
       </Form>
     </Card>
@@ -336,7 +334,7 @@ function PhoneCard({
 
   const sendCode = useMutation(sendPhoneBindCode, {
     onSuccess: () => {
-      message.success(m.auth_codeSent())
+      message.success('验证码已发送')
       setCooldown(60)
       const timer = setInterval(() => {
         setCooldown((s) => {
@@ -350,7 +348,7 @@ function PhoneCard({
 
   const bindMutation = useMutation(bindPhone, {
     onSuccess: () => {
-      message.success(m.profile_phoneBindSuccess())
+      message.success('手机号绑定成功')
       form.resetFields()
       onChanged()
     },
@@ -359,23 +357,23 @@ function PhoneCard({
 
   const unbindMutation = useMutation(unbindPhone, {
     onSuccess: () => {
-      message.success(m.profile_phoneUnbound())
+      message.success('手机号已解绑')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
 
   return (
-    <Card title={m.profile_phoneTitle()}>
+    <Card title={'手机绑定'}>
       {phone ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Input value={phone} disabled className="max-w-60" />
-            <Tag color="green">{m.profile_phoneBound()}</Tag>
+            <Tag color="green">{'已绑定'}</Tag>
           </div>
           {canUnbind ? (
             <UnbindForm
-              label={m.profile_unbindPhone()}
+              label={'解绑手机'}
               pending={unbindMutation.isPending}
               onSubmit={(currentPassword) => unbindMutation.mutate({ currentPassword })}
             />
@@ -388,13 +386,13 @@ function PhoneCard({
           requiredMark={false}
           onFinish={(values) => bindMutation.mutate(values)}
         >
-          <Form.Item name="phoneNumber" label={m.auth_phone()} rules={[phoneRule()]}>
+          <Form.Item name="phoneNumber" label={'手机号'} rules={[phoneRule()]}>
             <PhoneInput allowedRegions={allowedRegions} />
           </Form.Item>
           <Form.Item
             name="code"
-            label={m.auth_code()}
-            rules={[{ required: true, len: 6, message: m.auth_codeRule() }]}
+            label={'验证码'}
+            rules={[{ required: true, len: 6, message: '请输入 6 位验证码' }]}
           >
             <Input
               maxLength={6}
@@ -411,13 +409,13 @@ function PhoneCard({
                     })
                   }}
                 >
-                  {cooldown > 0 ? m.auth_resendIn({ seconds: cooldown }) : m.auth_sendCode()}
+                  {cooldown > 0 ? `${cooldown}秒后可重发` : '发送验证码'}
                 </Button>
               }
             />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={bindMutation.isPending}>
-            {m.profile_bindPhone()}
+            {'绑定手机'}
           </Button>
         </Form>
       )}
@@ -444,7 +442,7 @@ function EmailCard({
 
   const sendCode = useMutation(sendEmailBindCode, {
     onSuccess: () => {
-      message.success(m.auth_codeSent())
+      message.success('验证码已发送')
       setCooldown(60)
       const timer = setInterval(() => {
         setCooldown((s) => {
@@ -458,7 +456,7 @@ function EmailCard({
 
   const bindMutation = useMutation(bindEmail, {
     onSuccess: () => {
-      message.success(m.profile_emailBindSuccess())
+      message.success('邮箱绑定成功')
       form.resetFields()
       onChanged()
     },
@@ -467,7 +465,7 @@ function EmailCard({
 
   const unbindMutation = useMutation(unbindEmail, {
     onSuccess: () => {
-      message.success(m.profile_emailUnbound())
+      message.success('邮箱已解绑')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -476,18 +474,14 @@ function EmailCard({
   if (email) {
     if (!canUnbind) return null
     return (
-      <Card title={m.profile_emailTitle()}>
+      <Card title={'邮箱绑定'}>
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Input value={email} disabled className="max-w-60" />
-            {verified ? (
-              <Tag color="green">{m.profile_emailVerified()}</Tag>
-            ) : (
-              <Tag>{m.profile_emailUnverified()}</Tag>
-            )}
+            {verified ? <Tag color="green">{'已验证'}</Tag> : <Tag>{'未验证'}</Tag>}
           </div>
           <UnbindForm
-            label={m.profile_unbindEmail()}
+            label={'解绑邮箱'}
             pending={unbindMutation.isPending}
             onSubmit={(currentPassword) => unbindMutation.mutate({ currentPassword })}
           />
@@ -498,7 +492,7 @@ function EmailCard({
   if (!canBind) return null
 
   return (
-    <Card title={m.profile_emailTitle()}>
+    <Card title={'邮箱绑定'}>
       <Form
         form={form}
         layout="vertical"
@@ -507,15 +501,15 @@ function EmailCard({
       >
         <Form.Item
           name="email"
-          label={m.auth_email()}
-          rules={[{ required: true, type: 'email', message: m.auth_emailRule() }]}
+          label={'邮箱'}
+          rules={[{ required: true, type: 'email', message: '请输入有效的邮箱地址' }]}
         >
           <Input autoComplete="email" />
         </Form.Item>
         <Form.Item
           name="code"
-          label={m.auth_code()}
-          rules={[{ required: true, len: 6, message: m.auth_codeRule() }]}
+          label={'验证码'}
+          rules={[{ required: true, len: 6, message: '请输入 6 位验证码' }]}
         >
           <Input
             maxLength={6}
@@ -532,13 +526,13 @@ function EmailCard({
                   })
                 }}
               >
-                {cooldown > 0 ? m.auth_resendIn({ seconds: cooldown }) : m.auth_sendCode()}
+                {cooldown > 0 ? `${cooldown}秒后可重发` : '发送验证码'}
               </Button>
             }
           />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={bindMutation.isPending}>
-          {m.profile_bindEmail()}
+          {'绑定邮箱'}
         </Button>
       </Form>
     </Card>
@@ -565,12 +559,12 @@ function UnbindForm({
     >
       <Form.Item
         name="currentPassword"
-        rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+        rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
       >
-        <Input.Password autoComplete="current-password" placeholder={m.profile_currentPassword()} />
+        <Input.Password autoComplete="current-password" placeholder={'当前密码'} />
       </Form.Item>
       <Popconfirm
-        title={m.profile_unbindConfirm()}
+        title={'确定解绑该登录方式？'}
         okButtonProps={{ danger: true }}
         onConfirm={() => form.submit()}
       >
@@ -594,14 +588,14 @@ function SessionsCard() {
 
   const revokeMutation = useMutation(revokeMySession, {
     onSuccess: () => {
-      message.success(m.profile_sessionRevoked())
+      message.success('设备已下线')
       void invalidate()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
 
   return (
-    <Card title={m.profile_sessionsTitle()}>
+    <Card title={'已登录设备'}>
       <ul className="m-0 list-none divide-y divide-(--ant-color-split) p-0">
         {(data?.sessions ?? []).map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-3 py-3">
@@ -615,16 +609,16 @@ function SessionsCard() {
             </div>
             {s.current ? (
               <Tag color="blue" className="!me-0 shrink-0">
-                {m.profile_currentDevice()}
+                {'当前设备'}
               </Tag>
             ) : (
               <Popconfirm
-                title={m.profile_revokeConfirm()}
+                title={'确定将该设备下线？'}
                 okButtonProps={{ danger: true }}
                 onConfirm={() => revokeMutation.mutate({ id: s.id })}
               >
                 <Button size="small" danger loading={revokeMutation.isPending} className="shrink-0">
-                  {m.profile_revokeSession()}
+                  {'下线'}
                 </Button>
               </Popconfirm>
             )}
@@ -649,7 +643,7 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
 
   const unbindMutation = useMutation(unbindOauthIdentity, {
     onSuccess: () => {
-      message.success(m.profile_identityUnbound())
+      message.success('第三方账号已解绑')
       setUnbindTarget(undefined)
       void invalidate()
     },
@@ -662,10 +656,10 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
   const unboundOptions = options.filter((o) => !bound.has(o.key))
 
   return (
-    <Card title={m.profile_identitiesTitle()}>
+    <Card title={'已绑定的第三方账号'}>
       {identities.length === 0 ? (
         <div className="py-4 text-center text-sm text-(--ant-color-text-tertiary)">
-          {m.profile_noIdentities()}
+          {'尚未绑定第三方账号'}
         </div>
       ) : (
         <ul className="m-0 list-none divide-y divide-(--ant-color-split) p-0">
@@ -693,7 +687,7 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
                   setUnbindTarget(identity.providerKey)
                 }}
               >
-                {m.profile_unbindIdentity()}
+                {'解绑'}
               </Button>
             </li>
           ))}
@@ -708,7 +702,7 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
                 window.location.href = `/api/oauth/${encodeURIComponent(opt.key)}/authorize`
               }}
             >
-              {m.profile_bindIdentity({ name: opt.name || opt.key })}
+              {`绑定${opt.name || opt.key}`}
             </Button>
           ))}
         </div>
@@ -726,18 +720,15 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
         >
           <Form.Item
             name="currentPassword"
-            rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+            rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
           >
-            <Input.Password
-              autoComplete="current-password"
-              placeholder={m.profile_currentPassword()}
-            />
+            <Input.Password autoComplete="current-password" placeholder={'当前密码'} />
           </Form.Item>
           <Button danger htmlType="submit" loading={unbindMutation.isPending}>
-            {m.profile_unbindIdentity()}
+            {'解绑'}
           </Button>
           <Button type="text" onClick={() => setUnbindTarget(undefined)}>
-            {m.common_cancel()}
+            {'取消'}
           </Button>
         </Form>
       ) : null}
@@ -746,7 +737,7 @@ function IdentitiesCard({ options }: { options: OauthProviderOption[] }) {
 }
 
 function describeUserAgent(ua: string): string {
-  if (!ua) return m.profile_unknownDevice()
+  if (!ua) return '未知设备'
   const browser = /Edg\//.test(ua)
     ? 'Edge'
     : /Chrome\//.test(ua)
@@ -787,7 +778,7 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
 
   const activateMutation = useMutation(activateTotp, {
     onSuccess: () => {
-      message.success(m.profile_totpEnabled())
+      message.success('两步验证已开启')
       setSetup(undefined)
       onChanged()
     },
@@ -796,7 +787,7 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
 
   const disableMutation = useMutation(disableTotp, {
     onSuccess: () => {
-      message.success(m.profile_totpDisabled())
+      message.success('两步验证已关闭')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -804,9 +795,9 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
 
   if (enabled) {
     return (
-      <Card title={m.profile_totpTitle()}>
+      <Card title={'两步验证'}>
         <div className="mb-3 flex items-center gap-2">
-          <Tag color="green">{m.profile_totpActive()}</Tag>
+          <Tag color="green">{'已开启'}</Tag>
         </div>
         <Form
           form={disableForm}
@@ -816,20 +807,17 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
         >
           <Form.Item
             name="currentPassword"
-            rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+            rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
           >
-            <Input.Password
-              autoComplete="current-password"
-              placeholder={m.profile_currentPassword()}
-            />
+            <Input.Password autoComplete="current-password" placeholder={'当前密码'} />
           </Form.Item>
           <Popconfirm
-            title={m.profile_totpDisableConfirm()}
+            title={'确定关闭两步验证？'}
             okButtonProps={{ danger: true }}
             onConfirm={() => disableForm.submit()}
           >
             <Button danger loading={disableMutation.isPending}>
-              {m.profile_totpDisable()}
+              {'关闭'}
             </Button>
           </Popconfirm>
         </Form>
@@ -839,9 +827,13 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
 
   if (setup) {
     return (
-      <Card title={m.profile_totpTitle()}>
+      <Card title={'两步验证'}>
         <div className="space-y-4">
-          <Alert type="warning" title={m.profile_totpRecoveryHint()} showIcon />
+          <Alert
+            type="warning"
+            title={'请妥善保存以下恢复码——仅显示一次。身份验证器丢失时，每个恢复码可登录一次。'}
+            showIcon
+          />
           <div className="flex justify-center rounded bg-white p-3">
             <QRCode value={setup.otpauthUrl} />
           </div>
@@ -861,16 +853,16 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
           >
             <Form.Item
               name="code"
-              label={m.profile_totpFirstCode()}
-              rules={[{ required: true, len: 6, message: m.auth_codeRule() }]}
+              label={'输入身份验证器中的第一个验证码以确认'}
+              rules={[{ required: true, len: 6, message: '请输入 6 位验证码' }]}
             >
               <Input maxLength={6} autoComplete="one-time-code" className="max-w-40" />
             </Form.Item>
             <div className="flex gap-2">
               <Button type="primary" htmlType="submit" loading={activateMutation.isPending}>
-                {m.profile_totpActivate()}
+                {'确认并开启'}
               </Button>
-              <Button onClick={() => setSetup(undefined)}>{m.common_cancel()}</Button>
+              <Button onClick={() => setSetup(undefined)}>{'取消'}</Button>
             </div>
           </Form>
         </div>
@@ -879,8 +871,10 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
   }
 
   return (
-    <Card title={m.profile_totpTitle()}>
-      <div className="mb-3 text-sm text-(--ant-color-text-secondary)">{m.profile_totpHint()}</div>
+    <Card title={'两步验证'}>
+      <div className="mb-3 text-sm text-(--ant-color-text-secondary)">
+        {'登录时除密码外，还需输入身份验证器 App（TOTP）中的动态验证码。'}
+      </div>
       <Form
         form={setupForm}
         layout="inline"
@@ -889,15 +883,12 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
       >
         <Form.Item
           name="currentPassword"
-          rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+          rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
         >
-          <Input.Password
-            autoComplete="current-password"
-            placeholder={m.profile_currentPassword()}
-          />
+          <Input.Password autoComplete="current-password" placeholder={'当前密码'} />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={setupMutation.isPending}>
-          {m.profile_totpSetup()}
+          {'开启'}
         </Button>
       </Form>
     </Card>

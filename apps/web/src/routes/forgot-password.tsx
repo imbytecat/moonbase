@@ -6,7 +6,6 @@ import { useState } from 'react'
 import { AuthShell } from '#components/auth-shell'
 import { CaptchaWidget } from '#components/captcha-widget'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/forgot-password')({
   beforeLoad: async ({ context: { queryClient, transport } }) => {
@@ -35,10 +34,15 @@ function ForgotPasswordPage() {
   })
 
   return (
-    <AuthShell subtitle={m.auth_forgotHint()}>
+    <AuthShell subtitle={'输入注册邮箱，我们将发送重置链接'}>
       {error ? <Alert type="error" title={error} className="mb-4" showIcon /> : null}
       {sent ? (
-        <Alert type="success" title={m.auth_resetLinkSent()} className="mb-4" showIcon />
+        <Alert
+          type="success"
+          title={'如果该邮箱已注册，重置链接已发出，请查收'}
+          className="mb-4"
+          showIcon
+        />
       ) : (
         <Form
           layout="vertical"
@@ -51,8 +55,8 @@ function ForgotPasswordPage() {
         >
           <Form.Item
             name="email"
-            label={m.auth_email()}
-            rules={[{ required: true, type: 'email', message: m.auth_emailRule() }]}
+            label={'邮箱'}
+            rules={[{ required: true, type: 'email', message: '请输入有效的邮箱地址' }]}
           >
             <Input autoComplete="email" />
           </Form.Item>
@@ -70,13 +74,13 @@ function ForgotPasswordPage() {
             loading={requestMutation.isPending}
             disabled={captchaRequired && !captchaToken}
           >
-            {m.auth_sendResetLink()}
+            {'发送重置链接'}
           </Button>
         </Form>
       )}
 
       <div className="mt-4 text-center text-sm">
-        <Link to="/login">{m.auth_backToSignIn()}</Link>
+        <Link to="/login">{'返回登录'}</Link>
       </div>
     </AuthShell>
   )

@@ -11,7 +11,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Badge, Button, Dropdown, Empty, Spin } from 'antd'
 import { useState } from 'react'
-import { m } from '#paraglide/messages.js'
 
 function BellItem({ n, onNavigate }: { n: NotificationMessage; onNavigate: () => void }) {
   const inner = (
@@ -69,7 +68,7 @@ export function NotificationBell() {
       popupRender={() => (
         <div className="w-80 rounded-lg bg-(--ant-color-bg-elevated) shadow-(--ant-box-shadow-secondary)">
           <div className="flex items-center justify-between border-b border-(--ant-color-split) px-4 py-2.5">
-            <span className="text-sm font-medium">{m.notifications_title()}</span>
+            <span className="text-sm font-medium">{'消息中心'}</span>
             {unread > 0 ? (
               <Button
                 type="link"
@@ -77,7 +76,7 @@ export function NotificationBell() {
                 loading={markAll.isPending}
                 onClick={() => markAll.mutate({})}
               >
-                {m.notifications_markAllRead()}
+                {'全部已读'}
               </Button>
             ) : null}
           </div>
@@ -90,7 +89,7 @@ export function NotificationBell() {
               <Empty
                 className="py-8"
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={m.notifications_empty()}
+                description={'暂无消息'}
               />
             ) : (
               items.map((n) => <BellItem key={n.id} n={n} onNavigate={() => setOpen(false)} />)
@@ -98,7 +97,7 @@ export function NotificationBell() {
           </div>
           <div className="border-t border-(--ant-color-split) px-4 py-2 text-center">
             <Link to="/notifications" onClick={() => setOpen(false)} className="text-sm">
-              {m.notifications_viewAll()}
+              {'查看全部'}
             </Link>
           </div>
         </div>
@@ -106,7 +105,7 @@ export function NotificationBell() {
     >
       <button
         type="button"
-        aria-label={m.notifications_bellLabel()}
+        aria-label={'消息'}
         className="flex cursor-pointer items-center rounded-lg border-0 bg-transparent px-2 py-1.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
       >
         <Badge count={unread} size="small" overflowCount={99}>

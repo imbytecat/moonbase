@@ -1,7 +1,6 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { Button, Empty, Popconfirm, Select, Tag, Typography } from 'antd'
 import type { ReactNode } from 'react'
-import { m } from '#paraglide/messages.js'
 
 interface ProfileLike {
   id: string
@@ -74,7 +73,7 @@ export function ProfileManager<T extends ProfileLike>({
             <div className="text-xs text-(--ant-color-text-tertiary)">{texts.profilesHint}</div>
           </div>
           <Button type="primary" icon={<PlusOutlined />} onClick={onAdd} className="shrink-0">
-            {m.systemPage_addProfile()}
+            {'添加配置'}
           </Button>
         </div>
 
@@ -100,7 +99,7 @@ export function ProfileManager<T extends ProfileLike>({
                         ))}
                         {bound.length === 0 ? (
                           <Tag className="!me-0 !text-(--ant-color-text-quaternary)">
-                            {m.systemPage_profileIdle()}
+                            {'未使用'}
                           </Tag>
                         ) : null}
                       </span>
@@ -134,7 +133,7 @@ export function ProfileManager<T extends ProfileLike>({
 
       <div>
         <div className="mb-3">
-          <Typography.Text strong>{m.systemPage_bindingsTitle()}</Typography.Text>
+          <Typography.Text strong>{'用途绑定'}</Typography.Text>
           <div className="text-xs text-(--ant-color-text-tertiary)">{texts.bindingsHint}</div>
         </div>
         <div className="space-y-3">
@@ -149,7 +148,7 @@ export function ProfileManager<T extends ProfileLike>({
                   className="w-full min-w-0 sm:w-64"
                   mode="multiple"
                   value={b.profileIds}
-                  placeholder={m.systemPage_unbound()}
+                  placeholder={'未绑定'}
                   loading={binding}
                   options={profiles.map((p) => ({ label: p.name, value: p.id }))}
                   onChange={(ids) => onBind(b.purpose, ids)}
@@ -158,7 +157,7 @@ export function ProfileManager<T extends ProfileLike>({
                 <Select
                   className="w-full min-w-0 sm:w-64"
                   value={b.profileIds[0]}
-                  placeholder={m.systemPage_unbound()}
+                  placeholder={'未绑定'}
                   allowClear
                   loading={binding}
                   options={profiles.map((p) => ({ label: p.name, value: p.id }))}

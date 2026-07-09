@@ -36,7 +36,6 @@ import {
 import { useState } from 'react'
 import { humanizeError } from '#lib/errors'
 import { hasPermission, requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/users')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -75,7 +74,7 @@ function UsersPage() {
     onSuccess: () => {
       void invalidate()
       setDrawer({ open: false })
-      message.success(m.usersPage_userCreated())
+      message.success('用户已创建')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -84,7 +83,7 @@ function UsersPage() {
     onSuccess: () => {
       void invalidate()
       setDrawer({ open: false })
-      message.success(m.usersPage_userUpdated())
+      message.success('用户已更新')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -92,13 +91,13 @@ function UsersPage() {
   const deleteMutation = useMutation(deleteUser, {
     onSuccess: () => {
       void invalidate()
-      message.success(m.usersPage_userDeleted())
+      message.success('用户已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
 
   const resetPasswordMutation = useMutation(resetUserPassword, {
-    onSuccess: () => message.success(m.usersPage_passwordReset()),
+    onSuccess: () => message.success('密码已重置，该用户的所有会话已退出'),
     onError: (err) => message.error(humanizeError(err)),
   })
 
@@ -146,11 +145,11 @@ function UsersPage() {
 
   return (
     <Card
-      title={m.usersPage_title()}
+      title={'用户管理'}
       extra={
         canWrite ? (
           <Button type="primary" onClick={openCreate}>
-            {m.usersPage_addUser()}
+            {'添加用户'}
           </Button>
         ) : null
       }
@@ -162,7 +161,7 @@ function UsersPage() {
         scroll={{ x: 'max-content' }}
         columns={[
           {
-            title: m.usersPage_user(),
+            title: '用户',
             key: 'user',
             render: (_, u) => (
               <div className="flex items-center gap-3">
@@ -177,27 +176,19 @@ function UsersPage() {
             ),
           },
           {
-            title: m.usersPage_rolesCol(),
+            title: '角色',
             dataIndex: 'roles',
             render: (roles: string[]) =>
-              roles.length ? (
-                roles.map((r) => <Tag key={r}>{r}</Tag>)
-              ) : (
-                <Tag>{m.usersPage_noRoles()}</Tag>
-              ),
+              roles.length ? roles.map((r) => <Tag key={r}>{r}</Tag>) : <Tag>{'无角色'}</Tag>,
           },
           {
-            title: m.usersPage_status(),
+            title: '状态',
             dataIndex: 'isActive',
             render: (active: boolean) =>
-              active ? (
-                <Tag color="green">{m.usersPage_active()}</Tag>
-              ) : (
-                <Tag color="red">{m.usersPage_disabled()}</Tag>
-              ),
+              active ? <Tag color="green">{'正常'}</Tag> : <Tag color="red">{'禁用'}</Tag>,
           },
           {
-            title: m.usersPage_created(),
+            title: '创建时间',
             dataIndex: 'createdAt',
             render: (_, u) => (u.createdAt ? timestampDate(u.createdAt).toLocaleDateString() : ''),
           },
@@ -210,7 +201,7 @@ function UsersPage() {
                   render: (_: unknown, u: User) => (
                     <div className="flex gap-2">
                       <Button size="small" onClick={() => openEdit(u)}>
-                        {m.common_edit()}
+                        {'编辑'}
                       </Button>
                       <Button
                         size="small"
@@ -219,16 +210,16 @@ function UsersPage() {
                           setResetTarget(u)
                         }}
                       >
-                        {m.usersPage_resetPassword()}
+                        {'重置密码'}
                       </Button>
                       <Popconfirm
-                        title={m.usersPage_confirmDelete()}
-                        okText={m.common_delete()}
+                        title={'删除该用户？'}
+                        okText={'删除'}
                         okButtonProps={{ danger: true }}
                         onConfirm={() => deleteMutation.mutate({ id: u.id })}
                       >
                         <Button size="small" danger>
-                          {m.common_delete()}
+                          {'删除'}
                         </Button>
                       </Popconfirm>
                     </div>
@@ -240,11 +231,7 @@ function UsersPage() {
       />
 
       <Drawer
-        title={
-          drawer.editing
-            ? m.usersPage_editUser({ name: drawer.editing.name })
-            : m.usersPage_addUser()
-        }
+        title={drawer.editing ? `编辑 ${drawer.editing.name}` : '添加用户'}
         open={drawer.open}
         onClose={() => setDrawer({ open: false })}
         size="min(420px, 100vw)"
@@ -257,24 +244,23 @@ function UsersPage() {
           onFinish={submit}
           disabled={createMutation.isPending || updateMutation.isPending}
         >
-          <Form.Item
-            name="name"
-            label={m.auth_name()}
-            rules={[{ required: true, message: m.auth_nameRule() }]}
-          >
+          <Form.Item name="name" label={'姓名'} rules={[{ required: true, message: '请输入姓名' }]}>
             <Input />
           </Form.Item>
           <Form.Item
             name="username"
-            label={m.auth_username()}
+            label={'用户名'}
             dependencies={['email']}
             rules={[
-              { pattern: /^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/, message: m.auth_usernameRule() },
+              {
+                pattern: /^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/,
+                message: '3-32 位，字母开头，可含字母、数字、. _ -',
+              },
               ({ getFieldValue }) => ({
                 validator: () =>
                   getFieldValue('username') || getFieldValue('email')
                     ? Promise.resolve()
-                    : Promise.reject(new Error(m.usersPage_identifierRequired())),
+                    : Promise.reject(new Error('用户名和邮箱至少填一项')),
               }),
             ]}
           >
@@ -282,15 +268,15 @@ function UsersPage() {
           </Form.Item>
           <Form.Item
             name="email"
-            label={m.auth_email()}
+            label={'邮箱'}
             dependencies={['username']}
             rules={[
-              { type: 'email', message: m.auth_emailRule() },
+              { type: 'email', message: '请输入有效的邮箱地址' },
               ({ getFieldValue }) => ({
                 validator: () =>
                   getFieldValue('username') || getFieldValue('email')
                     ? Promise.resolve()
-                    : Promise.reject(new Error(m.usersPage_identifierRequired())),
+                    : Promise.reject(new Error('用户名和邮箱至少填一项')),
               }),
             ]}
           >
@@ -299,16 +285,16 @@ function UsersPage() {
           {drawer.editing ? null : (
             <Form.Item
               name="password"
-              label={m.auth_password()}
-              rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+              label={'密码'}
+              rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
             >
               <Input.Password autoComplete="new-password" />
             </Form.Item>
           )}
-          <Form.Item name="roleIds" label={m.usersPage_rolesCol()}>
-            <Select mode="multiple" options={roleOptions} placeholder={m.usersPage_assignRoles()} />
+          <Form.Item name="roleIds" label={'角色'}>
+            <Select mode="multiple" options={roleOptions} placeholder={'分配角色'} />
           </Form.Item>
-          <Form.Item name="isActive" label={m.usersPage_activeLabel()} valuePropName="checked">
+          <Form.Item name="isActive" label={'启用'} valuePropName="checked">
             <Switch />
           </Form.Item>
           <Button
@@ -317,13 +303,13 @@ function UsersPage() {
             block
             loading={createMutation.isPending || updateMutation.isPending}
           >
-            {drawer.editing ? m.usersPage_saveChanges() : m.usersPage_createUser()}
+            {drawer.editing ? '保存修改' : '创建用户'}
           </Button>
         </Form>
       </Drawer>
 
       <Drawer
-        title={resetTarget ? m.usersPage_resetPasswordFor({ name: resetTarget.name }) : ''}
+        title={resetTarget ? `重置 ${resetTarget.name} 的密码` : ''}
         open={Boolean(resetTarget)}
         onClose={() => setResetTarget(undefined)}
         size="min(420px, 100vw)"
@@ -344,13 +330,13 @@ function UsersPage() {
         >
           <Form.Item
             name="newPassword"
-            label={m.auth_newPassword()}
-            rules={[{ required: true, min: 8, message: m.auth_passwordRule() }]}
+            label={'新密码'}
+            rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={resetPasswordMutation.isPending}>
-            {m.usersPage_resetPassword()}
+            {'重置密码'}
           </Button>
         </Form>
       </Drawer>

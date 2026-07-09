@@ -23,7 +23,6 @@ import { PermissionChecklist } from '#components/permission-checklist'
 import { humanizeError } from '#lib/errors'
 import { permissionKey } from '#lib/permissions'
 import { hasPermission, requirePermission } from '#lib/session'
-import { m } from '#paraglide/messages.js'
 
 export const Route = createFileRoute('/_authed/roles')({
   beforeLoad: ({ context: { queryClient, transport } }) =>
@@ -62,7 +61,7 @@ function RolesPage() {
     onSuccess: () => {
       void invalidate()
       setDrawer({ open: false })
-      message.success(m.rolesPage_roleCreated())
+      message.success('角色已创建')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -71,7 +70,7 @@ function RolesPage() {
     onSuccess: () => {
       void invalidate()
       setDrawer({ open: false })
-      message.success(m.rolesPage_roleUpdated())
+      message.success('角色已更新')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -79,7 +78,7 @@ function RolesPage() {
   const deleteMutation = useMutation(deleteRole, {
     onSuccess: () => {
       void invalidate()
-      message.success(m.rolesPage_roleDeleted())
+      message.success('角色已删除')
     },
     onError: (err) => message.error(humanizeError(err)),
   })
@@ -109,11 +108,11 @@ function RolesPage() {
 
   return (
     <Card
-      title={m.rolesPage_title()}
+      title={'角色管理'}
       extra={
         canWrite ? (
           <Button type="primary" onClick={openCreate}>
-            {m.rolesPage_addRole()}
+            {'添加角色'}
           </Button>
         ) : null
       }
@@ -125,14 +124,14 @@ function RolesPage() {
         scroll={{ x: 'max-content' }}
         columns={[
           {
-            title: m.rolesPage_role(),
+            title: '角色',
             key: 'role',
             render: (_, r) => (
               <div>
                 <span className="font-medium">{r.name}</span>
                 {r.isSystem ? (
                   <Tag className="ms-2" color="blue">
-                    {m.rolesPage_system()}
+                    {'系统'}
                   </Tag>
                 ) : null}
                 <div className="text-xs text-gray-500">{r.description}</div>
@@ -140,11 +139,11 @@ function RolesPage() {
             ),
           },
           {
-            title: m.rolesPage_permissions(),
+            title: '权限',
             dataIndex: 'permissions',
             render: (perms: Permission[]) =>
               perms.includes(Permission.ALL) ? (
-                <Tag color="gold">{m.rolesPage_allPermissions()}</Tag>
+                <Tag color="gold">{'全部权限'}</Tag>
               ) : (
                 perms.map((p) => <Tag key={p}>{permissionKey(p)}</Tag>)
               ),
@@ -158,17 +157,17 @@ function RolesPage() {
                   render: (_: unknown, r: Role) => (
                     <div className="flex gap-2">
                       <Button size="small" onClick={() => openEdit(r)}>
-                        {m.common_edit()}
+                        {'编辑'}
                       </Button>
                       {r.isSystem ? null : (
                         <Popconfirm
-                          title={m.rolesPage_confirmDelete()}
-                          okText={m.common_delete()}
+                          title={'删除该角色？'}
+                          okText={'删除'}
                           okButtonProps={{ danger: true }}
                           onConfirm={() => deleteMutation.mutate({ id: r.id })}
                         >
                           <Button size="small" danger>
-                            {m.common_delete()}
+                            {'删除'}
                           </Button>
                         </Popconfirm>
                       )}
@@ -181,11 +180,7 @@ function RolesPage() {
       />
 
       <Drawer
-        title={
-          drawer.editing
-            ? m.rolesPage_editRole({ name: drawer.editing.name })
-            : m.rolesPage_addRole()
-        }
+        title={drawer.editing ? `编辑 ${drawer.editing.name}` : '添加角色'}
         open={drawer.open}
         onClose={() => setDrawer({ open: false })}
         size="min(420px, 100vw)"
@@ -200,20 +195,20 @@ function RolesPage() {
         >
           <Form.Item
             name="name"
-            label={m.rolesPage_name()}
-            rules={[{ required: true, message: m.rolesPage_nameRequired() }]}
+            label={'角色名称'}
+            rules={[{ required: true, message: '请输入角色名' }]}
           >
             <Input disabled={drawer.editing?.isSystem} />
           </Form.Item>
-          <Form.Item name="description" label={m.rolesPage_description()}>
+          <Form.Item name="description" label={'描述'}>
             <Input.TextArea rows={2} />
           </Form.Item>
           {drawer.editing?.isSystem && drawer.editing.name === 'admin' ? (
-            <Form.Item label={m.rolesPage_permissions()}>
-              <Tag color="gold">{m.rolesPage_allPermissionsImmutable()}</Tag>
+            <Form.Item label={'权限'}>
+              <Tag color="gold">{'全部权限（不可修改）'}</Tag>
             </Form.Item>
           ) : (
-            <Form.Item name="permissions" label={m.rolesPage_permissions()}>
+            <Form.Item name="permissions" label={'权限'}>
               <PermissionChecklist
                 options={permsData.permissions.map((p) => ({
                   permission: p.permission,
@@ -228,7 +223,7 @@ function RolesPage() {
             block
             loading={createMutation.isPending || updateMutation.isPending}
           >
-            {drawer.editing ? m.rolesPage_saveChanges() : m.rolesPage_createRole()}
+            {drawer.editing ? '保存修改' : '创建角色'}
           </Button>
         </Form>
       </Drawer>

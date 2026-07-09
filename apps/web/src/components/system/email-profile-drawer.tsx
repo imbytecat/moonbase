@@ -18,7 +18,6 @@ import {
 } from '#components/system/schema-profile-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
-import { m } from '#paraglide/messages.js'
 
 export function EmailProfileDrawer({
   profile,
@@ -41,14 +40,14 @@ export function EmailProfileDrawer({
 
   const createMutation = useMutation(createEmailProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_profileCreated())
+      message.success('存储配置已创建')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
   })
   const updateMutation = useMutation(updateEmailProfile, {
     onSuccess: () => {
-      message.success(m.systemPage_saved())
+      message.success('设置已保存')
       onChanged()
     },
     onError: (err) => message.error(humanizeError(err)),
@@ -62,13 +61,13 @@ export function EmailProfileDrawer({
     {
       value: 'smtp',
       label: 'SMTP',
-      description: m.systemPage_smtpDesc(),
+      description: '通用邮件发送协议，适配任何邮件服务商',
       icon: <MailOutlined className="text-xl text-(--ant-color-primary)" />,
     },
     {
       value: 'cloudflare',
       label: 'Cloudflare',
-      description: m.systemPage_cloudflareEmailDesc(),
+      description: 'Cloudflare 邮件发送接口',
       icon: <CloudOutlined className="text-xl text-(--ant-color-warning)" />,
     },
   ]
@@ -103,10 +102,10 @@ export function EmailProfileDrawer({
           >
             <Form.Item
               name="name"
-              label={m.systemPage_profileName()}
-              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+              label={'配置名称'}
+              rules={[{ required: true, message: '请输入配置名称' }]}
             >
-              <Input placeholder={m.systemPage_emailProfileNamePlaceholder()} />
+              <Input placeholder={'如：验证码通道、通知通道'} />
             </Form.Item>
             <div className="grid grid-cols-2 gap-4">
               {fields.map((field) => (
@@ -121,11 +120,11 @@ export function EmailProfileDrawer({
                 htmlType="submit"
                 loading={createMutation.isPending || updateMutation.isPending}
               >
-                {m.common_save()}
+                {'保存'}
               </Button>
               <Input
                 className="max-w-56"
-                placeholder={m.systemPage_testRecipient()}
+                placeholder={'测试收件邮箱'}
                 value={testTo}
                 onChange={(e) => setTestTo(e.target.value)}
               />
@@ -140,7 +139,7 @@ export function EmailProfileDrawer({
                   })
                 }}
               >
-                {m.systemPage_sendTestEmail()}
+                {'发送测试邮件'}
               </Button>
             </div>
           </Form>

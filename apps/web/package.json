@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#messages/*": "./messages/*",
     "#*": [
       "./src/*",
       "./src/*.ts",
@@ -17,7 +16,6 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "gen:routes": "tsr generate",
-    "gen:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale",
     "format": "biome format --write .",
     "check": "biome check .",
     "check:write": "biome check --write .",
@@ -48,7 +46,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
-    "@inlang/paraglide-js": "^2.20.2",
     "@tailwindcss/vite": "^4.3.2",
     "@tanstack/react-query-devtools": "^5.101.2",
     "@tanstack/react-router-devtools": "^1.167.0",
