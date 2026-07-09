@@ -42,13 +42,6 @@ plugins:
     opt:
       - target=ts
 
-  # --- settings codec (server) --- repo-local plugin: for every
-  # (moonbase.v1.profile) message it emits the storage struct + the write-only
-  # -secret Mask/FromProto/Merge codec into integrationkit/systemcodec. Run from
-  # apps/server so `go run ./cmd/...` resolves inside that module.
-  - local: ['go', '-C', 'apps/server', 'run', './cmd/protoc-gen-settings']
-    out: integrationkit/systemcodec
-
   # --- permission catalog (server) --- repo-local plugin: for every enum whose
   # values carry (moonbase.v1.description) it emits the Go {Key, Description}
   # catalog into internal/authcatalog, which auth.Catalog aliases — the proto

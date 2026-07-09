@@ -13,7 +13,7 @@
 //
 // Options are read straight off the descriptor by field number, so this plugin
 // never imports the generated options.pb.go — that would be a bootstrap cycle,
-// exactly as protoc-gen-settings and protoc-gen-permissions do.
+// exactly as protoc-gen-permissions does.
 package main
 
 import (

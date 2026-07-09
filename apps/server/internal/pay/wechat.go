@@ -21,7 +21,7 @@ import (
 	"github.com/wechatpay-apiv3/wechatpay-go/services/refunddomestic"
 	"github.com/wechatpay-apiv3/wechatpay-go/utils"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -35,32 +35,23 @@ const (
 	wechatMethodApp    = "app"    // APP 支付
 )
 
-func wechatUsable(p systemcodec.PaymentProfile) bool {
-	w := p.Wechat
-	if w.MchId == "" || w.AppId == "" || w.MchCertSerialNo == "" || w.MchPrivateKey == "" || w.ApiV3Key == "" {
-		return false
-	}
-	if w.AuthMethod == settings.PaymentAuthPlatformCert {
-		return true
-	}
-	return w.PublicKeyId != "" && w.PublicKey != ""
-}
-
-func wechatClient(ctx context.Context, p systemcodec.PaymentProfile) (*core.Client, error) {
-	w := p.Wechat
-	mchPriv, err := utils.LoadPrivateKey(w.MchPrivateKey)
+func wechatClient(ctx context.Context, config map[string]any) (*core.Client, error) {
+	mchPriv, err := utils.LoadPrivateKey(cfgStr(config, "mchPrivateKey"))
 	if err != nil {
 		return nil, fmt.Errorf("load merchant private key: %w", err)
 	}
 	var opts []core.ClientOption
-	if w.AuthMethod == settings.PaymentAuthPlatformCert {
-		opts = append(opts, option.WithWechatPayAutoAuthCipher(w.MchId, w.MchCertSerialNo, mchPriv, w.ApiV3Key))
+	mchID := cfgStr(config, "mchId")
+	mchCertSerialNo := cfgStr(config, "mchCertSerialNo")
+	apiV3Key := cfgStr(config, "apiV3Key")
+	if cfgStr(config, "authMethod") == settings.PaymentAuthPlatformCert {
+		opts = append(opts, option.WithWechatPayAutoAuthCipher(mchID, mchCertSerialNo, mchPriv, apiV3Key))
 	} else {
-		wxPub, err := utils.LoadPublicKey(w.PublicKey)
+		wxPub, err := utils.LoadPublicKey(cfgStr(config, "publicKey"))
 		if err != nil {
 			return nil, fmt.Errorf("load wechatpay public key: %w", err)
 		}
-		opts = append(opts, option.WithWechatPayPublicKeyAuthCipher(w.MchId, w.MchCertSerialNo, mchPriv, w.PublicKeyId, wxPub))
+		opts = append(opts, option.WithWechatPayPublicKeyAuthCipher(mchID, mchCertSerialNo, mchPriv, cfgStr(config, "publicKeyId"), wxPub))
 	}
 	client, err := core.NewClient(ctx, opts...)
 	if err != nil {
@@ -69,38 +60,42 @@ func wechatClient(ctx context.Context, p systemcodec.PaymentProfile) (*core.Clie
 	return client, nil
 }
 
-func wechatNotifyHandler(ctx context.Context, p systemcodec.PaymentProfile) (*notify.Handler, error) {
-	w := p.Wechat
-	if w.AuthMethod == settings.PaymentAuthPlatformCert {
-		mchPriv, err := utils.LoadPrivateKey(w.MchPrivateKey)
+func wechatNotifyHandler(ctx context.Context, p kitsettings.GenericProfile) (*notify.Handler, error) {
+	config := p.Config
+	apiV3Key := cfgStr(config, "apiV3Key")
+	mchID := cfgStr(config, "mchId")
+	mchCertSerialNo := cfgStr(config, "mchCertSerialNo")
+	if cfgStr(config, "authMethod") == settings.PaymentAuthPlatformCert {
+		mchPriv, err := utils.LoadPrivateKey(cfgStr(config, "mchPrivateKey"))
 		if err != nil {
 			return nil, fmt.Errorf("load merchant private key: %w", err)
 		}
 		mgr := downloader.MgrInstance()
-		if err := mgr.RegisterDownloaderWithPrivateKey(ctx, mchPriv, w.MchCertSerialNo, w.MchId, w.ApiV3Key); err != nil {
+		if err := mgr.RegisterDownloaderWithPrivateKey(ctx, mchPriv, mchCertSerialNo, mchID, apiV3Key); err != nil {
 			return nil, fmt.Errorf("register certificate downloader: %w", err)
 		}
-		return notify.NewRSANotifyHandler(w.ApiV3Key, verifiers.NewSHA256WithRSAVerifier(mgr.GetCertificateVisitor(w.MchId)))
+		return notify.NewRSANotifyHandler(apiV3Key, verifiers.NewSHA256WithRSAVerifier(mgr.GetCertificateVisitor(mchID)))
 	}
-	wxPub, err := utils.LoadPublicKey(w.PublicKey)
+	wxPub, err := utils.LoadPublicKey(cfgStr(config, "publicKey"))
 	if err != nil {
 		return nil, fmt.Errorf("load wechatpay public key: %w", err)
 	}
-	return notify.NewRSANotifyHandler(w.ApiV3Key, verifiers.NewSHA256WithRSAPubkeyVerifier(w.PublicKeyId, *wxPub))
+	return notify.NewRSANotifyHandler(apiV3Key, verifiers.NewSHA256WithRSAPubkeyVerifier(cfgStr(config, "publicKeyId"), *wxPub))
 }
 
-func wechatCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateRequest, notifyURL string) (Credential, error) {
-	client, err := wechatClient(ctx, p)
+func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error) {
+	client, err := wechatClient(ctx, p.Config)
 	if err != nil {
 		return "", err
 	}
-	w := p.Wechat
+	appID := cfgStr(p.Config, "appId")
+	mchID := cfgStr(p.Config, "mchId")
 	switch req.Method {
 	case wechatMethodNative:
 		svc := native.NativeApiService{Client: client}
 		rsp, _, err := svc.Prepay(ctx, native.PrepayRequest{
-			Appid:       core.String(w.AppId),
-			Mchid:       core.String(w.MchId),
+			Appid:       core.String(appID),
+			Mchid:       core.String(mchID),
 			Description: core.String(req.Subject),
 			OutTradeNo:  core.String(req.OutTradeNo),
 			NotifyUrl:   core.String(notifyURL),
@@ -116,8 +111,8 @@ func wechatCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 	case wechatMethodH5:
 		svc := h5.H5ApiService{Client: client}
 		rsp, _, err := svc.Prepay(ctx, h5.PrepayRequest{
-			Appid:       core.String(w.AppId),
-			Mchid:       core.String(w.MchId),
+			Appid:       core.String(appID),
+			Mchid:       core.String(mchID),
 			Description: core.String(req.Subject),
 			OutTradeNo:  core.String(req.OutTradeNo),
 			NotifyUrl:   core.String(notifyURL),
@@ -137,8 +132,8 @@ func wechatCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 	case wechatMethodJsapi:
 		svc := jsapi.JsapiApiService{Client: client}
 		rsp, _, err := svc.PrepayWithRequestPayment(ctx, jsapi.PrepayRequest{
-			Appid:       core.String(w.AppId),
-			Mchid:       core.String(w.MchId),
+			Appid:       core.String(appID),
+			Mchid:       core.String(mchID),
 			Description: core.String(req.Subject),
 			OutTradeNo:  core.String(req.OutTradeNo),
 			NotifyUrl:   core.String(notifyURL),
@@ -156,8 +151,8 @@ func wechatCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 	case wechatMethodApp:
 		svc := app.AppApiService{Client: client}
 		rsp, _, err := svc.PrepayWithRequestPayment(ctx, app.PrepayRequest{
-			Appid:       core.String(w.AppId),
-			Mchid:       core.String(w.MchId),
+			Appid:       core.String(appID),
+			Mchid:       core.String(mchID),
 			Description: core.String(req.Subject),
 			OutTradeNo:  core.String(req.OutTradeNo),
 			NotifyUrl:   core.String(notifyURL),
@@ -176,15 +171,15 @@ func wechatCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 	}
 }
 
-func wechatQuery(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo string) (QueryResult, error) {
-	client, err := wechatClient(ctx, p)
+func wechatQuery(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
+	client, err := wechatClient(ctx, p.Config)
 	if err != nil {
 		return QueryResult{}, err
 	}
 	svc := native.NativeApiService{Client: client}
 	tx, _, err := svc.QueryOrderByOutTradeNo(ctx, native.QueryOrderByOutTradeNoRequest{
 		OutTradeNo: core.String(outTradeNo),
-		Mchid:      core.String(p.Wechat.MchId),
+		Mchid:      core.String(cfgStr(p.Config, "mchId")),
 	})
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("wechat query: %w", err)
@@ -192,8 +187,8 @@ func wechatQuery(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo s
 	return wechatTransactionResult(tx), nil
 }
 
-func wechatRefund(ctx context.Context, p systemcodec.PaymentProfile, req RefundRequest, notifyURL string) (RefundResult, error) {
-	client, err := wechatClient(ctx, p)
+func wechatRefund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest, notifyURL string) (RefundResult, error) {
+	client, err := wechatClient(ctx, p.Config)
 	if err != nil {
 		return RefundResult{}, err
 	}
@@ -216,8 +211,8 @@ func wechatRefund(ctx context.Context, p systemcodec.PaymentProfile, req RefundR
 	return RefundResult{Settled: settled}, nil
 }
 
-func wechatQueryRefund(ctx context.Context, p systemcodec.PaymentProfile, refundNo string) (bool, error) {
-	client, err := wechatClient(ctx, p)
+func wechatQueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error) {
+	client, err := wechatClient(ctx, p.Config)
 	if err != nil {
 		return false, err
 	}
@@ -231,7 +226,7 @@ func wechatQueryRefund(ctx context.Context, p systemcodec.PaymentProfile, refund
 	return rsp.Status != nil && *rsp.Status == refunddomestic.STATUS_SUCCESS, nil
 }
 
-func wechatParseNotify(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error) {
+func wechatParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
 	handler, err := wechatNotifyHandler(ctx, p)
 	if err != nil {
 		return NotifyResult{}, err

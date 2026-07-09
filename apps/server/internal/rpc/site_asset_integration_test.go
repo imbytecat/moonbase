@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
@@ -29,11 +29,11 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 
 	store := settings.NewStore(repository.New(pool))
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "local-site",
 			Name:     "Local Site",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+			Config:   map[string]any{"directory": t.TempDir()},
 		}},
 		Bindings: map[string][]string{storage.PurposeSiteAssets: {"local-site"}},
 	}); err != nil {

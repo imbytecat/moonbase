@@ -13,7 +13,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // Standard OpenID Connect authorization-code flow via coreos/go-oidc +
@@ -60,8 +59,8 @@ func oidcProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
 
 // oidcScopes forces the openid scope: without it the provider returns no ID
 // token and there is nothing to verify.
-func oidcScopes(p systemcodec.OauthProfile) []string {
-	raw := p.Oidc.Scopes
+func oidcScopes(config map[string]any) []string {
+	raw := cfgStr(config, "scopes")
 	if raw == "" {
 		raw = oidcDefaultScopes
 	}
@@ -72,18 +71,18 @@ func oidcScopes(p systemcodec.OauthProfile) []string {
 	return scopes
 }
 
-func oidcOauth2Config(p systemcodec.OauthProfile, provider *oidc.Provider, redirectURI string) oauth2.Config {
+func oidcOauth2Config(config map[string]any, provider *oidc.Provider, redirectURI string) oauth2.Config {
 	return oauth2.Config{
-		ClientID:     p.Oidc.ClientId,
-		ClientSecret: p.Oidc.ClientSecret,
+		ClientID:     cfgStr(config, "clientId"),
+		ClientSecret: cfgStr(config, "clientSecret"),
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  redirectURI,
-		Scopes:       oidcScopes(p),
+		Scopes:       oidcScopes(config),
 	}
 }
 
-func oidcAuthorizeURL(ctx context.Context, p systemcodec.OauthProfile, redirectURI, state string) (string, FlowSecrets, error) {
-	provider, err := oidcProvider(ctx, p.Oidc.Issuer)
+func oidcAuthorizeURL(ctx context.Context, config map[string]any, redirectURI, state string) (string, FlowSecrets, error) {
+	provider, err := oidcProvider(ctx, cfgStr(config, "issuer"))
 	if err != nil {
 		return "", FlowSecrets{}, err
 	}
@@ -92,17 +91,17 @@ func oidcAuthorizeURL(ctx context.Context, p systemcodec.OauthProfile, redirectU
 		return "", FlowSecrets{}, err
 	}
 	verifier := oauth2.GenerateVerifier()
-	cfg := oidcOauth2Config(p, provider, redirectURI)
+	cfg := oidcOauth2Config(config, provider, redirectURI)
 	url := cfg.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier))
 	return url, FlowSecrets{Nonce: nonce, Verifier: verifier}, nil
 }
 
-func oidcExchange(ctx context.Context, p systemcodec.OauthProfile, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
-	provider, err := oidcProvider(ctx, p.Oidc.Issuer)
+func oidcExchange(ctx context.Context, config map[string]any, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
+	provider, err := oidcProvider(ctx, cfgStr(config, "issuer"))
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
-	cfg := oidcOauth2Config(p, provider, redirectURI)
+	cfg := oidcOauth2Config(config, provider, redirectURI)
 
 	token, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(secrets.Verifier))
 	if err != nil {
@@ -112,7 +111,7 @@ func oidcExchange(ctx context.Context, p systemcodec.OauthProfile, code, redirec
 	if !ok {
 		return ExternalIdentity{}, fmt.Errorf("oidc token exchange: response carried no id_token")
 	}
-	idToken, err := provider.Verifier(&oidc.Config{ClientID: p.Oidc.ClientId}).Verify(ctx, rawIDToken)
+	idToken, err := provider.Verifier(&oidc.Config{ClientID: cfgStr(config, "clientId")}).Verify(ctx, rawIDToken)
 	if err != nil {
 		return ExternalIdentity{}, fmt.Errorf("oidc id_token verify: %w", err)
 	}

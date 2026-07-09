@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
@@ -66,11 +66,11 @@ func TestPresignAvatarUploadLandsFilesRow(t *testing.T) {
 	// signed URL without any external backend.
 	store := settings.NewStore(repository.New(pool))
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "local-test",
 			Name:     "Local Test",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+			Config:   map[string]any{"directory": t.TempDir()},
 		}},
 		Bindings: map[string][]string{storage.PurposeAvatars: {"local-test"}},
 	}); err != nil {

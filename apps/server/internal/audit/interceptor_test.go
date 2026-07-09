@@ -123,7 +123,7 @@ func TestInterceptorExtractsNestedProfileID(t *testing.T) {
 	_, err := interceptor(next)(t.Context(), newFakeRequest(
 		"/system.v1.SystemService/UpdateCaptchaProfile",
 		&systemv1.UpdateCaptchaProfileRequest{
-			Profile: &systemv1.CaptchaProfile{Id: "prof-1", Provider: "altcha"},
+			Profile: &systemv1.Profile{Id: "prof-1", Provider: "altcha"},
 		},
 	))
 	if err != nil {

@@ -1,5 +1,7 @@
 # integration 抽成独立模块：超越模板 cherry-pick 约束、转向可依赖核心（保留 ADR-0002 的 legibility 内核）
 
+> **状态**：被 ADR-0006 修订。integration 模块化方向保留；`systemcodec`、typed profile、以及“schema 驱动运行时表单缓做”的非目标已被 schema-driven provider 配置取代。
+
 ## 背景
 
 moonbase 起于「模板」：复制一份、快速开干。但模板有结构性的病——每复制一份就分叉一份，base 的 bug 修复 / 安全补丁 / 新增共享能力**传不回副本**，副本越多、漂移越远（碎片化）。目标随之升级：把平时都要用的横向能力做成**一处、版本化、下游 depend 而非 copy** 的核心，业务方只写业务。
@@ -14,14 +16,14 @@ ADR-0002 把「模板 cherry-pick、diff 可移植」列为既定约束——而
 
 保留 vs 超越，划清：
 
-- **保留（ADR-0002 仍在 force）**：proto 单一真源（决策 2）；provider 派发保持**编译期、字面可 grep、零反射**（决策 4）。故 **go-plugin / 运行时插件 / schema 驱动运行时表单 / proto 切片，继续缓做**，不在本 ADR 范围。
+- **保留（ADR-0002 仍在 force）**：provider 派发保持**编译期、字面可 grep、零反射**（决策 4）。故 **go-plugin / 运行时插件 / proto 切片，继续缓做**，不在本 ADR 范围；schema 驱动表单已由 ADR-0006 接手。
 - **超越**：「单模块 + cherry-pick、diff 可移植」这一条。integration 从 base 的 `internal/` 包，抽成各自的 Go module，由 go.work 组织；下游未来可作**版本化依赖**消费，而非复制。
 
 边界规则（承接 ADR-0003：工件归域不归 integration）：
 
 - **integration module = 无状态 driver + 配置形状**。driver 藏在 seam（`ObjectStore` / `Sender` / `Verifier` / `Chatter` / `Flow` / `Gateway`）之后，**不碰 DB**。
 - **domain 表留在 base**：`files` / `file_attachments`（文件域）、`payment_orders`（支付域）按 ADR-0003 归域，不进 integration 模块。配置仍是共享 `settings` 表的一行 JSONB，**integration 模块零迁移、零建表**。
-- **共享地基另立一个模块**（暂名 `integrationkit`）：`integration` 原语（Catalog / Provider / Driver / Registry）+ 配置载体形状（`Integration[P]`（原 `Channel[P]`）/ `Profile[P]`）+ 生成的 `systemcodec` profile 类型。DAG：`server → integrations/<name> → integrationkit`，无环。base 依赖各 integration 模块并**显式编译期注册**（派发仍可 grep，legibility 不丢）。
+- **共享地基另立一个模块**（暂名 `integrationkit`）：`integration` 原语（Catalog / Provider / Driver / Registry）+ 配置载体形状（`Integration[GenericProfile]` / `GenericProfile`）+ schema 处理。DAG：`server → integrations/<name> → integrationkit`，无环。base 依赖各 integration 模块并**显式编译期注册**（派发仍可 grep，legibility 不丢）。
 
 第一步只抽 **5 个无状态 integration**（email / sms / captcha / llm / oauth）。storage / payment 因 driver 与域代码现仍同居，列为 phase 2：先验证模式，再拆出无状态 driver、把域留 base。
 
@@ -34,7 +36,7 @@ ADR-0002 把「模板 cherry-pick、diff 可移植」列为既定约束——而
 ## 非目标（明确的「不」）
 
 - **go-plugin / 运行时加载 / 独立进程插件**——被 ADR-0002 决策 4 精确排除。触发条件：出现「肯付费、且死活不肯重编译宿主」的真实客户。
-- **schema 驱动运行时表单 / 前端通用渲染器**——与 proto 单一真源（决策 2）张力。触发条件：真要做运行时可装 integration 的那天。前端此步**一行不改**。
+- **schema 驱动运行时表单 / 前端通用渲染器**——已由 ADR-0006 重新评估并采纳，用于 provider config，不等同于运行时加载 integration。
 - **per-integration proto 切片 / 独立 buf 生成**——proto 保持中央单一真源。触发条件：某 integration 真要独立发版 / 出售。
 - **把 integration 抽成独立仓库**——现阶段留 monorepo，保住「完整布线范例」（决策 6）与本地 go.work 联调；独立仓库待真实分发需求。
 

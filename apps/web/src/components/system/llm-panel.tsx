@@ -1,11 +1,12 @@
 import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useMutation } from '@connectrpc/connect-query'
+import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   bindLlmPurpose,
   createLlmProfile,
   deleteLlmProfile,
-  type LlmProfile,
+  describeLlmProviders,
   type LlmSettings,
+  type Profile,
   testLlm,
   updateLlmProfile,
 } from '@moonbase/api-client'
@@ -13,6 +14,12 @@ import { App, Button, Form, Input } from 'antd'
 import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
+import {
+  SchemaField,
+  type SchemaProfileFormValues,
+  schemaInitialConfig,
+  schemaProfileToProto,
+} from '#components/system/schema-profile-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
 import { m } from '#paraglide/messages.js'
@@ -36,7 +43,7 @@ export function LlmPanel({
   const { message } = App.useApp()
   const profiles = llm?.profiles ?? []
   const bindings = llm?.bindings ?? []
-  const [editing, setEditing] = useState<LlmProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteLlmProfile, {
     onSuccess: () => {
@@ -54,8 +61,7 @@ export function LlmPanel({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const modelOf = (p: LlmProfile) =>
-    p.provider === 'anthropic' ? p.anthropic?.model : p.openai?.model
+  const modelOf = (p: Profile) => String(p.config?.model ?? '')
 
   return (
     <>
@@ -104,26 +110,23 @@ export function LlmPanel({
   )
 }
 
-interface LlmProfileFormValues {
-  name: string
-  openai: { baseUrl: string; apiKey: string; model: string }
-  anthropic: { baseUrl: string; apiKey: string; model: string }
-}
-
 function LlmProfileDrawer({
   profile,
   open,
   onClose,
   onChanged,
 }: {
-  profile: LlmProfile | undefined
+  profile: Profile | undefined
   open: boolean
   onClose: () => void
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<LlmProfileFormValues>()
+  const [form] = Form.useForm<SchemaProfileFormValues>()
   const [result, setResult] = useState<TestState>()
+
+  const { data: describe } = useQuery(describeLlmProviders, {})
+  const schemas = describe?.providers ?? {}
 
   const createMutation = useMutation(createLlmProfile, {
     onSuccess: () => {
@@ -159,29 +162,8 @@ function LlmProfileDrawer({
     },
   ]
 
-  const storedOpenai = () => ({
-    baseUrl: profile?.openai?.baseUrl ?? '',
-    apiKey: '',
-    model: profile?.openai?.model ?? '',
-  })
-  const storedAnthropic = () => ({
-    baseUrl: profile?.anthropic?.baseUrl ?? '',
-    apiKey: '',
-    model: profile?.anthropic?.model ?? '',
-  })
-
-  const toProto = (provider: string, values: LlmProfileFormValues) => ({
-    id: profile?.id ?? '',
-    name: values.name ?? '',
-    provider,
-    openai: provider === 'openai' ? values.openai : storedOpenai(),
-    anthropic: provider === 'anthropic' ? values.anthropic : storedAnthropic(),
-  })
-
-  const openaiSecretPlaceholder = profile?.openai?.apiKeySet ? m.systemPage_secretUnchanged() : ''
-  const anthropicSecretPlaceholder = profile?.anthropic?.apiKeySet
-    ? m.systemPage_secretUnchanged()
-    : ''
+  const toProto = (provider: string, values: SchemaProfileFormValues) =>
+    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
 
   return (
     <ProfileFormDrawer
@@ -191,77 +173,59 @@ function LlmProfileDrawer({
       profileProvider={profile?.provider}
       providers={providers}
     >
-      {(provider) => (
-        <Form
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          initialValues={{
-            name: profile?.name ?? '',
-            openai: storedOpenai(),
-            anthropic: storedAnthropic(),
-          }}
-          onFinish={(values) => {
-            const p = toProto(provider, values)
-            if (profile) updateMutation.mutate({ profile: p })
-            else createMutation.mutate({ profile: p })
-          }}
-        >
-          <Form.Item
-            name="name"
-            label={m.systemPage_profileName()}
-            rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+      {(provider) => {
+        const fields = schemas[provider]?.fields ?? []
+        return (
+          <Form
+            form={form}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{
+              name: profile?.name ?? '',
+              config: schemaInitialConfig(profile, provider, fields),
+            }}
+            onFinish={(values) => {
+              const p = toProto(provider, values)
+              if (profile) updateMutation.mutate({ profile: p })
+              else createMutation.mutate({ profile: p })
+            }}
           >
-            <Input placeholder={m.systemPage_llmProfileNamePlaceholder()} />
-          </Form.Item>
-
-          <div className="grid grid-cols-2 gap-4">
             <Form.Item
-              name={[provider, 'baseUrl']}
-              label={m.systemPage_llmBaseUrl()}
-              extra={m.systemPage_llmBaseUrlHint()}
-              className="col-span-2"
+              name="name"
+              label={m.systemPage_profileName()}
+              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
             >
-              <Input
-                placeholder={
-                  provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'
-                }
-              />
+              <Input placeholder={m.systemPage_llmProfileNamePlaceholder()} />
             </Form.Item>
-            <Form.Item name={[provider, 'apiKey']} label="API Key">
-              <Input.Password
-                autoComplete="new-password"
-                placeholder={
-                  provider === 'openai' ? openaiSecretPlaceholder : anthropicSecretPlaceholder
-                }
-              />
-            </Form.Item>
-            <Form.Item name={[provider, 'model']} label={m.systemPage_llmModel()}>
-              <Input placeholder={provider === 'openai' ? 'gpt-4o-mini' : 'claude-sonnet-4-5'} />
-            </Form.Item>
-          </div>
 
-          <TestAlert result={result} />
-          <div className="flex gap-2">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {m.common_save()}
-            </Button>
-            <Button
-              loading={testMutation.isPending}
-              onClick={() => {
-                setResult(undefined)
-                testMutation.mutate({ profile: toProto(provider, form.getFieldsValue()) })
-              }}
-            >
-              {m.systemPage_testLlm()}
-            </Button>
-          </div>
-        </Form>
-      )}
+            <div className="grid grid-cols-2 gap-4">
+              {fields.map((field) => (
+                <SchemaField key={field.key} field={field} profile={profile} />
+              ))}
+            </div>
+
+            <TestAlert result={result} />
+            <div className="flex gap-2">
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={createMutation.isPending || updateMutation.isPending}
+              >
+                {m.common_save()}
+              </Button>
+              <Button
+                loading={testMutation.isPending}
+                onClick={() => {
+                  setResult(undefined)
+                  testMutation.mutate({ profile: toProto(provider, form.getFieldsValue()) })
+                }}
+              >
+                {m.systemPage_testLlm()}
+              </Button>
+            </div>
+          </Form>
+        )
+      }}
     </ProfileFormDrawer>
   )
 }

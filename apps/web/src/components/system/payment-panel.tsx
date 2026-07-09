@@ -3,8 +3,8 @@ import { useMutation } from '@connectrpc/connect-query'
 import {
   bindPaymentPurpose,
   deletePaymentProfile,
-  type PaymentProfile,
   type PaymentSettings,
+  type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
 import { useState } from 'react'
@@ -32,7 +32,7 @@ export function PaymentPanel({
   const { message } = App.useApp()
   const profiles = payment?.profiles ?? []
   const bindings = payment?.bindings ?? []
-  const [editing, setEditing] = useState<PaymentProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deletePaymentProfile, {
     onSuccess: () => {
@@ -50,12 +50,12 @@ export function PaymentPanel({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const descriptionOf = (p: PaymentProfile) => {
+  const descriptionOf = (p: Profile) => {
     switch (p.provider) {
       case 'alipay':
-        return p.alipay?.appId ?? ''
+        return String(p.config?.appId ?? '')
       case 'wechat':
-        return p.wechat?.mchId ?? ''
+        return String(p.config?.mchId ?? '')
       default:
         return ''
     }

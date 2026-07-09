@@ -1,6 +1,6 @@
 # 基础设施不变量为 AI agent 优化：确定性生成 / 类型优先于可被糊弄的测试与反射
 
-> **状态**：部分被 ADR-0005 超越。本 ADR 的 *agent-legibility 内核*（proto 单一真源＝决策 2、provider 派发零反射且字面可 grep＝决策 4、integration 作完整布线范例＝决策 6）**仍然在 force**；被超越的只有「模板 cherry-pick、diff 可移植」这一可移植性约束——integration（原 channel）自 2026-07 起抽成 go.work 独立模块。go-plugin / 运行时插件 / schema 驱动运行时表单**仍被本 ADR 排除**。见 ADR-0005。
+> **状态**：部分被 ADR-0005 与 ADR-0006 超越。本 ADR 的 *agent-legibility 内核*（provider 派发零反射且字面可 grep＝决策 4、integration 作完整布线范例＝决策 6）**仍然在 force**；「模板 cherry-pick、diff 可移植」被 ADR-0005 超越，typed profile + `protoc-gen-settings` 被 ADR-0006 的 schema-driven provider 配置超越。go-plugin / 运行时加载仍被本 ADR 排除。
 
 ## 背景
 
@@ -19,17 +19,17 @@
 基础设施（channel / profile / binding / 权限 / authz / 配置）的一致性与正确性，按以下优先级保证——**越靠前越优先**：
 
 1. **不可表达 > 可被糊弄。** 能做成**确定性、agent 无法蒙混**的约束（生成的表 / 类型 / 位置构造器 / drift-gate）时，优先于**可被 agent hack 到绿**的护栏测试或散文清单。测试**保留**，但降级为**行为兜底**，不作为结构真源。
-2. **proto = 单一 spec。** 跨端契约与 channel 形状的唯一结构化真源；派生物生成，不手抄。
-3. **无决策的机械映射 → build-time 生成。** 密钥掩码 / 编解码这类高频、易错、无判断的映射由 `protoc-gen-settings` 生成（见 `cmd/protoc-gen-settings`）。这类生成物 git-ignore 可接受——agent 几乎不需读它。
+2. **proto = 单一 wire spec。** 跨端 RPC 信封、权限与枚举目录的唯一结构化真源；provider 配置形状由 ADR-0006 的 driver schema 声明。
+3. **无决策的机械目录 → build-time 生成；provider config → schema 运行时处理。** 权限/支付目录仍生成；密钥掩码、空密钥保留和不可变字段已改由 `integrationkit/schema` + `channelOps` 按 schema 处理。
 4. **反射不用于策略 / 目录表。** authz、权限目录、provider 派发保持**字面可 grep 的提交源**（如 `internal/server/authz.go` 的决策表），绝不改成启动时反射描述符建表。
 5. **跨语言镜像用 drift-gate。** 前端对后端目录的镜像（`apps/web/src/lib/payments.ts`、`permissions.ts`）必须有一个把漂移变成**构建失败**的确定性闸（锚 + verify，或直接从 proto 生成），而非无兜底、也非可糊弄的测试。
 6. **每个横切关注点保留一个「完整布线的范例」** 作 agent 的主教材（本仓库每个 channel 即是）；`AGENTS.md` 散文是**薄导航**，非主信号。
 
 ## 现状符合度（审计锚点）
 
-**已符合**：统一形状 `Channel[P]`（`settings/settings.go`）+ `channelOps[P]`（`rpc/system_channel.go`）+ `Registry[P,Ops]` + `Catalog`（`channel/channel.go`）;机械映射已生成（`protoc-gen-settings`）;策略表零反射、字面可读（`authz.go`）;7 个 channel 在 `proto/system/v1/system.proto` 里形状高度一致。**本仓库本就大体贴合上述规范。**
+**当前符合（经 ADR-0005/0006 修订后）**：统一形状 `Integration[GenericProfile]`（`settings/settings.go`）+ `channelOps`（`rpc/system_channel.go`）+ provider schema/registry + `Catalog`；密钥掩码/合并由 schema 通用处理；策略表零反射、字面可读（`authz.go`）。
 
-**可被糊弄的缝（决策 1 的整改对象）**：`config.go` 的平行 `SetDefault` ↔ `TestLoadEnvOverrides`;`auth.Catalog` ↔ `Permission` 枚举;provider/method 的 `in:` ↔ Go 注册表 / `pay.Methods()`;`authz` 表 ↔ 覆盖测试——皆靠**运行时测试**对齐，可被 agent 糊弄。
+**可被糊弄的缝（决策 1 的整改对象）**：`config.go` 的平行 `SetDefault` ↔ `TestLoadEnvOverrides`;`auth.Catalog` ↔ `Permission` 枚举;provider/method schema ↔ Go 注册表 / `pay.Methods()`;`authz` 表 ↔ 覆盖测试——仍需继续把漂移前移到生成或类型层。
 
 **真正的洞（决策 5）**：`payments.ts` / `permissions.ts` 镜像后端目录，**无编译也无测试兜底**——后端加一个 method，前端静默烂掉，无处报错。
 

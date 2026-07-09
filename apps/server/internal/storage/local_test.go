@@ -14,7 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -41,11 +41,11 @@ func newLocalFixture(t *testing.T) (*settings.Store, *Client) {
 	t.Helper()
 	store := settings.NewStore(&memQuerier{rows: map[string][]byte{}})
 	cfg := settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "p1",
 			Name:     "local",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+			Config:   map[string]any{"directory": t.TempDir()},
 		}},
 		Bindings: map[string][]string{PurposeAvatars: {"p1"}},
 	}
@@ -195,7 +195,7 @@ func TestLocalResolveURLPublicPurposeIsUnsignedAndStable(t *testing.T) {
 }
 
 func TestLocalObjectPathRejectsTraversal(t *testing.T) {
-	cfg := systemcodec.LocalStorageConfig{Directory: "/srv/data"}
+	cfg := map[string]any{"directory": "/srv/data"}
 	if _, err := localObjectPath(cfg, "../etc/passwd"); err == nil {
 		t.Fatal("path traversal must be rejected")
 	}
@@ -206,9 +206,9 @@ func TestLocalObjectPathRejectsTraversal(t *testing.T) {
 
 func TestLocalTestProvesDirectoryWritable(t *testing.T) {
 	_, client := newLocalFixture(t)
-	err := client.TestConnection(t.Context(), systemcodec.StorageProfile{
+	err := client.TestConnection(t.Context(), kitsettings.GenericProfile{
 		Provider: "local",
-		Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+		Config:   map[string]any{"directory": t.TempDir()},
 	})
 	if err != nil {
 		t.Fatalf("writable directory must pass: %v", err)

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // WeChat Open Platform website-application QR login. The oddities drivers
@@ -23,9 +22,9 @@ const (
 
 var wechatHTTP = &http.Client{Timeout: 10 * time.Second}
 
-func wechatAuthorizeURL(_ context.Context, p systemcodec.OauthProfile, redirectURI, state string) (string, FlowSecrets, error) {
+func wechatAuthorizeURL(_ context.Context, config map[string]any, redirectURI, state string) (string, FlowSecrets, error) {
 	url := wechatAuthorizeEndpoint + "?" + encodeQuery(
-		"appid", p.Wechat.AppId,
+		"appid", cfgStr(config, "appId"),
 		"redirect_uri", redirectURI,
 		"response_type", "code",
 		"scope", "snsapi_login",
@@ -50,10 +49,10 @@ type wechatUserInfoResponse struct {
 	ErrMsg     string `json:"errmsg"`
 }
 
-func wechatExchange(ctx context.Context, p systemcodec.OauthProfile, code, _ string, _ FlowSecrets) (ExternalIdentity, error) {
+func wechatExchange(ctx context.Context, config map[string]any, code, _ string, _ FlowSecrets) (ExternalIdentity, error) {
 	tokenURL := wechatTokenEndpoint + "?" + encodeQuery(
-		"appid", p.Wechat.AppId,
-		"secret", p.Wechat.AppSecret,
+		"appid", cfgStr(config, "appId"),
+		"secret", cfgStr(config, "appSecret"),
 		"code", code,
 		"grant_type", "authorization_code",
 	)

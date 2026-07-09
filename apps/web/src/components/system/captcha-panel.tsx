@@ -1,17 +1,24 @@
 import { RadarChartOutlined, SafetyOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useMutation } from '@connectrpc/connect-query'
+import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   bindCaptchaPurpose,
-  type CaptchaProfile,
   type CaptchaSettings,
   createCaptchaProfile,
   deleteCaptchaProfile,
+  describeCaptchaProviders,
+  type Profile,
   updateCaptchaProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input, InputNumber } from 'antd'
+import { App, Button, Form, Input } from 'antd'
 import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
+import {
+  SchemaField,
+  type SchemaProfileFormValues,
+  schemaInitialConfig,
+  schemaProfileToProto,
+} from '#components/system/schema-profile-form'
 import { humanizeError } from '#lib/errors'
 import { m } from '#paraglide/messages.js'
 
@@ -35,7 +42,7 @@ export function CaptchaPanel({
   const { message } = App.useApp()
   const profiles = captcha?.profiles ?? []
   const bindings = captcha?.bindings ?? []
-  const [editing, setEditing] = useState<CaptchaProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteCaptchaProfile, {
     onSuccess: () => {
@@ -74,7 +81,7 @@ export function CaptchaPanel({
         profileDescription={(p) =>
           p.provider === 'altcha'
             ? m.systemPage_altchaDesc()
-            : (p.provider === 'geetest' ? p.geetest?.captchaId : p.turnstile?.siteKey) ||
+            : String(p.provider === 'geetest' ? p.config?.captchaId : p.config?.siteKey) ||
               m.systemPage_siteKey()
         }
         onAdd={() => setEditing('new')}
@@ -99,26 +106,22 @@ export function CaptchaPanel({
   )
 }
 
-interface CaptchaProfileFormValues {
-  name: string
-  turnstile: { siteKey: string; secretKey: string }
-  geetest: { captchaId: string; captchaKey: string }
-  altcha: { difficulty: number }
-}
-
 function CaptchaProfileDrawer({
   profile,
   open,
   onClose,
   onChanged,
 }: {
-  profile: CaptchaProfile | undefined
+  profile: Profile | undefined
   open: boolean
   onClose: () => void
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<CaptchaProfileFormValues>()
+  const [form] = Form.useForm<SchemaProfileFormValues>()
+
+  const { data: describe } = useQuery(describeCaptchaProviders, {})
+  const schemas = describe?.providers ?? {}
 
   const createMutation = useMutation(createCaptchaProfile, {
     onSuccess: () => {
@@ -156,24 +159,8 @@ function CaptchaProfileDrawer({
     },
   ]
 
-  const storedTurnstile = () => ({
-    siteKey: profile?.turnstile?.siteKey ?? '',
-    secretKey: '',
-  })
-  const storedGeetest = () => ({
-    captchaId: profile?.geetest?.captchaId ?? '',
-    captchaKey: '',
-  })
-  const storedAltcha = () => ({
-    difficulty: profile?.altcha?.difficulty ?? 0,
-  })
-
-  const turnstileSecretPlaceholder = profile?.turnstile?.secretKeySet
-    ? m.systemPage_secretUnchanged()
-    : ''
-  const geetestSecretPlaceholder = profile?.geetest?.captchaKeySet
-    ? m.systemPage_secretUnchanged()
-    : ''
+  const toProto = (provider: string, values: SchemaProfileFormValues) =>
+    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
 
   return (
     <ProfileFormDrawer
@@ -183,81 +170,47 @@ function CaptchaProfileDrawer({
       profileProvider={profile?.provider}
       providers={providers}
     >
-      {(provider) => (
-        <Form
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          initialValues={{
-            name: profile?.name ?? '',
-            turnstile: storedTurnstile(),
-            geetest: storedGeetest(),
-            altcha: storedAltcha(),
-          }}
-          onFinish={(values: CaptchaProfileFormValues) => {
-            const p = {
-              id: profile?.id ?? '',
-              name: values.name ?? '',
-              provider,
-              turnstile: provider === 'turnstile' ? values.turnstile : storedTurnstile(),
-              geetest: provider === 'geetest' ? values.geetest : storedGeetest(),
-              altcha: provider === 'altcha' ? values.altcha : storedAltcha(),
-            }
-            if (profile) updateMutation.mutate({ profile: p })
-            else createMutation.mutate({ profile: p })
-          }}
-        >
-          <Form.Item
-            name="name"
-            label={m.systemPage_profileName()}
-            rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+      {(provider) => {
+        const fields = schemas[provider]?.fields ?? []
+        return (
+          <Form
+            form={form}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{
+              name: profile?.name ?? '',
+              config: schemaInitialConfig(profile, provider, fields),
+            }}
+            onFinish={(values) => {
+              const p = toProto(provider, values)
+              if (profile) updateMutation.mutate({ profile: p })
+              else createMutation.mutate({ profile: p })
+            }}
           >
-            <Input placeholder={m.systemPage_captchaProfileNamePlaceholder()} />
-          </Form.Item>
-
-          {provider === 'altcha' ? (
             <Form.Item
-              name={['altcha', 'difficulty']}
-              label={m.systemPage_altchaDifficulty()}
-              extra={m.systemPage_altchaDifficultyHint()}
+              name="name"
+              label={m.systemPage_profileName()}
+              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
             >
-              <InputNumber min={0} max={10000000} step={100000} className="w-full" />
+              <Input placeholder={m.systemPage_captchaProfileNamePlaceholder()} />
             </Form.Item>
-          ) : provider === 'turnstile' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item name={['turnstile', 'siteKey']} label={m.systemPage_siteKey()}>
-                <Input autoComplete="off" />
-              </Form.Item>
-              <Form.Item name={['turnstile', 'secretKey']} label={m.systemPage_secretKey()}>
-                <Input.Password
-                  autoComplete="new-password"
-                  placeholder={turnstileSecretPlaceholder}
-                />
-              </Form.Item>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item name={['geetest', 'captchaId']} label={m.systemPage_captchaId()}>
-                <Input autoComplete="off" />
-              </Form.Item>
-              <Form.Item name={['geetest', 'captchaKey']} label={m.systemPage_captchaKey()}>
-                <Input.Password
-                  autoComplete="new-password"
-                  placeholder={geetestSecretPlaceholder}
-                />
-              </Form.Item>
-            </div>
-          )}
 
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={createMutation.isPending || updateMutation.isPending}
-          >
-            {m.common_save()}
-          </Button>
-        </Form>
-      )}
+            <div className="grid grid-cols-2 gap-4">
+              {fields.map((field) => (
+                <SchemaField key={field.key} field={field} profile={profile} />
+              ))}
+            </div>
+
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={createMutation.isPending || updateMutation.isPending}
+            >
+              {m.common_save()}
+            </Button>
+          </Form>
+        )
+      }}
     </ProfileFormDrawer>
   )
 }

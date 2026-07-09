@@ -5,19 +5,22 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) emailOps() integrationOps[systemcodec.EmailProfile] {
-	return integrationOps[systemcodec.EmailProfile]{
-		name:        "email",
-		load:        s.settings.Email,
-		save:        s.settings.SetEmail,
-		purposes:    mail.Purposes,
-		keepSecrets: systemcodec.EmailCodec.Merge,
+func (s *SystemService) emailOps() integrationOps[kitsettings.GenericProfile] {
+	return integrationOps[kitsettings.GenericProfile]{
+		name:     "email",
+		load:     s.settings.Email,
+		save:     s.settings.SetEmail,
+		purposes: mail.Purposes,
+		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+			return mergeProfile(mail.Schemas(), updated, stored)
+		},
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("email", mail.Schemas(), p) },
 	}
 }
 
@@ -25,12 +28,12 @@ func (s *SystemService) CreateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateEmailProfileRequest],
 ) (*connect.Response[systemv1.CreateEmailProfileResponse], error) {
-	profile, err := s.emailOps().create(ctx, s, systemcodec.EmailCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.emailOps().create(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.CreateEmailProfileResponse{
-		Profile: systemcodec.EmailCodec.Mask(profile),
+		Profile: emailProfileToProto(profile),
 	}), nil
 }
 
@@ -38,12 +41,12 @@ func (s *SystemService) UpdateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateEmailProfileRequest],
 ) (*connect.Response[systemv1.UpdateEmailProfileResponse], error) {
-	profile, err := s.emailOps().update(ctx, s, systemcodec.EmailCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.emailOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.UpdateEmailProfileResponse{
-		Profile: systemcodec.EmailCodec.Mask(profile),
+		Profile: emailProfileToProto(profile),
 	}), nil
 }
 
@@ -74,9 +77,9 @@ func (s *SystemService) SendTestEmail(
 	ctx context.Context,
 	req *connect.Request[systemv1.SendTestEmailRequest],
 ) (*connect.Response[systemv1.SendTestEmailResponse], error) {
-	var in *systemcodec.EmailProfile
+	var in *kitsettings.GenericProfile
 	if req.Msg.GetProfile() != nil {
-		p := systemcodec.EmailCodec.FromProto(req.Msg.GetProfile())
+		p := profileFromProto(req.Msg.GetProfile())
 		in = &p
 	}
 	profile, err := s.emailOps().resolveTestProfile(ctx, s, in, req.Msg.GetProfileId())
@@ -95,9 +98,9 @@ func (s *SystemService) SendTestEmail(
 }
 
 func toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
-	profiles := make([]*systemv1.EmailProfile, len(cfg.Profiles))
+	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = systemcodec.EmailCodec.Mask(p)
+		profiles[i] = emailProfileToProto(p)
 	}
 	// Bindings are emitted in catalog order so the UI renders a stable list.
 	bindings := make([]*systemv1.EmailBinding, len(mail.Purposes))
@@ -108,4 +111,15 @@ func toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
 		}
 	}
 	return &systemv1.EmailSettings{Profiles: profiles, Bindings: bindings}
+}
+
+func (s *SystemService) DescribeEmailProviders(
+	_ context.Context,
+	_ *connect.Request[systemv1.DescribeEmailProvidersRequest],
+) (*connect.Response[systemv1.DescribeEmailProvidersResponse], error) {
+	return connect.NewResponse(&systemv1.DescribeEmailProvidersResponse{Providers: describeProviders(mail.Schemas())}), nil
+}
+
+func emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	return profileToProto(p, mail.Schemas()[p.Provider])
 }

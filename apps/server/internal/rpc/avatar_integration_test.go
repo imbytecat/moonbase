@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
 	storagev1 "github.com/imbytecat/moonbase/server/internal/gen/storage/v1"
@@ -28,11 +28,11 @@ func TestChangeAvatarTransfersAttachment(t *testing.T) {
 
 	store := settings.NewStore(repository.New(pool))
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "local-avatar",
 			Name:     "Local Avatar",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+			Config:   map[string]any{"directory": t.TempDir()},
 		}},
 		Bindings: map[string][]string{storage.PurposeAvatars: {"local-avatar"}},
 	}); err != nil {

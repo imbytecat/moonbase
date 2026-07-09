@@ -64,7 +64,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "storage not configured", http.StatusNotFound)
 		return
 	}
-	path, err := localObjectPath(cfg.Local, key)
+	path, err := localObjectPath(cfg.Config, key)
 	if err != nil {
 		http.Error(w, "invalid object key", http.StatusBadRequest)
 		return

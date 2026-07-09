@@ -10,10 +10,13 @@ package storage
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -73,28 +76,31 @@ type ObjectStore interface {
 }
 
 type ConnectionTester interface {
-	TestConnection(ctx context.Context, cfg systemcodec.StorageProfile) error
+	TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error
 }
 
 // storageOps is the per-provider seam: each backend implements the three
-// storage verbs against its own config shape on StorageProfile. purpose
+// storage verbs against its own schema-described config shape. purpose
 // rides along because the local driver embeds it in signed URLs (the HTTP
 // handler re-resolves purpose → profile → directory at request time, so
 // rebinding a purpose never leaves stale URLs pointing at the wrong
 // directory).
 type storageOps struct {
-	presignPut func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key, contentType string, expires time.Duration) (string, error)
-	resolveURL func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key string, expires time.Duration) (string, error)
-	delete     func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile, purpose, key string) error
-	test       func(c *Client, ctx context.Context, cfg systemcodec.StorageProfile) error
+	presignPut func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key, contentType string, expires time.Duration) (string, error)
+	resolveURL func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key string, expires time.Duration) (string, error)
+	delete     func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile, purpose, key string) error
+	test       func(c *Client, ctx context.Context, cfg kitsettings.GenericProfile) error
 }
 
-var drivers = integration.Registry[systemcodec.StorageProfile, storageOps]{
+type driver struct {
+	schema schema.Schema
+	ops    storageOps
+}
+
+var drivers = map[string]driver{
 	"s3": {
-		Usable: func(p systemcodec.StorageProfile) bool {
-			return p.S3.Endpoint != "" && p.S3.Bucket != "" && p.S3.AccessKeyId != ""
-		},
-		Ops: storageOps{
+		schema: s3Schema,
+		ops: storageOps{
 			presignPut: (*Client).s3PresignPut,
 			resolveURL: (*Client).s3ResolveURL,
 			delete:     (*Client).s3Delete,
@@ -102,8 +108,8 @@ var drivers = integration.Registry[systemcodec.StorageProfile, storageOps]{
 		},
 	},
 	"local": {
-		Usable: func(systemcodec.StorageProfile) bool { return true },
-		Ops: storageOps{
+		schema: localSchema,
+		ops: storageOps{
 			presignPut: (*Client).localPresignPut,
 			resolveURL: (*Client).localResolveURL,
 			delete:     (*Client).localDelete,
@@ -112,10 +118,22 @@ var drivers = integration.Registry[systemcodec.StorageProfile, storageOps]{
 	},
 }
 
-// Providers lists the registered driver names, sorted — contract-tested
-// against the proto `in:` constraint in providers_test.go.
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
+}
+
+// Providers lists the registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
+}
+
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 type Client struct {
@@ -155,26 +173,26 @@ func (c *Client) Delete(ctx context.Context, purpose, key string) error {
 	return ops.delete(c, ctx, cfg, purpose, key)
 }
 
-func (c *Client) TestConnection(ctx context.Context, cfg systemcodec.StorageProfile) error {
-	ops, ok := drivers.OpsFor(cfg)
-	if !ok {
+func (c *Client) TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error {
+	d, ok := drivers[cfg.Provider]
+	if !ok || !d.schema.Usable(cfg.Config) {
 		return ErrNotConfigured
 	}
-	return ops.test(c, ctx, cfg)
+	return d.ops.test(c, ctx, cfg)
 }
 
-func (c *Client) opsFor(ctx context.Context, purpose string) (storageOps, systemcodec.StorageProfile, error) {
+func (c *Client) opsFor(ctx context.Context, purpose string) (storageOps, kitsettings.GenericProfile, error) {
 	st, err := c.store.Storage(ctx)
 	if err != nil {
-		return storageOps{}, systemcodec.StorageProfile{}, err
+		return storageOps{}, kitsettings.GenericProfile{}, err
 	}
 	cfg, ok := st.ProfileFor(purpose)
 	if !ok {
 		return storageOps{}, cfg, ErrNotConfigured
 	}
-	ops, ok := drivers.OpsFor(cfg)
-	if !ok {
+	d, ok := drivers[cfg.Provider]
+	if !ok || !d.schema.Usable(cfg.Config) {
 		return storageOps{}, cfg, ErrNotConfigured
 	}
-	return ops, cfg, nil
+	return d.ops, cfg, nil
 }

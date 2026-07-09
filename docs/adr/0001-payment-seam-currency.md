@@ -10,7 +10,7 @@
 
 **币种锁 CNY。** 金额固定为 `int64`「整数分」（100 分 = 1 元）；Alipay driver 用 `cents/100` 格式化成元字符串，WeChat 直接用整数分。`payment_orders.currency` 列保留、恒为 `'CNY'`，作为「这是个 CNY 系统」的诚实标注，而非运行时可变维度。**不**给 wire 加 `currency` 字段，**不**建 ISO 4217 最小单位指数表。
 
-**商户模式锁直连。** `PaymentProfile` 只承载直连商户凭证 + 已签约产品清单（`methods`）+ 验签模式。
+**商户模式锁直连。** 支付 `Profile.config` 只承载直连商户凭证 + 已签约产品清单（`methods`）+ 验签模式。
 
 **签约参数不提前泛化。** Alipay 小程序 JSAPI 的 `op_app_id` 保留为一次性特例字段，不泛化成通用的 `method → params` 槽——目前只有它一个这种参数，泛化即早产抽象。
 

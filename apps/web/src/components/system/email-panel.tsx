@@ -3,8 +3,8 @@ import { useMutation } from '@connectrpc/connect-query'
 import {
   bindEmailPurpose,
   deleteEmailProfile,
-  type EmailProfile,
   type EmailSettings,
+  type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
 import { useState } from 'react'
@@ -32,7 +32,7 @@ export function EmailPanel({
   const { message } = App.useApp()
   const profiles = email?.profiles ?? []
   const bindings = email?.bindings ?? []
-  const [editing, setEditing] = useState<EmailProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteEmailProfile, {
     onSuccess: () => {
@@ -53,7 +53,10 @@ export function EmailPanel({
   return (
     <>
       <ProfileManager
-        profiles={profiles.map((p) => ({ ...p, name: p.name || p.fromAddress }))}
+        profiles={profiles.map((p) => ({
+          ...p,
+          name: p.name || String(p.config?.fromAddress ?? ''),
+        }))}
         bindings={bindings.map((b) => ({
           purpose: b.purpose,
           profileIds: b.profileId ? [b.profileId] : [],
@@ -68,7 +71,7 @@ export function EmailPanel({
         purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
         profileIcon={() => <MailOutlined className="text-lg text-(--ant-color-primary)" />}
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider] ?? p.provider} />}
-        profileDescription={(p) => p.fromAddress || m.systemPage_fromAddress()}
+        profileDescription={(p) => String(p.config?.fromAddress || m.systemPage_fromAddress())}
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}

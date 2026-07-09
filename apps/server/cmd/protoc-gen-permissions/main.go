@@ -9,7 +9,7 @@
 // The description option is read straight off the descriptor by field number,
 // so this plugin never imports the generated options.pb.go — that would be a
 // bootstrap cycle (the plugin runs inside the same buf invocation that
-// generates it), exactly as protoc-gen-settings does for its bool options.
+// generates it).
 package main
 
 import (

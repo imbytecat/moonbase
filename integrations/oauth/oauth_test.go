@@ -6,21 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 )
 
 func TestClientAuthorizeURLUsesBoundUsableProfile(t *testing.T) {
 	client := NewClient(func(context.Context) (Config, error) {
 		return Config{
-			Profiles: []systemcodec.OauthProfile{{
+			Profiles: []kitsettings.GenericProfile{{
 				Id:       "wechat-login",
-				Key:      "wechat",
 				Name:     "WeChat",
 				Provider: "wechat",
-				Wechat: systemcodec.WechatOauthConfig{
-					AppId:     "app-id",
-					AppSecret: "app-secret",
-				},
+				Config:   map[string]any{"key": "wechat", "appId": "app-id", "appSecret": "app-secret"},
 			}},
 			Bindings: map[string][]string{PurposeLogin: {"wechat-login"}},
 		}, nil
@@ -49,14 +45,10 @@ func TestClientAuthorizeURLUsesBoundUsableProfile(t *testing.T) {
 func TestClientAuthorizeURLRejectsUnboundProfile(t *testing.T) {
 	client := NewClient(func(context.Context) (Config, error) {
 		return Config{
-			Profiles: []systemcodec.OauthProfile{{
+			Profiles: []kitsettings.GenericProfile{{
 				Id:       "wechat-login",
-				Key:      "wechat",
 				Provider: "wechat",
-				Wechat: systemcodec.WechatOauthConfig{
-					AppId:     "app-id",
-					AppSecret: "app-secret",
-				},
+				Config:   map[string]any{"key": "wechat", "appId": "app-id", "appSecret": "app-secret"},
 			}},
 			Bindings: map[string][]string{},
 		}, nil

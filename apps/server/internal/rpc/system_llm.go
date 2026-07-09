@@ -5,19 +5,22 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrations/llm"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) llmOps() integrationOps[systemcodec.LlmProfile] {
-	return integrationOps[systemcodec.LlmProfile]{
-		name:        "model",
-		load:        s.settings.Llm,
-		save:        s.settings.SetLlm,
-		purposes:    llm.Purposes,
-		keepSecrets: systemcodec.LlmCodec.Merge,
+func (s *SystemService) llmOps() integrationOps[kitsettings.GenericProfile] {
+	return integrationOps[kitsettings.GenericProfile]{
+		name:     "model",
+		load:     s.settings.Llm,
+		save:     s.settings.SetLlm,
+		purposes: llm.Purposes,
+		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+			return mergeProfile(llm.Schemas(), updated, stored)
+		},
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("llm", llm.Schemas(), p) },
 	}
 }
 
@@ -25,12 +28,12 @@ func (s *SystemService) CreateLlmProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateLlmProfileRequest],
 ) (*connect.Response[systemv1.CreateLlmProfileResponse], error) {
-	profile, err := s.llmOps().create(ctx, s, systemcodec.LlmCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.llmOps().create(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.CreateLlmProfileResponse{
-		Profile: systemcodec.LlmCodec.Mask(profile),
+		Profile: llmProfileToProto(profile),
 	}), nil
 }
 
@@ -38,12 +41,12 @@ func (s *SystemService) UpdateLlmProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateLlmProfileRequest],
 ) (*connect.Response[systemv1.UpdateLlmProfileResponse], error) {
-	profile, err := s.llmOps().update(ctx, s, systemcodec.LlmCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.llmOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.UpdateLlmProfileResponse{
-		Profile: systemcodec.LlmCodec.Mask(profile),
+		Profile: llmProfileToProto(profile),
 	}), nil
 }
 
@@ -74,9 +77,9 @@ func (s *SystemService) TestLlm(
 	ctx context.Context,
 	req *connect.Request[systemv1.TestLlmRequest],
 ) (*connect.Response[systemv1.TestLlmResponse], error) {
-	var in *systemcodec.LlmProfile
+	var in *kitsettings.GenericProfile
 	if req.Msg.GetProfile() != nil {
-		p := systemcodec.LlmCodec.FromProto(req.Msg.GetProfile())
+		p := profileFromProto(req.Msg.GetProfile())
 		in = &p
 	}
 	profile, err := s.llmOps().resolveTestProfile(ctx, s, in, req.Msg.GetProfileId())
@@ -99,9 +102,9 @@ func (s *SystemService) TestLlm(
 }
 
 func toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
-	profiles := make([]*systemv1.LlmProfile, len(cfg.Profiles))
+	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = systemcodec.LlmCodec.Mask(p)
+		profiles[i] = llmProfileToProto(p)
 	}
 	// Bindings are emitted in catalog order so the UI renders a stable list.
 	bindings := make([]*systemv1.LlmBinding, len(llm.Purposes))
@@ -112,4 +115,15 @@ func toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
 		}
 	}
 	return &systemv1.LlmSettings{Profiles: profiles, Bindings: bindings}
+}
+
+func (s *SystemService) DescribeLlmProviders(
+	_ context.Context,
+	_ *connect.Request[systemv1.DescribeLlmProvidersRequest],
+) (*connect.Response[systemv1.DescribeLlmProvidersResponse], error) {
+	return connect.NewResponse(&systemv1.DescribeLlmProvidersResponse{Providers: describeProviders(llm.Schemas())}), nil
+}
+
+func llmProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	return profileToProto(p, llm.Schemas()[p.Provider])
 }

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/database"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -42,11 +42,11 @@ func TestReclaimUnattachedSweepsOldOrphansOnly(t *testing.T) {
 	dir := t.TempDir()
 	store := settings.NewStore(repo)
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "local-sweep",
 			Name:     "Local Sweep",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: dir},
+			Config:   map[string]any{"directory": dir},
 		}},
 		Bindings: map[string][]string{storage.PurposeAvatars: {"local-sweep"}},
 	}); err != nil {

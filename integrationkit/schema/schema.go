@@ -110,15 +110,35 @@ func (s Schema) Validate(cfg map[string]any) error {
 			}
 			continue
 		}
-		str, _ := v.(string)
-		if f.MaxLen > 0 && len(str) > f.MaxLen {
-			return fmt.Errorf("schema: %q exceeds %d characters", f.Key, f.MaxLen)
-		}
-		if f.Type == Enum && !slices.Contains(f.Options, str) {
-			return fmt.Errorf("schema: %q must be one of %v", f.Key, f.Options)
+		for _, str := range stringsOf(v) {
+			if f.MaxLen > 0 && len(str) > f.MaxLen {
+				return fmt.Errorf("schema: %q exceeds %d characters", f.Key, f.MaxLen)
+			}
+			if f.Type == Enum && !slices.Contains(f.Options, str) {
+				return fmt.Errorf("schema: %q must be one of %v", f.Key, f.Options)
+			}
 		}
 	}
 	return nil
+}
+
+func stringsOf(v any) []string {
+	switch typed := v.(type) {
+	case []string:
+		return typed
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		return []string{typed}
+	default:
+		return nil
+	}
 }
 
 // Usable reports whether every Required field is present — the cheap gate a

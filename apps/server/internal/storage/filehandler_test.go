@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -47,7 +47,7 @@ func newFileHandlerFixture(t *testing.T, files map[uuid.UUID]repository.File) (*
 		t.Fatal(err)
 	}
 	cfg, _ := st.ProfileFor(PurposeAvatars)
-	return store, srv, cfg.Local.Directory
+	return store, srv, cfgStr(cfg.Config, "directory")
 }
 
 func TestFileHandlerServesPublicLocalFile(t *testing.T) {
@@ -161,15 +161,15 @@ func TestFileHandlerRedirectsPublicS3ToStableURL(t *testing.T) {
 
 	store := settings.NewStore(&memQuerier{rows: map[string][]byte{}})
 	if err := store.SetStorage(t.Context(), settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "s3",
 			Name:     "s3",
 			Provider: "s3",
-			S3: systemcodec.S3StorageConfig{
-				Endpoint:      "s3.test",
-				Bucket:        "b",
-				AccessKeyId:   "k",
-				PublicBaseUrl: "https://cdn.test",
+			Config: map[string]any{
+				"endpoint":      "s3.test",
+				"bucket":        "b",
+				"accessKeyId":   "k",
+				"publicBaseUrl": "https://cdn.test",
 			},
 		}},
 		Bindings: map[string][]string{PurposeAvatars: {"s3"}},

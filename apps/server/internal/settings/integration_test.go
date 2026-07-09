@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 )
 
 // TestIntegrationLookups pins the pure resolution logic behind every
@@ -12,7 +12,7 @@ import (
 // preservation, deleted-target skipping, and reverse binding lookup.
 func TestIntegrationLookups(t *testing.T) {
 	ch := Storage{
-		Profiles: []systemcodec.StorageProfile{
+		Profiles: []kitsettings.GenericProfile{
 			{Id: "a", Provider: "local"},
 			{Id: "b", Provider: "s3"},
 		},
@@ -40,7 +40,7 @@ func TestIntegrationLookups(t *testing.T) {
 		t.Error("ProfileFor(stale) = true, want false (bound profile deleted)")
 	}
 
-	ids := func(ps []systemcodec.StorageProfile) []string {
+	ids := func(ps []kitsettings.GenericProfile) []string {
 		out := make([]string, 0, len(ps))
 		for _, p := range ps {
 			out = append(out, p.Id)

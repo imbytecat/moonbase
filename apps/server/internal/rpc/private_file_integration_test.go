@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
@@ -31,11 +31,11 @@ func TestPermanentFileURLPrivatePurposeAuthThenSignedRedirect(t *testing.T) {
 
 	store := settings.NewStore(repository.New(pool))
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "local-priv",
 			Name:     "Local Private",
 			Provider: "local",
-			Local:    systemcodec.LocalStorageConfig{Directory: t.TempDir()},
+			Config:   map[string]any{"directory": t.TempDir()},
 		}},
 		Bindings: map[string][]string{privatePurpose: {"local-priv"}},
 	}); err != nil {
@@ -138,16 +138,16 @@ func TestPermanentFileURLPrivatePurposeS3SignedRedirect(t *testing.T) {
 
 	store := settings.NewStore(repository.New(pool))
 	if err := store.SetStorage(ctx, settings.Storage{
-		Profiles: []systemcodec.StorageProfile{{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "s3-priv",
 			Name:     "S3 Private",
 			Provider: "s3",
-			S3: systemcodec.S3StorageConfig{
-				Endpoint:        endpoint,
-				Region:          "us-east-1",
-				Bucket:          "app",
-				AccessKeyId:     "seaweedadmin",
-				SecretAccessKey: "seaweedadmin",
+			Config: map[string]any{
+				"endpoint":        endpoint,
+				"region":          "us-east-1",
+				"bucket":          "app",
+				"accessKeyId":     "seaweedadmin",
+				"secretAccessKey": "seaweedadmin",
 			},
 		}},
 		Bindings: map[string][]string{privatePurpose: {"s3-priv"}},

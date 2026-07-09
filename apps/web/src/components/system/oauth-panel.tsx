@@ -3,8 +3,8 @@ import { useMutation } from '@connectrpc/connect-query'
 import {
   bindOauthPurpose,
   deleteOauthProfile,
-  type OauthProfile,
   type OauthSettings,
+  type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
 import { useState } from 'react'
@@ -32,7 +32,7 @@ export function OauthPanel({
   const { message } = App.useApp()
   const profiles = oauth?.profiles ?? []
   const bindings = oauth?.bindings ?? []
-  const [editing, setEditing] = useState<OauthProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteOauthProfile, {
     onSuccess: () => {
@@ -76,7 +76,7 @@ export function OauthPanel({
         }
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
         profileDescription={(p) =>
-          p.provider === 'wechat' ? (p.wechat?.appId ?? '') : (p.oidc?.issuer ?? '')
+          p.provider === 'wechat' ? String(p.config?.appId ?? '') : String(p.config?.issuer ?? '')
         }
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}

@@ -11,6 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/config"
@@ -99,6 +100,15 @@ func loginAsAdmin(t *testing.T, baseURL string, client *http.Client) {
 	if err != nil {
 		t.Fatalf("admin login failed: %v", err)
 	}
+}
+
+func mustStruct(t *testing.T, config map[string]any) *structpb.Struct {
+	t.Helper()
+	out, err := structpb.NewStruct(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestAuthFlowAndPermissions(t *testing.T) {

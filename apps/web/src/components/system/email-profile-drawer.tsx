@@ -1,31 +1,24 @@
 import { CloudOutlined, MailOutlined } from '@ant-design/icons'
-import { useMutation } from '@connectrpc/connect-query'
+import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createEmailProfile,
-  type EmailProfile,
+  describeEmailProviders,
+  type Profile,
   sendTestEmail,
   updateEmailProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input, InputNumber, Select } from 'antd'
+import { App, Button, Form, Input } from 'antd'
 import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
+import {
+  SchemaField,
+  type SchemaProfileFormValues,
+  schemaInitialConfig,
+  schemaProfileToProto,
+} from '#components/system/schema-profile-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
 import { m } from '#paraglide/messages.js'
-
-interface EmailProfileFormValues {
-  name: string
-  fromAddress: string
-  fromName: string
-  smtp: {
-    host: string
-    port: number | null
-    username: string
-    password: string
-    encryption: string
-  }
-  cloudflare: { accountId: string; apiToken: string }
-}
 
 export function EmailProfileDrawer({
   profile,
@@ -33,15 +26,18 @@ export function EmailProfileDrawer({
   onClose,
   onChanged,
 }: {
-  profile: EmailProfile | undefined
+  profile: Profile | undefined
   open: boolean
   onClose: () => void
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<EmailProfileFormValues>()
+  const [form] = Form.useForm<SchemaProfileFormValues>()
   const [result, setResult] = useState<TestState>()
   const [testTo, setTestTo] = useState('')
+
+  const { data: describe } = useQuery(describeEmailProviders, {})
+  const schemas = describe?.providers ?? {}
 
   const createMutation = useMutation(createEmailProfile, {
     onSuccess: () => {
@@ -77,36 +73,8 @@ export function EmailProfileDrawer({
     },
   ]
 
-  const storedSmtp = () => ({
-    host: profile?.smtp?.host ?? '',
-    port: profile?.smtp?.port || 587,
-    username: profile?.smtp?.username ?? '',
-    password: '',
-    encryption: profile?.smtp?.encryption || 'starttls',
-  })
-  const storedCloudflare = () => ({
-    accountId: profile?.cloudflare?.accountId ?? '',
-    apiToken: '',
-  })
-
-  const toProto = (provider: string, values: EmailProfileFormValues) => ({
-    id: profile?.id ?? '',
-    name: values.name ?? '',
-    provider,
-    fromAddress: values.fromAddress ?? '',
-    fromName: values.fromName ?? '',
-    smtp:
-      provider === 'smtp'
-        ? { ...storedSmtp(), ...values.smtp, port: values.smtp?.port ?? 587 }
-        : storedSmtp(),
-    cloudflare:
-      provider === 'cloudflare'
-        ? { ...storedCloudflare(), ...values.cloudflare }
-        : storedCloudflare(),
-  })
-
-  const smtpSecretPlaceholder = profile?.smtp?.passwordSet ? m.systemPage_secretUnchanged() : ''
-  const cfSecretPlaceholder = profile?.cloudflare?.apiTokenSet ? m.systemPage_secretUnchanged() : ''
+  const toProto = (provider: string, values: SchemaProfileFormValues) =>
+    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
 
   return (
     <ProfileFormDrawer
@@ -116,108 +84,68 @@ export function EmailProfileDrawer({
       profileProvider={profile?.provider}
       providers={providers}
     >
-      {(provider) => (
-        <Form
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          initialValues={{
-            name: profile?.name ?? '',
-            fromAddress: profile?.fromAddress ?? '',
-            fromName: profile?.fromName ?? '',
-            smtp: storedSmtp(),
-            cloudflare: storedCloudflare(),
-          }}
-          onFinish={(values) => {
-            const p = toProto(provider, values)
-            if (profile) updateMutation.mutate({ profile: p })
-            else createMutation.mutate({ profile: p })
-          }}
-        >
-          <Form.Item
-            name="name"
-            label={m.systemPage_profileName()}
-            rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+      {(provider) => {
+        const fields = schemas[provider]?.fields ?? []
+        return (
+          <Form
+            form={form}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{
+              name: profile?.name ?? '',
+              config: schemaInitialConfig(profile, provider, fields),
+            }}
+            onFinish={(values) => {
+              const p = toProto(provider, values)
+              if (profile) updateMutation.mutate({ profile: p })
+              else createMutation.mutate({ profile: p })
+            }}
           >
-            <Input placeholder={m.systemPage_emailProfileNamePlaceholder()} />
-          </Form.Item>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="fromAddress" label={m.systemPage_fromAddress()}>
-              <Input placeholder="noreply@example.com" />
+            <Form.Item
+              name="name"
+              label={m.systemPage_profileName()}
+              rules={[{ required: true, message: m.systemPage_profileNameRule() }]}
+            >
+              <Input placeholder={m.systemPage_emailProfileNamePlaceholder()} />
             </Form.Item>
-            <Form.Item name="fromName" label={m.systemPage_fromName()}>
-              <Input />
-            </Form.Item>
-          </div>
-
-          {provider === 'smtp' ? (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <Form.Item name={['smtp', 'host']} label={m.systemPage_smtpHost()}>
-                  <Input placeholder="smtp.example.com" />
-                </Form.Item>
-                <Form.Item name={['smtp', 'port']} label={m.systemPage_port()}>
-                  <InputNumber min={1} max={65535} className="!w-full" />
-                </Form.Item>
-                <Form.Item name={['smtp', 'username']} label={m.systemPage_username()}>
-                  <Input autoComplete="off" />
-                </Form.Item>
-                <Form.Item name={['smtp', 'password']} label={m.systemPage_smtpPassword()}>
-                  <Input.Password autoComplete="new-password" placeholder={smtpSecretPlaceholder} />
-                </Form.Item>
-              </div>
-              <Form.Item name={['smtp', 'encryption']} label={m.systemPage_encryption()}>
-                <Select
-                  options={[
-                    { label: 'STARTTLS (587)', value: 'starttls' },
-                    { label: 'SSL/TLS (465)', value: 'ssl' },
-                    { label: m.systemPage_encryptionNone(), value: 'none' },
-                  ]}
-                />
-              </Form.Item>
-            </>
-          ) : (
             <div className="grid grid-cols-2 gap-4">
-              <Form.Item name={['cloudflare', 'accountId']} label={m.systemPage_cfAccountId()}>
-                <Input autoComplete="off" />
-              </Form.Item>
-              <Form.Item name={['cloudflare', 'apiToken']} label={m.systemPage_cfApiToken()}>
-                <Input.Password autoComplete="new-password" placeholder={cfSecretPlaceholder} />
-              </Form.Item>
+              {fields.map((field) => (
+                <SchemaField key={field.key} field={field} profile={profile} />
+              ))}
             </div>
-          )}
 
-          <TestAlert result={result} />
-          <div className="flex gap-2">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {m.common_save()}
-            </Button>
-            <Input
-              className="max-w-56"
-              placeholder={m.systemPage_testRecipient()}
-              value={testTo}
-              onChange={(e) => setTestTo(e.target.value)}
-            />
-            <Button
-              loading={testMutation.isPending}
-              disabled={!testTo}
-              onClick={() => {
-                setResult(undefined)
-                testMutation.mutate({
-                  to: testTo,
-                  profile: toProto(provider, form.getFieldsValue()),
-                })
-              }}
-            >
-              {m.systemPage_sendTestEmail()}
-            </Button>
-          </div>
-        </Form>
-      )}
+            <TestAlert result={result} />
+            <div className="flex gap-2">
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={createMutation.isPending || updateMutation.isPending}
+              >
+                {m.common_save()}
+              </Button>
+              <Input
+                className="max-w-56"
+                placeholder={m.systemPage_testRecipient()}
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+              />
+              <Button
+                loading={testMutation.isPending}
+                disabled={!testTo}
+                onClick={() => {
+                  setResult(undefined)
+                  testMutation.mutate({
+                    to: testTo,
+                    profile: toProto(provider, form.getFieldsValue()),
+                  })
+                }}
+              >
+                {m.systemPage_sendTestEmail()}
+              </Button>
+            </div>
+          </Form>
+        )
+      }}
     </ProfileFormDrawer>
   )
 }

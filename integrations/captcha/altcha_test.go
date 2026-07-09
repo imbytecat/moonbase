@@ -10,7 +10,6 @@ import (
 	altcha "github.com/altcha-org/altcha-lib-go"
 
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 type fakeStore struct {
@@ -28,12 +27,12 @@ func (f fakeStore) CaptchaAltchaKey(context.Context) ([]byte, error) {
 
 func newAltchaTestClient(t *testing.T) *Client {
 	t.Helper()
-	cfg := kitsettings.Integration[systemcodec.CaptchaProfile]{
-		Profiles: []systemcodec.CaptchaProfile{{
+	cfg := kitsettings.Integration[kitsettings.GenericProfile]{
+		Profiles: []kitsettings.GenericProfile{{
 			Id:       "p1",
 			Name:     "altcha",
 			Provider: "altcha",
-			Altcha:   systemcodec.AltchaCaptchaConfig{Difficulty: 1000},
+			Config:   map[string]any{"difficulty": 1000},
 		}},
 		Bindings: map[string][]string{PurposeAuth: {"p1"}},
 	}

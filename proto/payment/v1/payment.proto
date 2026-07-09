@@ -1,8 +1,8 @@
 syntax = "proto3";
 
 // Package payment.v1 is the payment-order surface: the durable state machine
-// behind the payment channel (system.v1 PaymentProfile configures the
-// connections). Orders are created against a purpose-bound profile with a
+// behind the payment channel (system.v1 Profile configures the connections).
+// Orders are created against a purpose-bound profile with a
 // per-order payment method (QR scan, mobile-web redirect, or in-app JSAPI),
 // paid through the provider's hosted flow, reconciled by async notification
 // or active sync, and refunded in full. Amounts are integer cents — never

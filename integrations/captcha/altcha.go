@@ -16,8 +16,6 @@ import (
 	"time"
 
 	altcha "github.com/altcha-org/altcha-lib-go"
-
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 const (
@@ -39,7 +37,7 @@ func (c *Client) ServeAltchaChallenge(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	challenge, err := c.newAltchaChallenge(r.Context(), p.Altcha)
+	challenge, err := c.newAltchaChallenge(r.Context(), p.Config)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -49,12 +47,12 @@ func (c *Client) ServeAltchaChallenge(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(challenge)
 }
 
-func (c *Client) newAltchaChallenge(ctx context.Context, cfg systemcodec.AltchaCaptchaConfig) (*altcha.Challenge, error) {
+func (c *Client) newAltchaChallenge(ctx context.Context, config map[string]any) (*altcha.Challenge, error) {
 	key, err := c.altchaHmacKey(ctx)
 	if err != nil {
 		return nil, err
 	}
-	maxNumber := int64(cfg.Difficulty)
+	maxNumber := cfgInt64(config, "difficulty")
 	if maxNumber <= 0 {
 		maxNumber = altchaDefaultMaxNumber
 	}
@@ -73,7 +71,7 @@ func (c *Client) newAltchaChallenge(ctx context.Context, cfg systemcodec.AltchaC
 
 // verifyAltcha checks the widget's base64 payload with the official
 // library, then consumes the token so a solved challenge can't be replayed.
-func (c *Client) verifyAltcha(ctx context.Context, _ systemcodec.CaptchaProfile, token, _ string) error {
+func (c *Client) verifyAltcha(ctx context.Context, _ map[string]any, token, _ string) error {
 	key, err := c.altchaHmacKey(ctx)
 	if err != nil {
 		return err
@@ -89,6 +87,19 @@ func (c *Client) verifyAltcha(ctx context.Context, _ systemcodec.CaptchaProfile,
 		return fmt.Errorf("captcha verification failed: challenge already used")
 	}
 	return nil
+}
+
+func cfgInt64(config map[string]any, key string) int64 {
+	switch v := config[key].(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
 }
 
 func (c *Client) altchaHmacKey(ctx context.Context) (string, error) {

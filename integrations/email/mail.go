@@ -12,14 +12,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	gomail "github.com/wneessen/go-mail"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // Email purposes are code, not data: each is a fixed slot the application
@@ -36,7 +38,7 @@ var Purposes = integration.Catalog{PurposeAuth}
 
 var ErrNotConfigured = fmt.Errorf("email is not configured")
 
-type Config = kitsettings.Integration[systemcodec.EmailProfile]
+type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
 type Loader func(ctx context.Context) (Config, error)
 
@@ -44,33 +46,45 @@ type Loader func(ctx context.Context) (Config, error)
 // and body in, addressed by purpose.
 type Sender interface {
 	Send(ctx context.Context, purpose, to, subject, textBody string) error
-	SendWith(ctx context.Context, profile systemcodec.EmailProfile, to, subject, textBody string) error
+	SendWith(ctx context.Context, profile kitsettings.GenericProfile, to, subject, textBody string) error
 }
 
-type sendFunc = func(c *Client, ctx context.Context, p systemcodec.EmailProfile, to, subject, textBody string) error
+type sendFunc = func(c *Client, ctx context.Context, config map[string]any, to, subject, textBody string) error
 
-var drivers = integration.Registry[systemcodec.EmailProfile, sendFunc]{
+type driver struct {
+	schema schema.Schema
+	send   sendFunc
+}
+
+var drivers = map[string]driver{
 	"smtp": {
-		Usable: func(p systemcodec.EmailProfile) bool { return p.Smtp.Host != "" },
-		Ops:    (*Client).sendSmtp,
+		schema: smtpSchema,
+		send:   (*Client).sendSmtp,
 	},
 	"cloudflare": {
-		Usable: func(p systemcodec.EmailProfile) bool {
-			return p.Cloudflare.AccountId != "" && p.Cloudflare.ApiToken != ""
-		},
-		Ops: (*Client).sendCloudflare,
+		schema: cloudflareSchema,
+		send:   (*Client).sendCloudflare,
 	},
+}
+
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
 }
 
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
 // ProfileUsable reports whether the profile's driver is fully configured —
 // the same gate SendWith enforces.
-func ProfileUsable(p systemcodec.EmailProfile) bool {
-	return p.FromAddress != "" && drivers.ProfileUsable(p)
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 // Usable reports whether the purpose resolves to a usable profile — shared
@@ -103,22 +117,21 @@ func (c *Client) Send(ctx context.Context, purpose, to, subject, textBody string
 	return c.SendWith(ctx, p, to, subject, textBody)
 }
 
-func (c *Client) SendWith(ctx context.Context, profile systemcodec.EmailProfile, to, subject, textBody string) error {
+func (c *Client) SendWith(ctx context.Context, profile kitsettings.GenericProfile, to, subject, textBody string) error {
 	if !ProfileUsable(profile) {
 		return ErrNotConfigured
 	}
-	return drivers[profile.Provider].Ops(c, ctx, profile, to, subject, textBody)
+	return drivers[profile.Provider].send(c, ctx, profile.Config, to, subject, textBody)
 }
 
-func (c *Client) sendSmtp(ctx context.Context, p systemcodec.EmailProfile, to, subject, textBody string) error {
-	smtp := p.Smtp
-
+func (c *Client) sendSmtp(ctx context.Context, config map[string]any, to, subject, textBody string) error {
 	msg := gomail.NewMsg()
-	if p.FromName != "" {
-		if err := msg.FromFormat(p.FromName, p.FromAddress); err != nil {
+	fromAddress := cfgStr(config, "fromAddress")
+	if fromName := cfgStr(config, "fromName"); fromName != "" {
+		if err := msg.FromFormat(fromName, fromAddress); err != nil {
 			return fmt.Errorf("invalid from address: %w", err)
 		}
-	} else if err := msg.From(p.FromAddress); err != nil {
+	} else if err := msg.From(fromAddress); err != nil {
 		return fmt.Errorf("invalid from address: %w", err)
 	}
 	if err := msg.To(to); err != nil {
@@ -127,8 +140,8 @@ func (c *Client) sendSmtp(ctx context.Context, p systemcodec.EmailProfile, to, s
 	msg.Subject(subject)
 	msg.SetBodyString(gomail.TypeTextPlain, textBody)
 
-	opts := []gomail.Option{gomail.WithPort(int(smtp.Port))}
-	switch smtp.Encryption {
+	opts := []gomail.Option{gomail.WithPort(cfgInt(config, "port"))}
+	switch cfgStr(config, "encryption") {
 	case "ssl":
 		opts = append(opts, gomail.WithSSLPort(false))
 	case "none":
@@ -136,15 +149,15 @@ func (c *Client) sendSmtp(ctx context.Context, p systemcodec.EmailProfile, to, s
 	default: // starttls
 		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSMandatory))
 	}
-	if smtp.Username != "" {
+	if username := cfgStr(config, "username"); username != "" {
 		opts = append(opts,
 			gomail.WithSMTPAuth(gomail.SMTPAuthAutoDiscover),
-			gomail.WithUsername(smtp.Username),
-			gomail.WithPassword(smtp.Password),
+			gomail.WithUsername(username),
+			gomail.WithPassword(cfgStr(config, "password")),
 		)
 	}
 
-	client, err := gomail.NewClient(smtp.Host, opts...)
+	client, err := gomail.NewClient(cfgStr(config, "host"), opts...)
 	if err != nil {
 		return fmt.Errorf("create smtp client: %w", err)
 	}
@@ -157,12 +170,10 @@ func (c *Client) sendSmtp(ctx context.Context, p systemcodec.EmailProfile, to, s
 // sendCloudflare posts to the Cloudflare Email Service (Email Sending) API:
 // POST /accounts/{account_id}/email/sending/send with a Bearer token.
 // https://developers.cloudflare.com/email-service/api/send-emails/rest-api/
-func (c *Client) sendCloudflare(ctx context.Context, p systemcodec.EmailProfile, to, subject, textBody string) error {
-	cf := p.Cloudflare
-
-	from := p.FromAddress
-	if p.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", p.FromName, p.FromAddress)
+func (c *Client) sendCloudflare(ctx context.Context, config map[string]any, to, subject, textBody string) error {
+	from := cfgStr(config, "fromAddress")
+	if fromName := cfgStr(config, "fromName"); fromName != "" {
+		from = fmt.Sprintf("%s <%s>", fromName, from)
 	}
 	payload, err := json.Marshal(map[string]string{
 		"to":      to,
@@ -175,12 +186,12 @@ func (c *Client) sendCloudflare(ctx context.Context, p systemcodec.EmailProfile,
 	}
 
 	endpoint := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/email/sending/send", cf.AccountId)
+		"https://api.cloudflare.com/client/v4/accounts/%s/email/sending/send", cfgStr(config, "accountId"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+cf.ApiToken)
+	req.Header.Set("Authorization", "Bearer "+cfgStr(config, "apiToken"))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
@@ -207,4 +218,22 @@ func (c *Client) sendCloudflare(ctx context.Context, p systemcodec.EmailProfile,
 		return fmt.Errorf("cloudflare send: http %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
+}
+
+func cfgInt(config map[string]any, key string) int {
+	switch v := config[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }

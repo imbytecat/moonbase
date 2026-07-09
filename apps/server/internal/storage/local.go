@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 )
 
 // The local driver stores objects on the server's own filesystem. There is
@@ -24,21 +24,22 @@ import (
 // DefaultLocalDirectory backs local profiles with an empty directory field.
 const DefaultLocalDirectory = "data/storage"
 
-func localDir(cfg systemcodec.LocalStorageConfig) string {
-	if cfg.Directory == "" {
+func localDir(config map[string]any) string {
+	directory := cfgStr(config, "directory")
+	if directory == "" {
 		return DefaultLocalDirectory
 	}
-	return cfg.Directory
+	return directory
 }
 
-func (c *Client) localPresignPut(ctx context.Context, _ systemcodec.StorageProfile, purpose, key, _ string, expires time.Duration) (string, error) {
+func (c *Client) localPresignPut(ctx context.Context, _ kitsettings.GenericProfile, purpose, key, _ string, expires time.Duration) (string, error) {
 	return c.localSignedURL(ctx, "PUT", purpose, key, expires)
 }
 
 // localResolveURL returns an unsigned stable URL for public purposes (the
 // handler serves public GETs without a signature) and a short-lived signed
 // URL for private ones.
-func (c *Client) localResolveURL(ctx context.Context, _ systemcodec.StorageProfile, purpose, key string, expires time.Duration) (string, error) {
+func (c *Client) localResolveURL(ctx context.Context, _ kitsettings.GenericProfile, purpose, key string, expires time.Duration) (string, error) {
 	if VisibilityOf(purpose) == VisibilityPublic {
 		return "/api/files/" + purpose + "/" + key, nil
 	}
@@ -47,8 +48,8 @@ func (c *Client) localResolveURL(ctx context.Context, _ systemcodec.StorageProfi
 
 // localDelete removes the on-disk object. A missing file is not an error, so
 // the sweep is idempotent under crash-resume (ADR-0003).
-func (c *Client) localDelete(_ context.Context, cfg systemcodec.StorageProfile, _, key string) error {
-	path, err := localObjectPath(cfg.Local, key)
+func (c *Client) localDelete(_ context.Context, cfg kitsettings.GenericProfile, _, key string) error {
+	path, err := localObjectPath(cfg.Config, key)
 	if err != nil {
 		return err
 	}
@@ -59,8 +60,8 @@ func (c *Client) localDelete(_ context.Context, cfg systemcodec.StorageProfile, 
 }
 
 // localTest proves the directory is writable by round-tripping a probe file.
-func (c *Client) localTest(_ context.Context, cfg systemcodec.StorageProfile) error {
-	dir := localDir(cfg.Local)
+func (c *Client) localTest(_ context.Context, cfg kitsettings.GenericProfile) error {
+	dir := localDir(cfg.Config)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create directory %q: %w", dir, err)
 	}
@@ -105,12 +106,17 @@ func verifyLocalSignature(secret []byte, method, purpose, key string, exp int64,
 
 // localObjectPath maps an object key into the profile directory, rejecting
 // path traversal: the cleaned path must stay inside the directory.
-func localObjectPath(cfg systemcodec.LocalStorageConfig, key string) (string, error) {
-	dir := localDir(cfg)
+func localObjectPath(config map[string]any, key string) (string, error) {
+	dir := localDir(config)
 	path := filepath.Join(dir, filepath.FromSlash(key))
 	rel, err := filepath.Rel(dir, path)
 	if err != nil || rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
 		return "", fmt.Errorf("invalid object key %q", key)
 	}
 	return path, nil
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }

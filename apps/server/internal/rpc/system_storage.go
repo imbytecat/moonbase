@@ -5,19 +5,22 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
-func (s *SystemService) storageOps() integrationOps[systemcodec.StorageProfile] {
-	return integrationOps[systemcodec.StorageProfile]{
-		name:        "storage",
-		load:        s.settings.Storage,
-		save:        s.settings.SetStorage,
-		purposes:    storage.Purposes,
-		keepSecrets: systemcodec.StorageCodec.Merge,
+func (s *SystemService) storageOps() integrationOps[kitsettings.GenericProfile] {
+	return integrationOps[kitsettings.GenericProfile]{
+		name:     "storage",
+		load:     s.settings.Storage,
+		save:     s.settings.SetStorage,
+		purposes: storage.Purposes,
+		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+			return mergeProfile(storage.Schemas(), updated, stored)
+		},
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("storage", storage.Schemas(), p) },
 	}
 }
 
@@ -25,12 +28,12 @@ func (s *SystemService) CreateStorageProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateStorageProfileRequest],
 ) (*connect.Response[systemv1.CreateStorageProfileResponse], error) {
-	profile, err := s.storageOps().create(ctx, s, systemcodec.StorageCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.storageOps().create(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.CreateStorageProfileResponse{
-		Profile: systemcodec.StorageCodec.Mask(profile),
+		Profile: storageProfileToProto(profile),
 	}), nil
 }
 
@@ -38,12 +41,12 @@ func (s *SystemService) UpdateStorageProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateStorageProfileRequest],
 ) (*connect.Response[systemv1.UpdateStorageProfileResponse], error) {
-	profile, err := s.storageOps().update(ctx, s, systemcodec.StorageCodec.FromProto(req.Msg.GetProfile()))
+	profile, err := s.storageOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.UpdateStorageProfileResponse{
-		Profile: systemcodec.StorageCodec.Mask(profile),
+		Profile: storageProfileToProto(profile),
 	}), nil
 }
 
@@ -74,9 +77,9 @@ func (s *SystemService) TestStorageConnection(
 	ctx context.Context,
 	req *connect.Request[systemv1.TestStorageConnectionRequest],
 ) (*connect.Response[systemv1.TestStorageConnectionResponse], error) {
-	var in *systemcodec.StorageProfile
+	var in *kitsettings.GenericProfile
 	if req.Msg.GetProfile() != nil {
-		p := systemcodec.StorageCodec.FromProto(req.Msg.GetProfile())
+		p := profileFromProto(req.Msg.GetProfile())
 		in = &p
 	}
 	cfg, err := s.storageOps().resolveTestProfile(ctx, s, in, req.Msg.GetProfileId())
@@ -93,9 +96,9 @@ func (s *SystemService) TestStorageConnection(
 }
 
 func toProtoStorage(cfg settings.Storage) *systemv1.StorageSettings {
-	profiles := make([]*systemv1.StorageProfile, len(cfg.Profiles))
+	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = systemcodec.StorageCodec.Mask(p)
+		profiles[i] = storageProfileToProto(p)
 	}
 	// Bindings are emitted in catalog order so the UI renders a stable list.
 	bindings := make([]*systemv1.StorageBinding, len(storage.Purposes))
@@ -106,4 +109,15 @@ func toProtoStorage(cfg settings.Storage) *systemv1.StorageSettings {
 		}
 	}
 	return &systemv1.StorageSettings{Profiles: profiles, Bindings: bindings}
+}
+
+func (s *SystemService) DescribeStorageProviders(
+	_ context.Context,
+	_ *connect.Request[systemv1.DescribeStorageProvidersRequest],
+) (*connect.Response[systemv1.DescribeStorageProvidersResponse], error) {
+	return connect.NewResponse(&systemv1.DescribeStorageProvidersResponse{Providers: describeProviders(storage.Schemas())}), nil
+}
+
+func storageProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	return profileToProto(p, storage.Schemas()[p.Provider])
 }

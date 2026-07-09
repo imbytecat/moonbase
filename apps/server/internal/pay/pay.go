@@ -20,13 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/paymentcatalog"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -150,29 +152,34 @@ type Option struct {
 // multi-valued.
 type Gateway interface {
 	OptionsFor(ctx context.Context, purpose string) ([]Option, error)
-	ProfileFor(ctx context.Context, purpose, profileID string) (systemcodec.PaymentProfile, error)
-	ProfileByID(ctx context.Context, profileID string) (systemcodec.PaymentProfile, error)
-	Create(ctx context.Context, p systemcodec.PaymentProfile, req CreateRequest) (Credential, error)
-	Query(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo string) (QueryResult, error)
-	Refund(ctx context.Context, p systemcodec.PaymentProfile, req RefundRequest) (RefundResult, error)
-	QueryRefund(ctx context.Context, p systemcodec.PaymentProfile, refundNo string) (settled bool, err error)
-	ParseNotify(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error)
+	ProfileFor(ctx context.Context, purpose, profileID string) (kitsettings.GenericProfile, error)
+	ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error)
+	Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest) (Credential, error)
+	Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
+	Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest) (RefundResult, error)
+	QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (settled bool, err error)
+	ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
 }
 
 type payOps struct {
 	catalog     []Method
 	currency    string
-	create      func(ctx context.Context, p systemcodec.PaymentProfile, req CreateRequest, notifyURL string) (Credential, error)
-	query       func(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo string) (QueryResult, error)
-	refund      func(ctx context.Context, p systemcodec.PaymentProfile, req RefundRequest, notifyURL string) (RefundResult, error)
-	queryRefund func(ctx context.Context, p systemcodec.PaymentProfile, refundNo string) (bool, error)
-	parseNotify func(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error)
+	create      func(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error)
+	query       func(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
+	refund      func(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest, notifyURL string) (RefundResult, error)
+	queryRefund func(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error)
+	parseNotify func(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
 }
 
-var drivers = integration.Registry[systemcodec.PaymentProfile, payOps]{
+type driver struct {
+	schema schema.Schema
+	ops    payOps
+}
+
+var drivers = map[string]driver{
 	"alipay": {
-		Usable: alipayUsable,
-		Ops: payOps{
+		schema: alipaySchema,
+		ops: payOps{
 			catalog:     methodCatalog("alipay"),
 			currency:    "CNY",
 			create:      alipayCreate,
@@ -183,8 +190,8 @@ var drivers = integration.Registry[systemcodec.PaymentProfile, payOps]{
 		},
 	},
 	"wechat": {
-		Usable: wechatUsable,
-		Ops: payOps{
+		schema: wechatSchema,
+		ops: payOps{
 			catalog:     methodCatalog("wechat"),
 			currency:    "CNY",
 			create:      wechatCreate,
@@ -194,6 +201,14 @@ var drivers = integration.Registry[systemcodec.PaymentProfile, payOps]{
 			parseNotify: wechatParseNotify,
 		},
 	},
+}
+
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
 }
 
 // methodCatalog builds a provider's product list from the generated catalog
@@ -229,26 +244,27 @@ func toInputs(names []string) []Input {
 
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
 // ProfileUsable reports whether the profile's driver is fully configured —
 // the same gate every Gateway call enforces.
-func ProfileUsable(p systemcodec.PaymentProfile) bool {
-	return drivers.ProfileUsable(p)
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config) && paymentAuthUsable(p)
 }
 
 // Catalog lists a provider's products in display order.
 func Catalog(provider string) []Method {
-	return drivers[provider].Ops.catalog
+	return drivers[provider].ops.catalog
 }
 
 // Methods lists every product id across all drivers, sorted — the union the
 // proto method `in:` constraint mirrors (TestPaymentMethodsMatchContract).
 func Methods() []string {
 	var out []string
-	for _, name := range drivers.Names() {
-		for _, m := range drivers[name].Ops.catalog {
+	for _, name := range Providers() {
+		for _, m := range drivers[name].ops.catalog {
 			out = append(out, m.ID)
 		}
 	}
@@ -260,18 +276,40 @@ func Methods() []string {
 // merchant signed for (p.Methods), in the driver's display order. Empty
 // p.Methods means "all of the provider's products" so profiles saved before
 // per-product selection keep working.
-func Offered(p systemcodec.PaymentProfile) []string {
-	out := make([]string, 0, len(drivers[p.Provider].Ops.catalog))
-	for _, m := range drivers[p.Provider].Ops.catalog {
-		if len(p.Methods) == 0 || slices.Contains(p.Methods, m.ID) {
+func Offered(p kitsettings.GenericProfile) []string {
+	methods := profileMethods(p)
+	out := make([]string, 0, len(drivers[p.Provider].ops.catalog))
+	for _, m := range drivers[p.Provider].ops.catalog {
+		if len(methods) == 0 || slices.Contains(methods, m.ID) {
 			out = append(out, m.ID)
 		}
 	}
 	return out
 }
 
+func profileMethods(p kitsettings.GenericProfile) []string {
+	switch raw := p.Config["methods"].(type) {
+	case []string:
+		return raw
+	case []any:
+		out := make([]string, 0, len(raw))
+		for _, item := range raw {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func ProfileMethods(p kitsettings.GenericProfile) []string {
+	return profileMethods(p)
+}
+
 func methodByID(provider, method string) (Method, bool) {
-	for _, m := range drivers[provider].Ops.catalog {
+	for _, m := range drivers[provider].ops.catalog {
 		if m.ID == method {
 			return m, true
 		}
@@ -281,8 +319,7 @@ func methodByID(provider, method string) (Method, bool) {
 
 // ValidateMethods reports whether every id in methods is a product of the
 // provider's catalog. An empty list is valid — it means "all products". This is
-// the save-time guard for a profile's signed products, replacing the removed
-// proto `in:` rule on PaymentProfile.methods with a catalog-derived check.
+// the save-time guard for a profile's signed products in Profile.config.methods.
 func ValidateMethods(provider string, methods []string) error {
 	for _, id := range methods {
 		if _, ok := methodByID(provider, id); !ok {
@@ -309,7 +346,7 @@ func InputsOf(provider, method string) []Input {
 // only so the payment_orders.currency column carries an honest value — not as a
 // multi-currency seam.
 func Currency(provider string) string {
-	if c := drivers[provider].Ops.currency; c != "" {
+	if c := drivers[provider].ops.currency; c != "" {
 		return c
 	}
 	return "CNY"
@@ -328,7 +365,7 @@ func NewClient(store *settings.Store, publicURL string) *Client {
 
 var _ Gateway = (*Client)(nil)
 
-func (c *Client) notifyURL(p systemcodec.PaymentProfile) string {
+func (c *Client) notifyURL(p kitsettings.GenericProfile) string {
 	return c.publicURL + "/api/payment/notify/" + p.Provider + "/" + p.Id
 }
 
@@ -347,33 +384,33 @@ func (c *Client) OptionsFor(ctx context.Context, purpose string) ([]Option, erro
 	return out, nil
 }
 
-func (c *Client) ProfileFor(ctx context.Context, purpose, profileID string) (systemcodec.PaymentProfile, error) {
+func (c *Client) ProfileFor(ctx context.Context, purpose, profileID string) (kitsettings.GenericProfile, error) {
 	cfg, err := c.store.Payment(ctx)
 	if err != nil {
-		return systemcodec.PaymentProfile{}, err
+		return kitsettings.GenericProfile{}, err
 	}
 	for _, p := range cfg.ProfilesFor(purpose) {
 		if p.Id == profileID && ProfileUsable(p) {
 			return p, nil
 		}
 	}
-	return systemcodec.PaymentProfile{}, ErrNotConfigured
+	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
-func (c *Client) ProfileByID(ctx context.Context, profileID string) (systemcodec.PaymentProfile, error) {
+func (c *Client) ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error) {
 	cfg, err := c.store.Payment(ctx)
 	if err != nil {
-		return systemcodec.PaymentProfile{}, err
+		return kitsettings.GenericProfile{}, err
 	}
 	if p, ok := cfg.Profile(profileID); ok && ProfileUsable(p) {
 		return p, nil
 	}
-	return systemcodec.PaymentProfile{}, ErrNotConfigured
+	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
-func (c *Client) Create(ctx context.Context, p systemcodec.PaymentProfile, req CreateRequest) (Credential, error) {
-	ops, ok := drivers.OpsFor(p)
-	if !ok {
+func (c *Client) Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest) (Credential, error) {
+	d, ok := drivers[p.Provider]
+	if !ok || !ProfileUsable(p) {
 		return "", ErrNotConfigured
 	}
 	if !slices.Contains(Methods(), req.Method) {
@@ -385,39 +422,63 @@ func (c *Client) Create(ctx context.Context, p systemcodec.PaymentProfile, req C
 	if slices.Contains(InputsOf(p.Provider, req.Method), InputPayerID) && req.PayerID == "" {
 		return "", fmt.Errorf("%w: payer_id for %q", ErrMissingInput, req.Method)
 	}
-	return ops.create(ctx, p, req, c.notifyURL(p))
+	return d.ops.create(ctx, p, req, c.notifyURL(p))
 }
 
-func (c *Client) Query(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo string) (QueryResult, error) {
-	ops, ok := drivers.OpsFor(p)
-	if !ok {
+func (c *Client) Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
+	d, ok := drivers[p.Provider]
+	if !ok || !ProfileUsable(p) {
 		return QueryResult{}, ErrNotConfigured
 	}
-	return ops.query(ctx, p, outTradeNo)
+	return d.ops.query(ctx, p, outTradeNo)
 }
 
-func (c *Client) Refund(ctx context.Context, p systemcodec.PaymentProfile, req RefundRequest) (RefundResult, error) {
-	ops, ok := drivers.OpsFor(p)
-	if !ok {
+func (c *Client) Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest) (RefundResult, error) {
+	d, ok := drivers[p.Provider]
+	if !ok || !ProfileUsable(p) {
 		return RefundResult{}, ErrNotConfigured
 	}
-	return ops.refund(ctx, p, req, c.notifyURL(p))
+	return d.ops.refund(ctx, p, req, c.notifyURL(p))
 }
 
-func (c *Client) QueryRefund(ctx context.Context, p systemcodec.PaymentProfile, refundNo string) (bool, error) {
-	ops, ok := drivers.OpsFor(p)
-	if !ok {
+func (c *Client) QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error) {
+	d, ok := drivers[p.Provider]
+	if !ok || !ProfileUsable(p) {
 		return false, ErrNotConfigured
 	}
-	return ops.queryRefund(ctx, p, refundNo)
+	return d.ops.queryRefund(ctx, p, refundNo)
 }
 
-func (c *Client) ParseNotify(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error) {
-	ops, ok := drivers.OpsFor(p)
-	if !ok {
+func (c *Client) ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
+	d, ok := drivers[p.Provider]
+	if !ok || !ProfileUsable(p) {
 		return NotifyResult{}, ErrNotConfigured
 	}
-	return ops.parseNotify(ctx, p, r)
+	return d.ops.parseNotify(ctx, p, r)
+}
+
+func paymentAuthUsable(p kitsettings.GenericProfile) bool {
+	switch p.Provider {
+	case "alipay":
+		if cfgStr(p.Config, "authMethod") == settings.PaymentAuthCert {
+			return cfgStr(p.Config, "appCert") != "" &&
+				cfgStr(p.Config, "alipayRootCert") != "" &&
+				cfgStr(p.Config, "alipayPublicCert") != ""
+		}
+		return cfgStr(p.Config, "alipayPublicKey") != ""
+	case "wechat":
+		if cfgStr(p.Config, "authMethod") == settings.PaymentAuthPlatformCert {
+			return true
+		}
+		return cfgStr(p.Config, "publicKeyId") != "" && cfgStr(p.Config, "publicKey") != ""
+	default:
+		return false
+	}
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }
 
 // yuan renders integer cents as the decimal-yuan string Alipay expects.

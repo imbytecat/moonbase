@@ -9,8 +9,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/integrations/llm"
 	"github.com/imbytecat/moonbase/server/integrations/oauth"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
@@ -43,9 +44,9 @@ func (m *memSettingsQuerier) UpsertSetting(_ context.Context, arg repository.Ups
 	return nil
 }
 
-type okTester struct{ lastTested systemcodec.StorageProfile }
+type okTester struct{ lastTested kitsettings.GenericProfile }
 
-func (t *okTester) TestConnection(_ context.Context, cfg systemcodec.StorageProfile) error {
+func (t *okTester) TestConnection(_ context.Context, cfg kitsettings.GenericProfile) error {
 	t.lastTested = cfg
 	return nil
 }
@@ -56,22 +57,38 @@ func newSystemService(q repository.Querier) (*SystemService, *okTester) {
 	return NewSystemService(settings.NewStore(q), nil, tester, nil, nil, nil, logger), tester
 }
 
+func profileConfig(t *testing.T, config map[string]any) *structpb.Struct {
+	t.Helper()
+	out, err := structpb.NewStruct(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func configMap(p *systemv1.Profile) map[string]any {
+	if p.GetConfig() == nil {
+		return nil
+	}
+	return p.GetConfig().AsMap()
+}
+
 func TestStorageProfileCRUDAndBinding(t *testing.T) {
 	q := newMemSettingsQuerier()
 	svc, _ := newSystemService(q)
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.StorageProfile{
+		Profile: &systemv1.Profile{
 			Name:     "public assets",
 			Provider: "s3",
-			S3: &systemv1.S3StorageConfig{
-				Endpoint:        "s3.example.com",
-				Bucket:          "assets",
-				AccessKeyId:     "AK",
-				SecretAccessKey: "SECRET",
-				PublicBaseUrl:   "https://cdn.example.com",
-			},
+			Config: profileConfig(t, map[string]any{
+				"endpoint":        "s3.example.com",
+				"bucket":          "assets",
+				"accessKeyId":     "AK",
+				"secretAccessKey": "SECRET",
+				"publicBaseUrl":   "https://cdn.example.com",
+			}),
 		},
 	}))
 	if err != nil {
@@ -81,10 +98,11 @@ func TestStorageProfileCRUDAndBinding(t *testing.T) {
 	if profile.GetId() == "" {
 		t.Fatal("create must assign an id")
 	}
-	if profile.GetS3().GetSecretAccessKey() != "" {
+	cfg := configMap(profile)
+	if cfg["secretAccessKey"] != "" {
 		t.Fatal("secret must never be echoed back")
 	}
-	if !profile.GetS3().GetSecretAccessKeySet() {
+	if cfg["secretAccessKey_set"] != true {
 		t.Fatal("secret_set must report a stored secret")
 	}
 
@@ -137,15 +155,15 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.StorageProfile{
+		Profile: &systemv1.Profile{
 			Name:     "private",
 			Provider: "s3",
-			S3: &systemv1.S3StorageConfig{
-				Endpoint:        "s3.example.com",
-				Bucket:          "files",
-				AccessKeyId:     "AK",
-				SecretAccessKey: "ORIGINAL",
-			},
+			Config: profileConfig(t, map[string]any{
+				"endpoint":        "s3.example.com",
+				"bucket":          "files",
+				"accessKeyId":     "AK",
+				"secretAccessKey": "ORIGINAL",
+			}),
 		},
 	}))
 	if err != nil {
@@ -154,15 +172,15 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 	id := created.Msg.GetProfile().GetId()
 
 	if _, err := svc.UpdateStorageProfile(ctx, connect.NewRequest(&systemv1.UpdateStorageProfileRequest{
-		Profile: &systemv1.StorageProfile{
+		Profile: &systemv1.Profile{
 			Id:       id,
 			Name:     "private (renamed)",
 			Provider: "s3",
-			S3: &systemv1.S3StorageConfig{
-				Endpoint:    "s3.example.com",
-				Bucket:      "files",
-				AccessKeyId: "AK2",
-			},
+			Config: profileConfig(t, map[string]any{
+				"endpoint":    "s3.example.com",
+				"bucket":      "files",
+				"accessKeyId": "AK2",
+			}),
 		},
 	})); err != nil {
 		t.Fatal(err)
@@ -176,10 +194,10 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 	if !ok {
 		t.Fatal("profile vanished after update")
 	}
-	if p.S3.SecretAccessKey != "ORIGINAL" {
-		t.Fatalf("secret = %q, want the stored value kept", p.S3.SecretAccessKey)
+	if p.Config["secretAccessKey"] != "ORIGINAL" {
+		t.Fatalf("secret = %q, want the stored value kept", p.Config["secretAccessKey"])
 	}
-	if p.S3.AccessKeyId != "AK2" || p.Name != "private (renamed)" {
+	if p.Config["accessKeyId"] != "AK2" || p.Name != "private (renamed)" {
 		t.Fatalf("non-secret fields must update: %+v", p)
 	}
 }
@@ -190,15 +208,15 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.StorageProfile{
+		Profile: &systemv1.Profile{
 			Name:     "private",
 			Provider: "s3",
-			S3: &systemv1.S3StorageConfig{
-				Endpoint:        "s3.example.com",
-				Bucket:          "files",
-				AccessKeyId:     "AK",
-				SecretAccessKey: "STORED-SECRET",
-			},
+			Config: profileConfig(t, map[string]any{
+				"endpoint":        "s3.example.com",
+				"bucket":          "files",
+				"accessKeyId":     "AK",
+				"secretAccessKey": "STORED-SECRET",
+			}),
 		},
 	}))
 	if err != nil {
@@ -206,14 +224,14 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 	}
 
 	resp, err := svc.TestStorageConnection(ctx, connect.NewRequest(&systemv1.TestStorageConnectionRequest{
-		Profile: &systemv1.StorageProfile{
+		Profile: &systemv1.Profile{
 			Id:       created.Msg.GetProfile().GetId(),
 			Provider: "s3",
-			S3: &systemv1.S3StorageConfig{
-				Endpoint:    "s3.example.com",
-				Bucket:      "files",
-				AccessKeyId: "AK",
-			},
+			Config: profileConfig(t, map[string]any{
+				"endpoint":    "s3.example.com",
+				"bucket":      "files",
+				"accessKeyId": "AK",
+			}),
 		},
 	}))
 	if err != nil {
@@ -222,8 +240,8 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 	if !resp.Msg.GetOk() {
 		t.Fatalf("test failed: %s", resp.Msg.GetMessage())
 	}
-	if tester.lastTested.S3.SecretAccessKey != "STORED-SECRET" {
-		t.Fatalf("tested secret = %q, want stored secret merged in", tester.lastTested.S3.SecretAccessKey)
+	if tester.lastTested.Config["secretAccessKey"] != "STORED-SECRET" {
+		t.Fatalf("tested secret = %q, want stored secret merged in", tester.lastTested.Config["secretAccessKey"])
 	}
 }
 
@@ -255,13 +273,13 @@ func TestSnapshotEmitsBindingsInCatalogOrder(t *testing.T) {
 	}
 }
 
-type recordingChatter struct{ lastProfile systemcodec.LlmProfile }
+type recordingChatter struct{ lastProfile kitsettings.GenericProfile }
 
 func (c *recordingChatter) Complete(_ context.Context, _, _, _ string) (string, error) {
 	return "", nil
 }
 
-func (c *recordingChatter) CompleteWith(_ context.Context, p systemcodec.LlmProfile, _, _ string) (string, error) {
+func (c *recordingChatter) CompleteWith(_ context.Context, p kitsettings.GenericProfile, _, _ string) (string, error) {
 	c.lastProfile = p
 	return "hello", nil
 }
@@ -278,10 +296,10 @@ func TestLlmProfileCRUDAndBinding(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.LlmProfile{
+		Profile: &systemv1.Profile{
 			Name:     "fast",
 			Provider: "openai",
-			Openai:   &systemv1.OpenAiLlmConfig{ApiKey: "SECRET", Model: "gpt-4o-mini"},
+			Config:   profileConfig(t, map[string]any{"apiKey": "SECRET", "model": "gpt-4o-mini"}),
 		},
 	}))
 	if err != nil {
@@ -291,10 +309,11 @@ func TestLlmProfileCRUDAndBinding(t *testing.T) {
 	if profile.GetId() == "" {
 		t.Fatal("create must assign an id")
 	}
-	if profile.GetOpenai().GetApiKey() != "" {
+	cfg := configMap(profile)
+	if cfg["apiKey"] != "" {
 		t.Fatal("secret must never be echoed back")
 	}
-	if !profile.GetOpenai().GetApiKeySet() {
+	if cfg["apiKey_set"] != true {
 		t.Fatal("secret_set must report a stored secret")
 	}
 
@@ -347,10 +366,10 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.LlmProfile{
+		Profile: &systemv1.Profile{
 			Name:     "fast",
 			Provider: "openai",
-			Openai:   &systemv1.OpenAiLlmConfig{ApiKey: "ORIGINAL", Model: "gpt-4o-mini"},
+			Config:   profileConfig(t, map[string]any{"apiKey": "ORIGINAL", "model": "gpt-4o-mini"}),
 		},
 	}))
 	if err != nil {
@@ -359,11 +378,11 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 	id := created.Msg.GetProfile().GetId()
 
 	if _, err := svc.UpdateLlmProfile(ctx, connect.NewRequest(&systemv1.UpdateLlmProfileRequest{
-		Profile: &systemv1.LlmProfile{
+		Profile: &systemv1.Profile{
 			Id:       id,
 			Name:     "fast (renamed)",
 			Provider: "openai",
-			Openai:   &systemv1.OpenAiLlmConfig{Model: "gpt-4o"},
+			Config:   profileConfig(t, map[string]any{"model": "gpt-4o"}),
 		},
 	})); err != nil {
 		t.Fatal(err)
@@ -377,10 +396,10 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 	if !ok {
 		t.Fatal("profile vanished after update")
 	}
-	if p.Openai.ApiKey != "ORIGINAL" {
-		t.Fatalf("secret = %q, want the stored value kept", p.Openai.ApiKey)
+	if p.Config["apiKey"] != "ORIGINAL" {
+		t.Fatalf("secret = %q, want the stored value kept", p.Config["apiKey"])
 	}
-	if p.Openai.Model != "gpt-4o" || p.Name != "fast (renamed)" {
+	if p.Config["model"] != "gpt-4o" || p.Name != "fast (renamed)" {
 		t.Fatalf("non-secret fields must update: %+v", p)
 	}
 }
@@ -391,10 +410,10 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.LlmProfile{
+		Profile: &systemv1.Profile{
 			Name:     "fast",
 			Provider: "openai",
-			Openai:   &systemv1.OpenAiLlmConfig{ApiKey: "STORED-SECRET", Model: "gpt-4o-mini"},
+			Config:   profileConfig(t, map[string]any{"apiKey": "STORED-SECRET", "model": "gpt-4o-mini"}),
 		},
 	}))
 	if err != nil {
@@ -402,10 +421,10 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 	}
 
 	resp, err := svc.TestLlm(ctx, connect.NewRequest(&systemv1.TestLlmRequest{
-		Profile: &systemv1.LlmProfile{
+		Profile: &systemv1.Profile{
 			Id:       created.Msg.GetProfile().GetId(),
 			Provider: "openai",
-			Openai:   &systemv1.OpenAiLlmConfig{Model: "gpt-4o-mini"},
+			Config:   profileConfig(t, map[string]any{"model": "gpt-4o-mini"}),
 		},
 	}))
 	if err != nil {
@@ -414,8 +433,8 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 	if !resp.Msg.GetOk() {
 		t.Fatalf("test failed: %s", resp.Msg.GetMessage())
 	}
-	if chatter.lastProfile.Openai.ApiKey != "STORED-SECRET" {
-		t.Fatalf("tested secret = %q, want stored secret merged in", chatter.lastProfile.Openai.ApiKey)
+	if chatter.lastProfile.Config["apiKey"] != "STORED-SECRET" {
+		t.Fatalf("tested secret = %q, want stored secret merged in", chatter.lastProfile.Config["apiKey"])
 	}
 }
 
@@ -442,15 +461,15 @@ func TestOauthLoginBinding(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.OauthProfile{
-			Key:      "google",
+		Profile: &systemv1.Profile{
 			Name:     "Google",
 			Provider: "oidc",
-			Oidc: &systemv1.OidcOauthConfig{
-				Issuer:       "https://accounts.google.com",
-				ClientId:     "cid",
-				ClientSecret: "SECRET",
-			},
+			Config: profileConfig(t, map[string]any{
+				"key":          "google",
+				"issuer":       "https://accounts.google.com",
+				"clientId":     "cid",
+				"clientSecret": "SECRET",
+			}),
 		},
 	}))
 	if err != nil {
@@ -510,15 +529,15 @@ func TestOauthProfileCRUD(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.OauthProfile{
-			Key:      "google",
+		Profile: &systemv1.Profile{
 			Name:     "Google",
 			Provider: "oidc",
-			Oidc: &systemv1.OidcOauthConfig{
-				Issuer:       "https://accounts.google.com",
-				ClientId:     "cid",
-				ClientSecret: "SECRET",
-			},
+			Config: profileConfig(t, map[string]any{
+				"key":          "google",
+				"issuer":       "https://accounts.google.com",
+				"clientId":     "cid",
+				"clientSecret": "SECRET",
+			}),
 		},
 	}))
 	if err != nil {
@@ -528,18 +547,19 @@ func TestOauthProfileCRUD(t *testing.T) {
 	if profile.GetId() == "" {
 		t.Fatal("create must assign an id")
 	}
-	if profile.GetOidc().GetClientSecret() != "" {
+	cfg := configMap(profile)
+	if cfg["clientSecret"] != "" {
 		t.Fatal("secret must never be echoed back")
 	}
-	if !profile.GetOidc().GetClientSecretSet() {
+	if cfg["clientSecret_set"] != true {
 		t.Fatal("secret_set must report a stored secret")
 	}
 
 	_, err = svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.OauthProfile{
-			Key:      "google",
+		Profile: &systemv1.Profile{
 			Name:     "Google again",
 			Provider: "oidc",
+			Config:   profileConfig(t, map[string]any{"key": "google"}),
 		},
 	}))
 	if connect.CodeOf(err) != connect.CodeAlreadyExists {
@@ -547,22 +567,22 @@ func TestOauthProfileCRUD(t *testing.T) {
 	}
 
 	updated, err := svc.UpdateOauthProfile(ctx, connect.NewRequest(&systemv1.UpdateOauthProfileRequest{
-		Profile: &systemv1.OauthProfile{
+		Profile: &systemv1.Profile{
 			Id:       profile.GetId(),
-			Key:      "renamed-key-must-be-ignored",
 			Name:     "Google (renamed)",
 			Provider: "oidc",
-			Oidc: &systemv1.OidcOauthConfig{
-				Issuer:   "https://accounts.google.com",
-				ClientId: "cid2",
-			},
+			Config: profileConfig(t, map[string]any{
+				"key":      "renamed-key-must-be-ignored",
+				"issuer":   "https://accounts.google.com",
+				"clientId": "cid2",
+			}),
 		},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Msg.GetProfile().GetKey() != "google" {
-		t.Fatalf("key = %q, want immutable %q", updated.Msg.GetProfile().GetKey(), "google")
+	if got := configMap(updated.Msg.GetProfile())["key"]; got != "google" {
+		t.Fatalf("key = %q, want immutable %q", got, "google")
 	}
 
 	var stored settings.OAuth
@@ -573,8 +593,8 @@ func TestOauthProfileCRUD(t *testing.T) {
 	if !ok {
 		t.Fatal("profile vanished after update")
 	}
-	if p.Oidc.ClientSecret != "SECRET" {
-		t.Fatalf("secret = %q, want the stored value kept", p.Oidc.ClientSecret)
+	if p.Config["clientSecret"] != "SECRET" {
+		t.Fatalf("secret = %q, want the stored value kept", p.Config["clientSecret"])
 	}
 
 	q.identityCounts["google"] = 3

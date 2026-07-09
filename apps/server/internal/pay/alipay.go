@@ -10,7 +10,7 @@ import (
 
 	"github.com/smartwalle/alipay/v3"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -34,45 +34,31 @@ const (
 	alipayProductApp        = "QUICK_MSECURITY_PAY"
 )
 
-func alipayUsable(p systemcodec.PaymentProfile) bool {
-	a := p.Alipay
-	if a.AppId == "" || a.AppPrivateKey == "" {
-		return false
-	}
-	switch a.AuthMethod {
-	case settings.PaymentAuthCert:
-		return a.AppCert != "" && a.AlipayRootCert != "" && a.AlipayPublicCert != ""
-	default:
-		return a.AlipayPublicKey != ""
-	}
-}
-
-func alipayClient(p systemcodec.PaymentProfile) (*alipay.Client, error) {
-	a := p.Alipay
-	client, err := alipay.New(a.AppId, a.AppPrivateKey, true)
+func alipayClient(config map[string]any) (*alipay.Client, error) {
+	client, err := alipay.New(cfgStr(config, "appId"), cfgStr(config, "appPrivateKey"), true)
 	if err != nil {
 		return nil, fmt.Errorf("create alipay client: %w", err)
 	}
-	if a.AuthMethod == settings.PaymentAuthCert {
-		if err := client.LoadAppCertPublicKey(a.AppCert); err != nil {
+	if cfgStr(config, "authMethod") == settings.PaymentAuthCert {
+		if err := client.LoadAppCertPublicKey(cfgStr(config, "appCert")); err != nil {
 			return nil, fmt.Errorf("load app cert: %w", err)
 		}
-		if err := client.LoadAliPayRootCert(a.AlipayRootCert); err != nil {
+		if err := client.LoadAliPayRootCert(cfgStr(config, "alipayRootCert")); err != nil {
 			return nil, fmt.Errorf("load alipay root cert: %w", err)
 		}
-		if err := client.LoadAlipayCertPublicKey(a.AlipayPublicCert); err != nil {
+		if err := client.LoadAlipayCertPublicKey(cfgStr(config, "alipayPublicCert")); err != nil {
 			return nil, fmt.Errorf("load alipay public cert: %w", err)
 		}
 		return client, nil
 	}
-	if err := client.LoadAliPayPublicKey(a.AlipayPublicKey); err != nil {
+	if err := client.LoadAliPayPublicKey(cfgStr(config, "alipayPublicKey")); err != nil {
 		return nil, fmt.Errorf("load alipay public key: %w", err)
 	}
 	return client, nil
 }
 
-func alipayCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateRequest, notifyURL string) (Credential, error) {
-	client, err := alipayClient(p)
+func alipayCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error) {
+	client, err := alipayClient(p.Config)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +105,8 @@ func alipayCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 		}
 		return u.String(), nil
 	case alipayMethodCreate:
-		if p.Alipay.OpAppId == "" {
+		opAppID := cfgStr(p.Config, "opAppId")
+		if opAppID == "" {
 			return "", fmt.Errorf("%w: op_app_id for alipay jsapi", ErrMissingInput)
 		}
 		var param alipay.TradeCreate
@@ -127,7 +114,7 @@ func alipayCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 		param.Subject = req.Subject
 		param.TotalAmount = yuan(req.Amount)
 		param.ProductCode = alipayProductJSAPI
-		param.OpAppId = p.Alipay.OpAppId
+		param.OpAppId = opAppID
 		param.NotifyURL = notifyURL
 		// buyer_id is the legacy 2088-prefixed numeric user id; anything else
 		// is the newer openid shape.
@@ -165,8 +152,8 @@ func alipayCreate(ctx context.Context, p systemcodec.PaymentProfile, req CreateR
 	}
 }
 
-func alipayQuery(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo string) (QueryResult, error) {
-	client, err := alipayClient(p)
+func alipayQuery(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
+	client, err := alipayClient(p.Config)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -189,8 +176,8 @@ func alipayQuery(ctx context.Context, p systemcodec.PaymentProfile, outTradeNo s
 	}, nil
 }
 
-func alipayRefund(ctx context.Context, p systemcodec.PaymentProfile, req RefundRequest, _ string) (RefundResult, error) {
-	client, err := alipayClient(p)
+func alipayRefund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest, _ string) (RefundResult, error) {
+	client, err := alipayClient(p.Config)
 	if err != nil {
 		return RefundResult{}, err
 	}
@@ -209,13 +196,13 @@ func alipayRefund(ctx context.Context, p systemcodec.PaymentProfile, req RefundR
 	return RefundResult{Settled: true}, nil
 }
 
-func alipayQueryRefund(_ context.Context, _ systemcodec.PaymentProfile, _ string) (bool, error) {
+func alipayQueryRefund(_ context.Context, _ kitsettings.GenericProfile, _ string) (bool, error) {
 	// Alipay refunds settle synchronously in TradeRefund; nothing to poll.
 	return true, nil
 }
 
-func alipayParseNotify(ctx context.Context, p systemcodec.PaymentProfile, r *http.Request) (NotifyResult, error) {
-	client, err := alipayClient(p)
+func alipayParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
+	client, err := alipayClient(p.Config)
 	if err != nil {
 		return NotifyResult{}, err
 	}

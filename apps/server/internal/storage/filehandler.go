@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -84,7 +84,7 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch cfg.Provider {
 	case "local":
-		h.serveLocal(w, r, cfg.Local, file)
+		h.serveLocal(w, r, cfg.Config, file)
 	default:
 		h.redirect(w, r, cfg, file)
 	}
@@ -93,8 +93,8 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // serveLocal streams the bytes directly — a 302 back to the same server is a
 // pointless round trip. Files are spiritually immutable (ADR-0003), so the
 // year-long immutable cache is sound.
-func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, cfg systemcodec.LocalStorageConfig, file repository.File) {
-	path, err := localObjectPath(cfg, file.ObjectKey)
+func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, config map[string]any, file repository.File) {
+	path, err := localObjectPath(config, file.ObjectKey)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -125,13 +125,13 @@ func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, cfg sys
 // cached briefly (rebinding a profile leaves stale redirects alive for at
 // most an hour); a signed URL carries an expiry, so caching the redirect
 // would outlive it — never store those.
-func (h *FileHandler) redirect(w http.ResponseWriter, r *http.Request, cfg systemcodec.StorageProfile, file repository.File) {
+func (h *FileHandler) redirect(w http.ResponseWriter, r *http.Request, cfg kitsettings.GenericProfile, file repository.File) {
 	u, err := h.client.ResolveURL(r.Context(), file.Purpose, file.ObjectKey, time.Hour)
 	if err != nil {
 		h.internal(w, r, "resolve url", err)
 		return
 	}
-	if cfg.S3.PublicBaseUrl != "" {
+	if cfgStr(cfg.Config, "publicBaseUrl") != "" {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 	} else {
 		w.Header().Set("Cache-Control", "private, no-store")

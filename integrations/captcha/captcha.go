@@ -9,14 +9,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // CAPTCHA purposes are code, not data: each is a fixed slot the application
@@ -31,7 +33,7 @@ const (
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = integration.Catalog{PurposeAuth}
 
-type Config = kitsettings.Integration[systemcodec.CaptchaProfile]
+type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
 type Store interface {
 	Captcha(ctx context.Context) (Config, error)
@@ -50,26 +52,27 @@ type Verifier interface {
 // captchaOps bundles the per-provider surface: the public site key served to
 // widgets and server-side token verification.
 type captchaOps struct {
-	siteKey func(p systemcodec.CaptchaProfile) string
-	verify  func(c *Client, ctx context.Context, p systemcodec.CaptchaProfile, token, remoteIP string) error
+	siteKey func(config map[string]any) string
+	verify  func(c *Client, ctx context.Context, config map[string]any, token, remoteIP string) error
 }
 
-var drivers = integration.Registry[systemcodec.CaptchaProfile, captchaOps]{
+type driver struct {
+	schema schema.Schema
+	ops    captchaOps
+}
+
+var drivers = map[string]driver{
 	"turnstile": {
-		Usable: func(p systemcodec.CaptchaProfile) bool {
-			return p.Turnstile.SiteKey != "" && p.Turnstile.SecretKey != ""
-		},
-		Ops: captchaOps{
-			siteKey: func(p systemcodec.CaptchaProfile) string { return p.Turnstile.SiteKey },
+		schema: turnstileSchema,
+		ops: captchaOps{
+			siteKey: func(config map[string]any) string { return cfgStr(config, "siteKey") },
 			verify:  (*Client).verifyTurnstile,
 		},
 	},
 	"geetest": {
-		Usable: func(p systemcodec.CaptchaProfile) bool {
-			return p.Geetest.CaptchaId != "" && p.Geetest.CaptchaKey != ""
-		},
-		Ops: captchaOps{
-			siteKey: func(p systemcodec.CaptchaProfile) string { return p.Geetest.CaptchaId },
+		schema: geetestSchema,
+		ops: captchaOps{
+			siteKey: func(config map[string]any) string { return cfgStr(config, "captchaId") },
 			verify:  (*Client).verifyGeetest,
 		},
 	},
@@ -77,22 +80,31 @@ var drivers = integration.Registry[systemcodec.CaptchaProfile, captchaOps]{
 	// challenge from /api/captcha/altcha/challenge, so siteKey is empty on
 	// purpose.
 	"altcha": {
-		Usable: func(systemcodec.CaptchaProfile) bool { return true },
-		Ops: captchaOps{
-			siteKey: func(systemcodec.CaptchaProfile) string { return "" },
+		schema: altchaSchema,
+		ops: captchaOps{
+			siteKey: func(map[string]any) string { return "" },
 			verify:  (*Client).verifyAltcha,
 		},
 	},
 }
 
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
+}
+
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
 // ProfileUsable reports whether the profile's driver is fully configured.
-func ProfileUsable(p systemcodec.CaptchaProfile) bool {
-	return drivers.ProfileUsable(p)
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 // Widget returns the provider name and public site key the login page needs
@@ -102,11 +114,11 @@ func Widget(cfg Config, purpose string) (provider, siteKey string, ok bool) {
 	if !found {
 		return "", "", false
 	}
-	ops, usable := drivers.OpsFor(p)
-	if !usable {
+	d, ok := drivers[p.Provider]
+	if !ok || !d.schema.Usable(p.Config) {
 		return "", "", false
 	}
-	return p.Provider, ops.siteKey(p), true
+	return p.Provider, d.ops.siteKey(p.Config), true
 }
 
 type Client struct {
@@ -143,19 +155,19 @@ func (c *Client) Verify(ctx context.Context, purpose, token, remoteIP string) er
 	if !found {
 		return nil
 	}
-	ops, usable := drivers.OpsFor(p)
-	if !usable {
+	d, ok := drivers[p.Provider]
+	if !ok || !d.schema.Usable(p.Config) {
 		return nil
 	}
 	if token == "" {
 		return fmt.Errorf("captcha token required")
 	}
-	return ops.verify(c, ctx, p, token, remoteIP)
+	return d.ops.verify(c, ctx, p.Config, token, remoteIP)
 }
 
 // https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
-func (c *Client) verifyTurnstile(ctx context.Context, p systemcodec.CaptchaProfile, token, remoteIP string) error {
-	form := url.Values{"secret": {p.Turnstile.SecretKey}, "response": {token}}
+func (c *Client) verifyTurnstile(ctx context.Context, config map[string]any, token, remoteIP string) error {
+	form := url.Values{"secret": {cfgStr(config, "secretKey")}, "response": {token}}
 	if remoteIP != "" {
 		form.Set("remoteip", remoteIP)
 	}
@@ -188,7 +200,7 @@ func (c *Client) verifyTurnstile(ctx context.Context, p systemcodec.CaptchaProfi
 // is the JSON blob the widget produces (lot_number, captcha_output, pass_token,
 // gen_time), POSTed to the validate endpoint signed with HMAC-SHA256.
 // https://docs.geetest.com/BehaviorVerification/apirefer/api/web
-func (c *Client) verifyGeetest(ctx context.Context, p systemcodec.CaptchaProfile, token, _ string) error {
+func (c *Client) verifyGeetest(ctx context.Context, config map[string]any, token, _ string) error {
 	var payload struct {
 		LotNumber     string `json:"lot_number"`
 		CaptchaOutput string `json:"captcha_output"`
@@ -204,9 +216,9 @@ func (c *Client) verifyGeetest(ctx context.Context, p systemcodec.CaptchaProfile
 		"captcha_output": {payload.CaptchaOutput},
 		"pass_token":     {payload.PassToken},
 		"gen_time":       {payload.GenTime},
-		"sign_token":     {geetestSign(p.Geetest.CaptchaKey, payload.LotNumber)},
+		"sign_token":     {geetestSign(cfgStr(config, "captchaKey"), payload.LotNumber)},
 	}
-	endpoint := "https://gcaptcha4.geetest.com/validate?captcha_id=" + url.QueryEscape(p.Geetest.CaptchaId)
+	endpoint := "https://gcaptcha4.geetest.com/validate?captcha_id=" + url.QueryEscape(cfgStr(config, "captchaId"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
 		strings.NewReader(form.Encode()))
 	if err != nil {
@@ -229,4 +241,9 @@ func (c *Client) verifyGeetest(ctx context.Context, p systemcodec.CaptchaProfile
 		return fmt.Errorf("captcha verification failed: %s", out.Reason)
 	}
 	return nil
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }

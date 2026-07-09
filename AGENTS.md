@@ -21,7 +21,6 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 全新克隆：这些文件在生成前并不存在；永远不要手改它们。
 - `apps/server/internal/gen/` + `packages/api-client/src/gen/` ← `moon run proto:generate`（buf）。经由 `proto:generate` 任务依赖，被 server:build/dev/test/check/fix/release + web:build/typecheck/dev 依赖。
-- `apps/server/internal/systemcodec/` ← `moon run proto:generate`（`protoc-gen-settings`，一个仓库本地的 buf 插件）：channel 档案存储结构体 + 只写密钥的 `Mask`/`FromProto`/`Merge` 编解码器，每个 `option (moonbase.v1.profile)` 消息一套。`settings.*Profile` 是指向它的别名；驱动直接 import 它。
 - `apps/server/internal/repository/` ← `moon run server:generate`（sqlc）。
 - `apps/web/src/routeTree.gen.ts` ← `moon run web:gen`（TanStack Router）。
 - `apps/web/src/paraglide/` ← `moon run web:gen-i18n`（Paraglide，源自 `messages/*.json`；Vite 插件也会在 dev/build 时重新生成）。
@@ -31,8 +30,6 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 ## 护栏测试——测试变红意味着修你漏掉的那一侧，绝不弱化测试
 
 - `internal/server/authz_test.go` —— 每个注册的 RPC 都需要一条授权规则。新增 proto service ⇒ 在此加生成的空导入（blank import）+ 路径前缀，规则写在 `authz.go`。
-- `internal/rpc/providers_test.go` —— proto `provider` `in:` 列表里的每个 provider 都需要一个 Go 驱动，反之亦然；`TestPaymentMethodsMatchContract` + `TestPaymentProfileMethodsMatchContract` 让每笔订单的 method 与档案的已签约产品列表同 `pay.Methods()`（驱动目录的并集）对齐。
-- `internal/rpc/secrets_test.go` —— 每个只写密钥必须在空值更新下存活；缺失 `keepSecrets` 分支 = 凭据被抹掉。
 - `apps/web/src/lib/messages.test.ts` —— `zh-CN.json` / `en.json` 的键必须保持一致（parity）。
 - `internal/config/config_test.go`（`TestLoadEnvOverrides`）—— 每个配置键都需要一个 viper 默认值，否则其 `MOONBASE_*` 环境变量会被静默忽略。
 
@@ -50,27 +47,27 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 ## 给现有通道新增一个 provider
 
-1. 在 `proto/system/v1/system.proto` 新增一个配置消息（它**自己**的字段形状，绝不复用别的驱动的）+ 把该值加入对应 `*Profile.provider` 的 `in:` 列表。给每个只写凭据字段标注 `[(moonbase.v1.secret) = true]`，并给它一个兄弟字段 `bool <field>_set`（读侧的掩码标志；`<field>_set` 这个名字是 `protoc-gen-settings` 匹配的**硬性**约定）。→ 重新生成。
-2. **不要**手写 mapper。`moon run proto:generate` 会运行 `protoc-gen-settings`（`apps/server/cmd/protoc-gen-settings`，在 `buf.gen.yaml` 里接线），它为每个标了 `option (moonbase.v1.profile) = true` 的消息，向 `internal/systemcodec`（git 忽略）产出：存储结构体（`<field>_set` 标志被丢弃——它们仅存在于 wire 上）、它的 `ProfileID`/`ProviderName`/`WithID`，以及一个带 `FromProto`/`Mask`/`Merge` 的 `<Channel>Codec`。`Mask` 清空密钥 + 置 `<field>_set`；`Merge` 在空值更新时保留已存密钥，并保留 `[(moonbase.v1.immutable) = true]` 字段（如 oauth 的 `key`）。`channelOps.keepSecrets` 就是 `systemcodec.<Channel>Codec.Merge`；处理器调用 `Codec.FromProto`/`.Mask`。
-3. 在该 channel 包的 `drivers` 注册表（`channel.Registry`）加一条驱动条目；驱动代码寻址 `systemcodec.<Channel>Profile`（**不是** `settings.*Profile`——那些现在是生成的别名，且 Go 字段名遵循 proto 的 CamelCase：`AccessKeyId`、`ApiKey`、`OpAppId`，而非 `AccessKeyID`/`APIKey`/`OpAppID`）。
-4. Web：在 `src/components/system/<channel>-profile-drawer.tsx`（captcha/llm 则是 `<channel>-panel.tsx`）加一个 `ProviderOption` 卡片 + 一个按 provider 分支的配置字段块 + 文案。抽屉**只**提交所选 provider 的值；生成的 `Merge` 会回填其他 provider 的已存配置，让凭据存活。掩码标志读作 `<field>Set`（如 `smtp.passwordSet`），与 proto 的 `<field>_set` 对应。
+1. 在该 channel 包里新增 provider schema（通常是 `schema.go`）：用 `integrationkit/schema` 描述字段、密钥、不可变字段、必填、枚举/数组选项和 UI 文案。**不要改 `proto/system/v1/system.proto` 来加 provider 专属消息**；wire 上只有通用 `system.v1.Profile.config`。
+2. 在 channel 包的驱动注册表加一条驱动条目，注册 provider key + schema + driver factory。驱动从 `kitsettings.GenericProfile.Config` 解码自己的配置结构；只有接缝方法（Send/Verify/Complete/...）共享，字段形状归 provider 自己所有。
+3. 密钥保留、掩码和不可变字段由 `channelOps` 按 schema 统一处理：读侧在 `Profile.config` 中返回掩码占位，更新时空密钥保留已存值，不可变字段（如 OAuth `key`）保持旧值。
+4. Web：通用 `SchemaProfileForm` 消费 `Describe*Providers` 返回的 schema 渲染表单。只有新增字段类型或特殊交互时才扩展 `schema-profile-form.tsx`；普通 provider 只需要 Go schema + 必要的用户文案。
 
 若改为新增一个用途（PURPOSE）= 一个常量 + channel 包里的 `Purposes` 目录条目 + 一个 `PURPOSE_LABELS` 条目 + web 文案。
 
-新增一整个 channel = 以上全部，外加一个标了 `option (moonbase.v1.profile) = true` 的消息（生成器会自动发现它）、一个 `settings.<Channel>` 类型别名 + `Store` 的 getter/setter，以及一个带标准 `channelOps` 接线的 `system_<channel>.go`。
+新增一整个 channel = 以上全部，外加 `settings.Integration[kitsettings.GenericProfile]` 的 Store getter/setter、通道 catalog、`system_<channel>.go` 的标准 `channelOps` 接线、`Describe<Channel>Providers` RPC，以及一个 web 面板入口。
 
 ## Settings = 两个后端面（web 呈现为一个）
 
 - `settings.v1` = 业务开关（`settings.*` 权限）：注册策略、注册标识符、手机区域、站点（SITE）标识。`GetSiteInfo` 是**公开**的（登录页在未登录时渲染它）。新的产品开关 → 放这里。
 - `system.v1` = 带密钥的基础设施通道（`system.*` 权限）：storage/captcha/email/sms/llm/oauth/payment。新通道 → 放这里。**没有**通用的 UpdateSystemSettings——只有 GetSystemSettings + 每通道的档案 CRUD/Bind/Test。
 - web 把两者都呈现在 `/settings/*` 下（按权限过滤的分组）；这个拆分存在于 proto/权限里，而非导航里。
-- **密钥在 wire 上只写**：读取时掩码（`secret_set`）；更新时的空值保留已存密钥（每通道的 `keepSecrets`）。
+- **密钥在 wire 上只写**：读取 `Profile.config` 时按 schema 掩码；更新时的空值保留已存密钥；驱动只看到合并后的真实配置。
 - **Settings 存储是 JSONB，无迁移**（`internal/settings`）：结构体形状变更会静默地把旧行零读——重置 dev 卷或重新录入配置（真实部署也一样）。缺失的行读作零配置，所以无需 seeding。
-- **统一的通道模型**：`settings.Channel[P]`（Profiles + Bindings `map[string][]string`）；`channelOps[P]`（`internal/rpc/system_channel.go`）是每个通道 Create/Update/Delete/Bind 背后唯一的生命周期。每通道的文件只做 proto⇆settings 映射。
+- **统一的通道模型**：`settings.Integration[kitsettings.GenericProfile]`（Profiles + Bindings `map[string][]string`）；`channelOps`（`internal/rpc/system_channel.go`）是每个通道 Create/Update/Delete/Bind/Describe 背后唯一的生命周期。每通道文件只接线 catalog、schema、driver registry 和测试动作。
 - **绑定即激活** —— 任何地方都**没有**每档案的 `enabled` 标志（它会造出一个"已绑定但被禁用"、语义未定义的状态，如被静默禁用的 CAPTCHA）。要暂停就解绑。
 - **用途目录是代码**：每个通道导出一个 `channel.Catalog`（`storage.Purposes`、`mail.Purposes`……）。业务代码按用途寻址通道，绝不用档案 id：`mail.Sender.Send(ctx, purpose, …)`。未绑定的用途 → `ErrNotConfigured`（CAPTCHA 例外 = 直通，让全新安装仍可登录）；删除已绑定的档案 = FailedPrecondition。多值用途（oauth 的 `login`、所有 payment）携带 `profile_ids` 并扇出；其余为单值。
-- **驱动 = 一个接缝（seam）背后的每 provider 配置形状**：一个带标签联合的档案（每 provider 一个子消息）；**所有** provider 配置并排持久化，所以切换永不丢凭据。绝不要把 provider 参数摊平到共享字段——只有接缝（Send/Verify/Complete/……）是共享的。
-- OAuth 档案的 `key` = `user_identities.provider` 里的 slug 以及流程 URL `/api/oauth/{key}/...`；创建后**不可变**；删除一个仍有身份行的 = FailedPrecondition。
+- **驱动 = 一个接缝（seam）背后的每 provider 配置形状**：provider schema 描述自己的 `Profile.config` 字段；只有接缝（Send/Verify/Complete/……）共享。绝不要把 provider 参数摊平成通道级共享字段。
+- OAuth 档案的 `config.key` = `user_identities.provider` 里的 slug 以及流程 URL `/api/oauth/{key}/...`；创建后**不可变**；删除一个仍有身份行的 = FailedPrecondition。
 - Web：每个通道复用 `ProfileManager` + `ProfileFormDrawer`；每个表单都走 `FormDrawer`（脏数据守卫关闭）——绝不要在表单外直接挂一个裸的 antd Drawer。新通道 = 在 `src/components/system/` 加新面板 + 一条 `src/lib/settings-nav.tsx` 条目。
 - 用户可见文本（proto 注释、UI 文案、错误字符串）里不要出现工具/库名——描述协议（"SMTP"、"S3-compatible"），而非实现。错误展示一条通用的已翻译消息，绝不用裸的 `err.message`。
 
@@ -80,7 +77,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 - **审计**（`internal/audit` + audit.v1）：一个拦截器接缝记录每个会改动的一元 RPC——处理器从不写审计行。请求载荷**从不**存储（密钥即便对审计轨迹也保持只写）；只读的 RPC 面；经 `MOONBASE_AUDIT_RETENTION_DAYS` 的每小时保留清道夫（默认 180，0 = 永久）。
 - **工作流**（`internal/workflow` + workflow.v1）：DBOS 是一个**库**，把检查点写入**同一** Postgres 的 `dbos` schema，并在启动时续跑被中断的运行。工作流是注册的**代码**；nil 引擎（单元测试）会让工作流 RPC 回 FailedPrecondition。
-- **支付**是唯一带数据平面的通道：迁移出来的 `payment_orders` 表拥有状态机；每次结算写入都用 SQL 状态守卫（`WHERE status IN (...)`），所以被重放的 provider 回调和并发同步是幂等的。回调是朴素的 `POST /api/payment/notify/{provider}/{profile}`，由驱动的签名校验鉴权（无会话）。**method 是 provider 范围内的官方产品 id**（支付宝 API method `precreate`/`page_pay`/`wap_pay`/`create`/`app_pay`；微信 trade_type `native`/`h5`/`jsapi`/`app`）——**不是**一个共享三元组：每个驱动声明一个 `pay.Method` 目录（id + `CredentialKind` qr/redirect/params + 必需的 `Inputs`），一个档案为其中一个子集签约（`PaymentProfile.Methods`，空 = 全部 → `pay.Offered`），收银台只提供那些，前端在 `src/lib/payments.ts` 镜像该目录、并按 `order.credentialKind` 渲染。支付宝 `create`（小程序 JSAPI）需要 `op_app_id`，否则下单失败。
+- **支付**是唯一带数据平面的通道：迁移出来的 `payment_orders` 表拥有状态机；每次结算写入都用 SQL 状态守卫（`WHERE status IN (...)`），所以被重放的 provider 回调和并发同步是幂等的。回调是朴素的 `POST /api/payment/notify/{provider}/{profile}`，由驱动的签名校验鉴权（无会话）。**method 是 provider 范围内的官方产品 id**（支付宝 API method `precreate`/`page_pay`/`wap_pay`/`create`/`app_pay`；微信 trade_type `native`/`h5`/`jsapi`/`app`）——**不是**一个共享三元组：每个驱动声明一个 `pay.Method` 目录（id + `CredentialKind` qr/redirect/params + 必需的 `Inputs`），一个档案在 `Profile.config.methods` 为其中一个子集签约（空 = 全部 → `pay.Offered`），收银台只提供那些，前端在 `src/lib/payments.ts` 镜像该目录、并按 `order.credentialKind` 渲染。支付宝 `create`（小程序 JSAPI）需要 `op_app_id`，否则下单失败。
 - **通知 + 出站 i18n**（`internal/notification` + notification.v1；`internal/i18n`）：每用户的站内信收件箱。业务代码经 `notification.Publisher` 接缝通知——`Publish(userID,…)` / `PublishToPermission(perm,…)`（向持有某权限者扇出）——**绝不**直接写 `notifications` 行；读侧是自限定范围的 RPC（authz `{}` + `IdentityFromContext`，所以用户只看到自己的）。出站文本（收件箱标题/正文、验证/重置/验证码邮件）经 `internal/i18n` 本地化（`Resolve`：`user.locale` → 请求 `Accept-Language` → 默认 `zh-CN`），并**按收件人**已渲染地存储/发送——但 RPC 错误消息在服务端**不**本地化（它们保持为代码，由 SPA 人性化展示）。`users.locale`（`CurrentUser.locale`）是账号语言；SPA 在登录时经 `setLocale` 应用它（靠重载收敛），公开的认证页带一个匿名切换器。
 
 ## 认证与 RBAC

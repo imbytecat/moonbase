@@ -27,18 +27,34 @@ func (s *SystemService) smsOps() integrationOps[kitsettings.GenericProfile] {
 }
 
 func smsMerge(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-	if sch, ok := sms.Schemas()[updated.Provider]; ok {
+	return mergeProfile(sms.Schemas(), updated, stored)
+}
+
+func smsValidate(p kitsettings.GenericProfile) error {
+	return validateProfile("sms", sms.Schemas(), p)
+}
+
+func mergeProfile(schemas map[string]schema.Schema, updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+	if sch, ok := schemas[updated.Provider]; ok {
 		updated.Config = sch.Merge(updated.Config, stored.Config)
 	}
 	return updated
 }
 
-func smsValidate(p kitsettings.GenericProfile) error {
-	sch, ok := sms.Schemas()[p.Provider]
+func validateProfile(name string, schemas map[string]schema.Schema, p kitsettings.GenericProfile) error {
+	sch, ok := schemas[p.Provider]
 	if !ok {
-		return fmt.Errorf("unknown sms provider %q", p.Provider)
+		return fmt.Errorf("unknown %s provider %q", name, p.Provider)
 	}
 	return sch.Validate(p.Config)
+}
+
+func describeProviders(schemas map[string]schema.Schema) map[string]*systemv1.ProviderSchema {
+	providers := make(map[string]*systemv1.ProviderSchema, len(schemas))
+	for name, sch := range schemas {
+		providers[name] = &systemv1.ProviderSchema{Fields: fieldDescriptors(sch)}
+	}
+	return providers
 }
 
 func (s *SystemService) CreateSmsProfile(
@@ -121,11 +137,7 @@ func (s *SystemService) DescribeSmsProviders(
 	_ *connect.Request[systemv1.DescribeSmsProvidersRequest],
 ) (*connect.Response[systemv1.DescribeSmsProvidersResponse], error) {
 	schemas := sms.Schemas()
-	providers := make(map[string]*systemv1.ProviderSchema, len(schemas))
-	for name, sch := range schemas {
-		providers[name] = &systemv1.ProviderSchema{Fields: fieldDescriptors(sch)}
-	}
-	return connect.NewResponse(&systemv1.DescribeSmsProvidersResponse{Providers: providers}), nil
+	return connect.NewResponse(&systemv1.DescribeSmsProvidersResponse{Providers: describeProviders(schemas)}), nil
 }
 
 func profileFromProto(p *systemv1.Profile) kitsettings.GenericProfile {

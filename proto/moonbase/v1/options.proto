@@ -1,32 +1,12 @@
 syntax = "proto3";
 
 // Package moonbase.v1 declares repo-local protobuf options that drive code
-// generation beyond the wire types. Currently they feed protoc-gen-settings,
-// the settings-codec generator: it turns a profile message into its storage
-// struct (wire-only *_set flags dropped) plus a Mask/FromProto/Merge codec
-// that concentrates the write-only-secret rule in one generated place.
+// generation beyond the wire types: permission catalogs and payment method
+// catalogs. Provider config is schema-driven at runtime, not declared through
+// custom protobuf options.
 package moonbase.v1;
 
 import "google/protobuf/descriptor.proto";
-
-extend google.protobuf.MessageOptions {
-  // profile marks a message as an infrastructure-integration connection
-  // profile. protoc-gen-settings emits a storage struct for it (dropping every
-  // sibling <field>_set flag, which is wire-only) plus a codec that maps the
-  // message to and from that struct and enforces write-only secrets.
-  bool profile = 50001;
-}
-
-extend google.protobuf.FieldOptions {
-  // secret marks a write-only credential field. Its stored value is masked
-  // out of responses — the sibling <field>_set bool reports whether one is
-  // stored — and an empty value on update keeps the stored secret.
-  bool secret = 50001;
-
-  // immutable marks a field that must not change after create: an update
-  // keeps the stored value (e.g. an OAuth key referenced by identity rows).
-  bool immutable = 50002;
-}
 
 extend google.protobuf.EnumValueOptions {
   // description carries an enum value's human-readable catalog text. A code

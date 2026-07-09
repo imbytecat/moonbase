@@ -9,6 +9,8 @@ package llm
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
@@ -16,8 +18,8 @@ import (
 	openaioption "github.com/openai/openai-go/v3/option"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // AI purposes are code, not data: each is a fixed slot the application calls
@@ -36,7 +38,7 @@ var Purposes = integration.Catalog{PurposeChat}
 // incomplete; callers map it to a friendly "not configured" RPC error.
 var ErrNotConfigured = fmt.Errorf("ai model is not configured")
 
-type Config = kitsettings.Integration[systemcodec.LlmProfile]
+type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
 type Loader func(ctx context.Context) (Config, error)
 
@@ -45,35 +47,45 @@ type Loader func(ctx context.Context) (Config, error)
 // interface when a real feature needs it.
 type Chatter interface {
 	Complete(ctx context.Context, purpose, systemPrompt, userPrompt string) (string, error)
-	CompleteWith(ctx context.Context, profile systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error)
+	CompleteWith(ctx context.Context, profile kitsettings.GenericProfile, systemPrompt, userPrompt string) (string, error)
 }
 
-type completeFunc = func(ctx context.Context, p systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error)
+type completeFunc = func(ctx context.Context, config map[string]any, systemPrompt, userPrompt string) (string, error)
 
-var drivers = integration.Registry[systemcodec.LlmProfile, completeFunc]{
+type driver struct {
+	schema   schema.Schema
+	complete completeFunc
+}
+
+var drivers = map[string]driver{
 	"openai": {
-		Usable: func(p systemcodec.LlmProfile) bool {
-			return p.Openai.ApiKey != "" && p.Openai.Model != ""
-		},
-		Ops: completeOpenAI,
+		schema:   openAISchema,
+		complete: completeOpenAI,
 	},
 	"anthropic": {
-		Usable: func(p systemcodec.LlmProfile) bool {
-			return p.Anthropic.ApiKey != "" && p.Anthropic.Model != ""
-		},
-		Ops: completeAnthropic,
+		schema:   anthropicSchema,
+		complete: completeAnthropic,
 	},
+}
+
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
 }
 
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
 // ProfileUsable reports whether the profile's driver is fully configured —
 // the same gate CompleteWith enforces.
-func ProfileUsable(p systemcodec.LlmProfile) bool {
-	return drivers.ProfileUsable(p)
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 // Usable reports whether the purpose resolves to a usable profile.
@@ -104,18 +116,18 @@ func (c *Client) Complete(ctx context.Context, purpose, systemPrompt, userPrompt
 	return c.CompleteWith(ctx, p, systemPrompt, userPrompt)
 }
 
-func (c *Client) CompleteWith(ctx context.Context, profile systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error) {
-	complete, ok := drivers.OpsFor(profile)
-	if !ok {
+func (c *Client) CompleteWith(ctx context.Context, profile kitsettings.GenericProfile, systemPrompt, userPrompt string) (string, error) {
+	d, ok := drivers[profile.Provider]
+	if !ok || !d.schema.Usable(profile.Config) {
 		return "", ErrNotConfigured
 	}
-	return complete(ctx, profile, systemPrompt, userPrompt)
+	return d.complete(ctx, profile.Config, systemPrompt, userPrompt)
 }
 
-func completeOpenAI(ctx context.Context, p systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error) {
-	opts := []openaioption.RequestOption{openaioption.WithAPIKey(p.Openai.ApiKey)}
-	if p.Openai.BaseUrl != "" {
-		opts = append(opts, openaioption.WithBaseURL(p.Openai.BaseUrl))
+func completeOpenAI(ctx context.Context, config map[string]any, systemPrompt, userPrompt string) (string, error) {
+	opts := []openaioption.RequestOption{openaioption.WithAPIKey(cfgStr(config, "apiKey"))}
+	if baseURL := cfgStr(config, "baseUrl"); baseURL != "" {
+		opts = append(opts, openaioption.WithBaseURL(baseURL))
 	}
 	client := openai.NewClient(opts...)
 
@@ -126,7 +138,7 @@ func completeOpenAI(ctx context.Context, p systemcodec.LlmProfile, systemPrompt,
 	messages = append(messages, openai.UserMessage(userPrompt))
 
 	resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Model:    p.Openai.Model,
+		Model:    cfgStr(config, "model"),
 		Messages: messages,
 	})
 	if err != nil {
@@ -138,15 +150,15 @@ func completeOpenAI(ctx context.Context, p systemcodec.LlmProfile, systemPrompt,
 	return resp.Choices[0].Message.Content, nil
 }
 
-func completeAnthropic(ctx context.Context, p systemcodec.LlmProfile, systemPrompt, userPrompt string) (string, error) {
-	opts := []anthropicoption.RequestOption{anthropicoption.WithAPIKey(p.Anthropic.ApiKey)}
-	if p.Anthropic.BaseUrl != "" {
-		opts = append(opts, anthropicoption.WithBaseURL(p.Anthropic.BaseUrl))
+func completeAnthropic(ctx context.Context, config map[string]any, systemPrompt, userPrompt string) (string, error) {
+	opts := []anthropicoption.RequestOption{anthropicoption.WithAPIKey(cfgStr(config, "apiKey"))}
+	if baseURL := cfgStr(config, "baseUrl"); baseURL != "" {
+		opts = append(opts, anthropicoption.WithBaseURL(baseURL))
 	}
 	client := anthropic.NewClient(opts...)
 
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.Model(p.Anthropic.Model),
+		Model:     anthropic.Model(cfgStr(config, "model")),
 		MaxTokens: 1024,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(userPrompt)),
@@ -166,4 +178,9 @@ func completeAnthropic(ctx context.Context, p systemcodec.LlmProfile, systemProm
 		}
 	}
 	return "", fmt.Errorf("message completion: no text content")
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }

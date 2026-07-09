@@ -3,7 +3,7 @@ import { useMutation } from '@connectrpc/connect-query'
 import {
   bindStoragePurpose,
   deleteStorageProfile,
-  type StorageProfile,
+  type Profile,
   type StorageSettings,
 } from '@moonbase/api-client'
 import { App, Tag } from 'antd'
@@ -33,7 +33,7 @@ export function StoragePanel({
   const { message } = App.useApp()
   const profiles = storage?.profiles ?? []
   const bindings = storage?.bindings ?? []
-  const [editing, setEditing] = useState<StorageProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteStorageProfile, {
     onSuccess: () => {
@@ -57,7 +57,8 @@ export function StoragePanel({
         profiles={profiles.map((p) => ({
           ...p,
           name:
-            p.name || (p.provider === 'local' ? m.systemPage_storageLocal() : p.s3?.bucket) || '',
+            p.name ||
+            (p.provider === 'local' ? m.systemPage_storageLocal() : String(p.config?.bucket ?? '')),
         }))}
         bindings={bindings.map((b) => ({
           purpose: b.purpose,
@@ -74,7 +75,7 @@ export function StoragePanel({
         profileIcon={(p) =>
           p.provider === 'local' ? (
             <HddOutlined className="text-lg text-(--ant-color-primary)" />
-          ) : p.s3?.publicBaseUrl ? (
+          ) : p.config?.publicBaseUrl ? (
             <GlobalOutlined className="text-lg text-(--ant-color-success)" />
           ) : (
             <LockOutlined className="text-lg text-(--ant-color-text-tertiary)" />
@@ -84,16 +85,18 @@ export function StoragePanel({
           <>
             <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />
             {p.provider === 's3' ? (
-              <Tag color={p.s3?.publicBaseUrl ? 'green' : 'default'}>
-                {p.s3?.publicBaseUrl ? m.systemPage_publicBucket() : m.systemPage_privateBucket()}
+              <Tag color={p.config?.publicBaseUrl ? 'green' : 'default'}>
+                {p.config?.publicBaseUrl
+                  ? m.systemPage_publicBucket()
+                  : m.systemPage_privateBucket()}
               </Tag>
             ) : null}
           </>
         )}
         profileDescription={(p) =>
           p.provider === 'local'
-            ? p.local?.directory || m.systemPage_storageDefaultDirectory()
-            : `${p.s3?.endpoint} / ${p.s3?.bucket}`
+            ? String(p.config?.directory || m.systemPage_storageDefaultDirectory())
+            : `${String(p.config?.endpoint ?? '')} / ${String(p.config?.bucket ?? '')}`
         }
         onAdd={() => setEditing('new')}
         onEdit={(p) => setEditing(p)}

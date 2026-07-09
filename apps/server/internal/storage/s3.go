@@ -10,15 +10,15 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 )
 
-func (c *Client) s3PresignPut(ctx context.Context, cfg systemcodec.StorageProfile, _, key, contentType string, expires time.Duration) (string, error) {
-	mc, err := newMinio(cfg.S3)
+func (c *Client) s3PresignPut(ctx context.Context, cfg kitsettings.GenericProfile, _, key, contentType string, expires time.Duration) (string, error) {
+	mc, err := newMinio(cfg.Config)
 	if err != nil {
 		return "", err
 	}
-	u, err := mc.Presign(ctx, "PUT", cfg.S3.Bucket, key, expires, url.Values{
+	u, err := mc.Presign(ctx, "PUT", cfgStr(cfg.Config, "bucket"), key, expires, url.Values{
 		"Content-Type": {contentType},
 	})
 	if err != nil {
@@ -27,15 +27,15 @@ func (c *Client) s3PresignPut(ctx context.Context, cfg systemcodec.StorageProfil
 	return u.String(), nil
 }
 
-func (c *Client) s3ResolveURL(ctx context.Context, cfg systemcodec.StorageProfile, _, key string, expires time.Duration) (string, error) {
-	if cfg.S3.PublicBaseUrl != "" {
-		return strings.TrimSuffix(cfg.S3.PublicBaseUrl, "/") + "/" + strings.TrimPrefix(key, "/"), nil
+func (c *Client) s3ResolveURL(ctx context.Context, cfg kitsettings.GenericProfile, _, key string, expires time.Duration) (string, error) {
+	if publicBaseURL := cfgStr(cfg.Config, "publicBaseUrl"); publicBaseURL != "" {
+		return strings.TrimSuffix(publicBaseURL, "/") + "/" + strings.TrimPrefix(key, "/"), nil
 	}
-	mc, err := newMinio(cfg.S3)
+	mc, err := newMinio(cfg.Config)
 	if err != nil {
 		return "", err
 	}
-	u, err := mc.PresignedGetObject(ctx, cfg.S3.Bucket, key, expires, nil)
+	u, err := mc.PresignedGetObject(ctx, cfgStr(cfg.Config, "bucket"), key, expires, nil)
 	if err != nil {
 		return "", fmt.Errorf("presign get: %w", err)
 	}
@@ -44,12 +44,12 @@ func (c *Client) s3ResolveURL(ctx context.Context, cfg systemcodec.StorageProfil
 
 // s3Delete removes an object. S3 DELETE is idempotent — removing a key that is
 // already gone succeeds — so the sweep can safely re-run after a crash.
-func (c *Client) s3Delete(ctx context.Context, cfg systemcodec.StorageProfile, _, key string) error {
-	mc, err := newMinio(cfg.S3)
+func (c *Client) s3Delete(ctx context.Context, cfg kitsettings.GenericProfile, _, key string) error {
+	mc, err := newMinio(cfg.Config)
 	if err != nil {
 		return err
 	}
-	if err := mc.RemoveObject(ctx, cfg.S3.Bucket, key, minio.RemoveObjectOptions{}); err != nil {
+	if err := mc.RemoveObject(ctx, cfgStr(cfg.Config, "bucket"), key, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("delete object: %w", err)
 	}
 	return nil
@@ -57,34 +57,43 @@ func (c *Client) s3Delete(ctx context.Context, cfg systemcodec.StorageProfile, _
 
 // s3Test verifies the config end-to-end by checking the bucket exists — the
 // cheapest call that exercises endpoint, credentials and bucket.
-func (c *Client) s3Test(ctx context.Context, cfg systemcodec.StorageProfile) error {
-	mc, err := newMinio(cfg.S3)
+func (c *Client) s3Test(ctx context.Context, cfg kitsettings.GenericProfile) error {
+	mc, err := newMinio(cfg.Config)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	ok, err := mc.BucketExists(ctx, cfg.S3.Bucket)
+	bucket := cfgStr(cfg.Config, "bucket")
+	ok, err := mc.BucketExists(ctx, bucket)
 	if err != nil {
 		return fmt.Errorf("connect to bucket: %w", err)
 	}
 	if !ok {
-		return fmt.Errorf("bucket %q does not exist", cfg.S3.Bucket)
+		return fmt.Errorf("bucket %q does not exist", bucket)
 	}
 	return nil
 }
 
-func newMinio(cfg systemcodec.S3StorageConfig) (*minio.Client, error) {
-	if cfg.Endpoint == "" || cfg.Bucket == "" || cfg.AccessKeyId == "" {
+func newMinio(config map[string]any) (*minio.Client, error) {
+	endpoint := cfgStr(config, "endpoint")
+	bucket := cfgStr(config, "bucket")
+	accessKeyID := cfgStr(config, "accessKeyId")
+	if endpoint == "" || bucket == "" || accessKeyID == "" {
 		return nil, ErrNotConfigured
 	}
-	mc, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AccessKeyId, cfg.SecretAccessKey, ""),
-		Secure: cfg.UseSsl,
-		Region: cfg.Region,
+	mc, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyID, cfgStr(config, "secretAccessKey"), ""),
+		Secure: cfgBool(config, "useSsl"),
+		Region: cfgStr(config, "region"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create s3 client: %w", err)
 	}
 	return mc, nil
+}
+
+func cfgBool(config map[string]any, key string) bool {
+	b, _ := config[key].(bool)
+	return b
 }

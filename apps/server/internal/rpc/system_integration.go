@@ -13,10 +13,10 @@ import (
 )
 
 // integrationOps is the one implementation behind every profile-based
-// integration's Create/Update/Delete/Bind RPCs (storage, captcha, email, sms,
-// llm). Only the profile payload differs per integration; the lifecycle rules
-// are shared: create assigns the id, update keeps stored secrets when the wire
-// value is empty, delete refuses while bound, bind validates the purpose
+// integration's Create/Update/Delete/Bind RPCs. Each integration supplies its
+// catalog, schema-aware secret merge, and optional validation; the lifecycle
+// rules are shared: create assigns the id, update keeps stored secrets when the
+// wire value is empty, delete refuses while bound, bind validates the purpose
 // catalog.
 type integrationOps[P settings.Profile[P]] struct {
 	name        string

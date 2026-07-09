@@ -2,64 +2,13 @@ syntax = "proto3";
 
 // Package system.v1 is the SYSTEM settings surface: infrastructure integrations
 // (file storage, CAPTCHA, email, SMS, LLM, third-party login) configured by
-// platform operators behind system.read / system.write. Every secret is
-// write-only over the wire: reads mask it (empty + *_set=true), an empty
-// secret on update keeps the stored value. Business toggles live in
-// settings.v1 instead.
+// platform operators behind system.read / system.write. Provider config is
+// schema-driven: drivers describe fields, base masks secrets and keeps stored
+// secret values on empty updates. Business toggles live in settings.v1 instead.
 package system.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
-import "moonbase/v1/options.proto";
-
-// One file-storage connection: a storage driver plus that driver's own
-// config shape. Operators register any number of profiles (e.g. a public
-// assets bucket and a private user-files bucket) and bind each storage
-// purpose to one of them.
-message StorageProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Display name shown wherever a profile is picked.
-  string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "local",
-      "s3"
-    ]
-  }];
-  LocalStorageConfig local = 4;
-  S3StorageConfig s3 = 5;
-}
-
-// Server-local disk storage. Uploads and reads go through the application
-// server itself via short-lived signed URLs — zero external dependencies,
-// suited to single-instance deployments.
-message LocalStorageConfig {
-  // Directory on the server's filesystem; relative paths resolve against the
-  // server working directory. Created on first use.
-  string directory = 1 [(buf.validate.field).string.max_len = 512];
-}
-
-// Any S3-compatible endpoint (AWS S3, MinIO, R2, ...).
-message S3StorageConfig {
-  string endpoint = 1 [(buf.validate.field).string.max_len = 253];
-  string region = 2 [(buf.validate.field).string.max_len = 64];
-  string bucket = 3 [(buf.validate.field).string.max_len = 63];
-  string access_key_id = 4 [(buf.validate.field).string.max_len = 128];
-  string secret_access_key = 5 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  bool use_ssl = 6;
-  // Public base URL of the bucket (e.g. a CDN or website endpoint). When set,
-  // object URLs are built as <public_base_url>/<key> — the bucket must allow
-  // anonymous reads. When empty the bucket is treated as private and reads go
-  // through short-lived presigned URLs.
-  string public_base_url = 7 [(buf.validate.field).string.max_len = 512];
-  bool secret_access_key_set = 8;
-}
 
 // A storage purpose is a fixed, code-defined slot the application reads and
 // writes (user avatars, site assets, ...). Binding a purpose to a profile
@@ -71,65 +20,9 @@ message StorageBinding {
 }
 
 message StorageSettings {
-  repeated StorageProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated StorageBinding bindings = 2;
-}
-
-// One CAPTCHA connection: a verification driver plus that driver's own
-// config shape. The public key (Turnstile site key / Geetest captcha_id)
-// flows to the login page via auth.v1 GetAuthConfig; the server-side key is
-// write-only. Operators register any number of profiles and bind each
-// CAPTCHA purpose to one of them.
-message CaptchaProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Display name shown wherever a profile is picked.
-  string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "turnstile",
-      "geetest",
-      "altcha"
-    ]
-  }];
-  TurnstileCaptchaConfig turnstile = 4;
-  GeetestCaptchaConfig geetest = 5;
-  AltchaCaptchaConfig altcha = 6;
-}
-
-// Cloudflare Turnstile; keys from the Cloudflare dashboard.
-message TurnstileCaptchaConfig {
-  string site_key = 1 [(buf.validate.field).string.max_len = 128];
-  string secret_key = 2 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  bool secret_key_set = 3;
-}
-
-// Geetest v4 web integration; keys from the Geetest console.
-message GeetestCaptchaConfig {
-  string captcha_id = 1 [(buf.validate.field).string.max_len = 128];
-  string captcha_key = 2 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  bool captcha_key_set = 3;
-}
-
-// Built-in ALTCHA proof-of-work challenge (https://altcha.org): fully
-// self-hosted, no external service, works offline / on air-gapped networks.
-// The browser solves a small hash puzzle instead of the user solving a
-// picture. difficulty is the maximum random number the widget brute-forces
-// (bigger = slower for bots AND users); 0 uses the built-in default.
-message AltchaCaptchaConfig {
-  int32 difficulty = 1 [(buf.validate.field).int32 = {
-    gte: 0
-    lte: 10000000
-  }];
 }
 
 // A CAPTCHA purpose is a fixed, code-defined slot the application challenges
@@ -142,33 +35,9 @@ message CaptchaBinding {
 }
 
 message CaptchaSettings {
-  repeated CaptchaProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated CaptchaBinding bindings = 2;
-}
-
-// One outbound-email connection: a delivery driver plus that driver's own
-// config shape — each driver's parameters are deliberately different, only
-// the sending seam is shared. Sender identity (from_*) is per profile so two
-// profiles can send as different addresses. Operators register any number of
-// profiles and bind each email purpose to one of them.
-message EmailProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Display name shown wherever a profile is picked.
-  string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "smtp",
-      "cloudflare"
-    ]
-  }];
-  string from_address = 4 [(buf.validate.field).string.max_len = 254];
-  string from_name = 5 [(buf.validate.field).string.max_len = 100];
-  SmtpConfig smtp = 6;
-  CloudflareEmailConfig cloudflare = 7;
 }
 
 // An email purpose is a fixed, code-defined slot the application sends
@@ -181,57 +50,16 @@ message EmailBinding {
 }
 
 message EmailSettings {
-  repeated EmailProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated EmailBinding bindings = 2;
 }
 
-// Plain SMTP — works with any provider exposing an SMTP endpoint.
-message SmtpConfig {
-  string host = 1 [(buf.validate.field).string.max_len = 253];
-  int32 port = 2 [(buf.validate.field).int32 = {
-    gte: 0
-    lte: 65535
-  }];
-  string username = 3 [(buf.validate.field).string.max_len = 128];
-  string password = 4 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  // "starttls" (587), "ssl" (465) or "none" (unencrypted, e.g. a local dev
-  // SMTP server).
-  string encryption = 5 [(buf.validate.field).string = {
-    in: [
-      "",
-      "starttls",
-      "ssl",
-      "none"
-    ]
-  }];
-  bool password_set = 6;
-}
-
-// Cloudflare Email Service (Email Sending REST API). The sender domain must
-// be onboarded for Email Sending on the account that owns the token.
-message CloudflareEmailConfig {
-  string account_id = 1 [(buf.validate.field).string.max_len = 64];
-  string api_token = 2 [
-    (buf.validate.field).string.max_len = 256,
-    (moonbase.v1.secret) = true
-  ];
-  bool api_token_set = 3;
-}
-
-// One SMS connection: a delivery driver plus that driver's own config shape
-// (sign name / template layout differ per vendor — that variance lives in
-// the driver config, only the send-code seam is shared). Operators register
-// any number of profiles and bind each SMS purpose to one of them.
 // Profile is the generic, schema-driven connection profile (ADR-0006): the
 // per-provider config crosses as an opaque Struct whose shape is described by
 // the driver's schema (see DescribeSmsProviders). base masks / merges /
 // validates it generically from that schema, so the wire type carries NO
-// per-provider fields. Reused by every integration as it migrates off the
-// typed profiles.
+// per-provider fields. Reused by every integration.
 message Profile {
   // Server-assigned id; empty on create.
   string id = 1 [(buf.validate.field).string.max_len = 36];
@@ -250,7 +78,7 @@ message Profile {
 message FieldDescriptor {
   string key = 1;
   string label = 2;
-  string type = 3; // string | text | int | bool | enum
+  string type = 3; // string | text | int | bool | enum | string_array
   bool secret = 4;
   bool immutable = 5;
   bool required = 6;
@@ -287,28 +115,6 @@ message DescribeSmsProvidersResponse {
   map<string, ProviderSchema> providers = 1;
 }
 
-// One AI model connection: a provider (API dialect) plus that dialect's
-// config. "openai" is any OpenAI-compatible endpoint (hosted or self-hosted)
-// selected via base_url; "anthropic" is the native Messages API. Operators
-// register any number of profiles (e.g. a fast cheap model and a strong
-// reasoning model) and bind each AI purpose to one of them.
-message LlmProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Display name shown wherever a profile is picked.
-  string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "openai",
-      "anthropic"
-    ]
-  }];
-  OpenAiLlmConfig openai = 4;
-  AnthropicLlmConfig anthropic = 5;
-}
-
 // An AI purpose is a fixed, code-defined slot the application calls models
 // through (general chat, ...). Binding a purpose to a profile turns the
 // feature on; an unbound purpose reports "not configured".
@@ -319,88 +125,9 @@ message LlmBinding {
 }
 
 message LlmSettings {
-  repeated LlmProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated LlmBinding bindings = 2;
-}
-
-message OpenAiLlmConfig {
-  // Base URL of an OpenAI-compatible endpoint; empty = the official API.
-  string base_url = 1 [(buf.validate.field).string.max_len = 512];
-  string api_key = 2 [
-    (buf.validate.field).string.max_len = 256,
-    (moonbase.v1.secret) = true
-  ];
-  string model = 3 [(buf.validate.field).string.max_len = 128];
-  bool api_key_set = 4;
-}
-
-message AnthropicLlmConfig {
-  // Optional gateway base URL; empty = the official API.
-  string base_url = 1 [(buf.validate.field).string.max_len = 512];
-  string api_key = 2 [
-    (buf.validate.field).string.max_len = 256,
-    (moonbase.v1.secret) = true
-  ];
-  string model = 3 [(buf.validate.field).string.max_len = 128];
-  bool api_key_set = 4;
-}
-
-// One third-party login connection. Unlike other integrations there are no
-// purpose bindings: every enabled profile shows on the login page
-// simultaneously. key is the operator-chosen stable identifier — it names
-// the profile in identity records and the browser flow URL
-// (/api/oauth/{key}/...), so it is immutable after creation; name is the
-// login-button label. The "oidc" driver covers any OpenID Connect provider
-// (Google, GitHub via OIDC proxies, Keycloak, Authentik, ...); "wechat" is
-// the WeChat Open Platform QR-login dialect.
-message OauthProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Stable slug used in identity records and flow URLs; immutable.
-  string key = 2 [
-    (buf.validate.field).string.pattern = "^[a-z][a-z0-9-]{1,31}$",
-    (moonbase.v1.immutable) = true
-  ];
-  // Login-button label shown to end users.
-  string name = 3 [(buf.validate.field).string.max_len = 64];
-  string provider = 4 [(buf.validate.field).string = {
-    in: [
-      "oidc",
-      "wechat"
-    ]
-  }];
-  OidcOauthConfig oidc = 5;
-  WechatOauthConfig wechat = 6;
-}
-
-// Standard OpenID Connect authorization-code flow; endpoints come from the
-// issuer's discovery document.
-message OidcOauthConfig {
-  // Issuer URL, e.g. https://accounts.google.com — discovery is fetched from
-  // <issuer>/.well-known/openid-configuration.
-  string issuer = 1 [(buf.validate.field).string.max_len = 512];
-  string client_id = 2 [(buf.validate.field).string.max_len = 256];
-  string client_secret = 3 [
-    (buf.validate.field).string.max_len = 256,
-    (moonbase.v1.secret) = true
-  ];
-  // Requested scopes; empty = "openid profile email".
-  string scopes = 4 [(buf.validate.field).string.max_len = 256];
-  bool client_secret_set = 5;
-}
-
-// WeChat Open Platform "website application" (QR-code login); credentials
-// from open.weixin.qq.com.
-message WechatOauthConfig {
-  string app_id = 1 [(buf.validate.field).string.max_len = 64];
-  string app_secret = 2 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  bool app_secret_set = 3;
 }
 
 // A third-party-login purpose is a fixed, code-defined slot like every other
@@ -413,109 +140,9 @@ message OauthBinding {
 }
 
 message OauthSettings {
-  repeated OauthProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated OauthBinding bindings = 2;
-}
-
-// One payment-gateway connection: a payment driver plus that driver's own
-// merchant credentials. Payment purposes are multi-valued: every bound
-// profile becomes a selectable payment option (e.g. Alipay AND WeChat Pay on
-// the same checkout), and the payer picks one at pay time.
-message PaymentProfile {
-  option (moonbase.v1.profile) = true;
-
-  // Server-assigned id; empty on create.
-  string id = 1 [(buf.validate.field).string.max_len = 36];
-  // Display name shown wherever a profile is picked.
-  string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "alipay",
-      "wechat"
-    ]
-  }];
-  AlipayPaymentConfig alipay = 4;
-  WechatPaymentConfig wechat = 5;
-  // Official provider products this merchant signed for, keyed by the
-  // provider's official API method — Alipay (precreate 当面付/订单码,
-  // page_pay 电脑网站支付, wap_pay 手机网站支付, create 小程序支付,
-  // app_pay APP 支付) or WeChat trade_type (native, h5, jsapi, app). A profile
-  // only offers what it subscribed to; empty = all of the provider's products,
-  // for back-compat. Membership is validated server-side against the generated
-  // driver catalog (the single source), so the wire only bounds each string.
-  repeated string methods = 6 [(buf.validate.field).repeated = {
-    unique: true
-    items: {string: {max_len: 32}}
-  }];
-}
-
-// Alipay open-platform merchant credentials (V3 OpenAPI). The application's
-// RSA private key signs requests; responses and async notifications are
-// verified per auth_method: "public_key" uses the platform's public key,
-// "cert" uses the certificate chain issued by the open platform.
-message AlipayPaymentConfig {
-  string app_id = 1 [(buf.validate.field).string.max_len = 32];
-  // Application RSA private key, PEM or base64 body. Write-only.
-  string app_private_key = 2 [
-    (buf.validate.field).string.max_len = 8192,
-    (moonbase.v1.secret) = true
-  ];
-  bool app_private_key_set = 3;
-  string auth_method = 4 [(buf.validate.field).string = {
-    in: [
-      "",
-      "public_key",
-      "cert"
-    ]
-  }];
-  // Platform public key (公钥模式), PEM or base64 body.
-  string alipay_public_key = 5 [(buf.validate.field).string.max_len = 8192];
-  // Certificate mode (证书模式): the three certificates downloaded from the
-  // open platform. Not secret, but long PEM blobs.
-  string app_cert = 6 [(buf.validate.field).string.max_len = 16384];
-  string alipay_root_cert = 7 [(buf.validate.field).string.max_len = 16384];
-  string alipay_public_cert = 8 [(buf.validate.field).string.max_len = 16384];
-  // Mini-program APPID for 小程序支付 (jsapi_pay): alipay.trade.create sends it
-  // as op_app_id and the order fails without it. Not secret.
-  string op_app_id = 9 [(buf.validate.field).string.max_len = 32];
-}
-
-// WeChat Pay merchant credentials (APIv3). The merchant certificate's
-// private key signs requests; platform responses and callbacks are verified
-// per auth_method: "public_key" uses the WeChat Pay public key issued to
-// merchants onboarded after 2024, "platform_cert" auto-downloads platform
-// certificates (older merchants).
-message WechatPaymentConfig {
-  // Merchant id (商户号).
-  string mch_id = 1 [(buf.validate.field).string.max_len = 32];
-  // The appid bound to the merchant (公众号/开放平台/小程序 appid).
-  string app_id = 2 [(buf.validate.field).string.max_len = 32];
-  // Merchant API certificate serial number.
-  string mch_cert_serial_no = 3 [(buf.validate.field).string.max_len = 64];
-  // Merchant API certificate private key, PEM. Write-only.
-  string mch_private_key = 4 [
-    (buf.validate.field).string.max_len = 8192,
-    (moonbase.v1.secret) = true
-  ];
-  bool mch_private_key_set = 5;
-  // APIv3 key (32 chars) decrypting callback ciphertexts. Write-only.
-  string api_v3_key = 6 [
-    (buf.validate.field).string.max_len = 64,
-    (moonbase.v1.secret) = true
-  ];
-  bool api_v3_key_set = 7;
-  string auth_method = 8 [(buf.validate.field).string = {
-    in: [
-      "",
-      "public_key",
-      "platform_cert"
-    ]
-  }];
-  // WeChat Pay public key id (PUB_KEY_ID_...), public-key mode only.
-  string public_key_id = 9 [(buf.validate.field).string.max_len = 64];
-  // WeChat Pay public key, PEM. Public-key mode only.
-  string public_key = 10 [(buf.validate.field).string.max_len = 8192];
 }
 
 // A payment purpose is a fixed, code-defined checkout slot. Multi-valued:
@@ -527,7 +154,7 @@ message PaymentBinding {
 }
 
 message PaymentSettings {
-  repeated PaymentProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated PaymentBinding bindings = 2;
 }
@@ -545,21 +172,27 @@ message GetSystemSettingsResponse {
 }
 
 message CreateStorageProfileRequest {
-  StorageProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateStorageProfileResponse {
-  StorageProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdateStorageProfileRequest {
-  StorageProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateStorageProfileResponse {
-  StorageProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribeStorageProvidersRequest {}
+
+message DescribeStorageProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -585,7 +218,7 @@ message BindStoragePurposeResponse {
 // the stored profile with the same id), or profile_id to test a stored
 // profile as-is.
 message TestStorageConnectionRequest {
-  optional StorageProfile profile = 1;
+  optional Profile profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -599,7 +232,7 @@ message TestStorageConnectionResponse {
 // with the same id), or profile_id to test a stored profile as-is.
 message SendTestEmailRequest {
   string to = 1 [(buf.validate.field).string.email = true];
-  optional EmailProfile profile = 2;
+  optional Profile profile = 2;
   string profile_id = 3 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -630,7 +263,7 @@ message SendTestSmsResponse {
 // test unsaved form values (an empty secret falls back to the stored profile
 // with the same id), or profile_id to test a stored profile as-is.
 message TestLlmRequest {
-  optional LlmProfile profile = 1;
+  optional Profile profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -640,21 +273,27 @@ message TestLlmResponse {
 }
 
 message CreateLlmProfileRequest {
-  LlmProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateLlmProfileResponse {
-  LlmProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdateLlmProfileRequest {
-  LlmProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateLlmProfileResponse {
-  LlmProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribeLlmProvidersRequest {}
+
+message DescribeLlmProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -676,21 +315,27 @@ message BindLlmPurposeResponse {
 }
 
 message CreateEmailProfileRequest {
-  EmailProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateEmailProfileResponse {
-  EmailProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdateEmailProfileRequest {
-  EmailProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateEmailProfileResponse {
-  EmailProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribeEmailProvidersRequest {}
+
+message DescribeEmailProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -748,21 +393,27 @@ message BindSmsPurposeResponse {
 }
 
 message CreateCaptchaProfileRequest {
-  CaptchaProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateCaptchaProfileResponse {
-  CaptchaProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdateCaptchaProfileRequest {
-  CaptchaProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateCaptchaProfileResponse {
-  CaptchaProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribeCaptchaProvidersRequest {}
+
+message DescribeCaptchaProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -784,21 +435,27 @@ message BindCaptchaPurposeResponse {
 }
 
 message CreateOauthProfileRequest {
-  OauthProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateOauthProfileResponse {
-  OauthProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. key is immutable (identity records
 // reference it); an empty secret keeps the stored value.
 message UpdateOauthProfileRequest {
-  OauthProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateOauthProfileResponse {
-  OauthProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribeOauthProvidersRequest {}
+
+message DescribeOauthProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while any user identity still references the profile's key.
@@ -820,21 +477,27 @@ message BindOauthPurposeResponse {
 }
 
 message CreatePaymentProfileRequest {
-  PaymentProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreatePaymentProfileResponse {
-  PaymentProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdatePaymentProfileRequest {
-  PaymentProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdatePaymentProfileResponse {
-  PaymentProfile profile = 1;
+  Profile profile = 1;
+}
+
+message DescribePaymentProvidersRequest {}
+
+message DescribePaymentProvidersResponse {
+  map<string, ProviderSchema> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -861,14 +524,17 @@ service SystemService {
   rpc UpdateStorageProfile(UpdateStorageProfileRequest) returns (UpdateStorageProfileResponse) {}
   rpc DeleteStorageProfile(DeleteStorageProfileRequest) returns (DeleteStorageProfileResponse) {}
   rpc BindStoragePurpose(BindStoragePurposeRequest) returns (BindStoragePurposeResponse) {}
+  rpc DescribeStorageProviders(DescribeStorageProvidersRequest) returns (DescribeStorageProvidersResponse) {}
   rpc CreateCaptchaProfile(CreateCaptchaProfileRequest) returns (CreateCaptchaProfileResponse) {}
   rpc UpdateCaptchaProfile(UpdateCaptchaProfileRequest) returns (UpdateCaptchaProfileResponse) {}
   rpc DeleteCaptchaProfile(DeleteCaptchaProfileRequest) returns (DeleteCaptchaProfileResponse) {}
   rpc BindCaptchaPurpose(BindCaptchaPurposeRequest) returns (BindCaptchaPurposeResponse) {}
+  rpc DescribeCaptchaProviders(DescribeCaptchaProvidersRequest) returns (DescribeCaptchaProvidersResponse) {}
   rpc CreateEmailProfile(CreateEmailProfileRequest) returns (CreateEmailProfileResponse) {}
   rpc UpdateEmailProfile(UpdateEmailProfileRequest) returns (UpdateEmailProfileResponse) {}
   rpc DeleteEmailProfile(DeleteEmailProfileRequest) returns (DeleteEmailProfileResponse) {}
   rpc BindEmailPurpose(BindEmailPurposeRequest) returns (BindEmailPurposeResponse) {}
+  rpc DescribeEmailProviders(DescribeEmailProvidersRequest) returns (DescribeEmailProvidersResponse) {}
   rpc CreateSmsProfile(CreateSmsProfileRequest) returns (CreateSmsProfileResponse) {}
   rpc UpdateSmsProfile(UpdateSmsProfileRequest) returns (UpdateSmsProfileResponse) {}
   rpc DeleteSmsProfile(DeleteSmsProfileRequest) returns (DeleteSmsProfileResponse) {}
@@ -877,14 +543,17 @@ service SystemService {
   rpc UpdateLlmProfile(UpdateLlmProfileRequest) returns (UpdateLlmProfileResponse) {}
   rpc DeleteLlmProfile(DeleteLlmProfileRequest) returns (DeleteLlmProfileResponse) {}
   rpc BindLlmPurpose(BindLlmPurposeRequest) returns (BindLlmPurposeResponse) {}
+  rpc DescribeLlmProviders(DescribeLlmProvidersRequest) returns (DescribeLlmProvidersResponse) {}
   rpc CreateOauthProfile(CreateOauthProfileRequest) returns (CreateOauthProfileResponse) {}
   rpc UpdateOauthProfile(UpdateOauthProfileRequest) returns (UpdateOauthProfileResponse) {}
   rpc DeleteOauthProfile(DeleteOauthProfileRequest) returns (DeleteOauthProfileResponse) {}
   rpc BindOauthPurpose(BindOauthPurposeRequest) returns (BindOauthPurposeResponse) {}
+  rpc DescribeOauthProviders(DescribeOauthProvidersRequest) returns (DescribeOauthProvidersResponse) {}
   rpc CreatePaymentProfile(CreatePaymentProfileRequest) returns (CreatePaymentProfileResponse) {}
   rpc UpdatePaymentProfile(UpdatePaymentProfileRequest) returns (UpdatePaymentProfileResponse) {}
   rpc DeletePaymentProfile(DeletePaymentProfileRequest) returns (DeletePaymentProfileResponse) {}
   rpc BindPaymentPurpose(BindPaymentPurposeRequest) returns (BindPaymentPurposeResponse) {}
+  rpc DescribePaymentProviders(DescribePaymentProvidersRequest) returns (DescribePaymentProvidersResponse) {}
   rpc TestStorageConnection(TestStorageConnectionRequest) returns (TestStorageConnectionResponse) {}
   rpc SendTestEmail(SendTestEmailRequest) returns (SendTestEmailResponse) {}
   rpc SendTestSms(SendTestSmsRequest) returns (SendTestSmsResponse) {}

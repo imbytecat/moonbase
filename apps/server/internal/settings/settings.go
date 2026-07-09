@@ -20,7 +20,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 )
 
@@ -84,21 +83,19 @@ type Profile[P any] = kitsettings.Profile[P]
 
 type Integration[P kitsettings.Profile[P]] = kitsettings.Integration[P]
 
-type Storage = Integration[systemcodec.StorageProfile]
+type Storage = Integration[kitsettings.GenericProfile]
 
-type Captcha = Integration[systemcodec.CaptchaProfile]
+type Captcha = Integration[kitsettings.GenericProfile]
 
-// Email is the outbound-email channel. Its profile and config shapes are
-// generated from proto by protoc-gen-settings, so they live in systemcodec.
-type Email = Integration[systemcodec.EmailProfile]
+type Email = Integration[kitsettings.GenericProfile]
 
 type Sms = Integration[kitsettings.GenericProfile]
 
-type Llm = Integration[systemcodec.LlmProfile]
+type Llm = Integration[kitsettings.GenericProfile]
 
-type OAuth = Integration[systemcodec.OauthProfile]
+type OAuth = Integration[kitsettings.GenericProfile]
 
-type Payment = Integration[systemcodec.PaymentProfile]
+type Payment = Integration[kitsettings.GenericProfile]
 
 const (
 	PaymentAuthPublicKey    = "public_key"
@@ -106,13 +103,18 @@ const (
 	PaymentAuthPlatformCert = "platform_cert"
 )
 
-func ProfileByKey(cfg OAuth, key string) (systemcodec.OauthProfile, bool) {
+func ProfileByKey(cfg OAuth, key string) (kitsettings.GenericProfile, bool) {
 	for _, p := range cfg.Profiles {
-		if p.Key == key {
+		if profileKey(p) == key {
 			return p, true
 		}
 	}
-	return systemcodec.OauthProfile{}, false
+	return kitsettings.GenericProfile{}, false
+}
+
+func profileKey(p kitsettings.GenericProfile) string {
+	s, _ := p.Config["key"].(string)
+	return s
 }
 
 type Store struct {
@@ -165,7 +167,7 @@ func fileIDParam(id string) pgtype.UUID {
 }
 
 func (s *Store) Storage(ctx context.Context) (Storage, error) {
-	return getIntegration[systemcodec.StorageProfile](ctx, s, keyStorage)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyStorage)
 }
 
 func (s *Store) SetStorage(ctx context.Context, v Storage) error {
@@ -173,7 +175,7 @@ func (s *Store) SetStorage(ctx context.Context, v Storage) error {
 }
 
 func (s *Store) Captcha(ctx context.Context) (Captcha, error) {
-	return getIntegration[systemcodec.CaptchaProfile](ctx, s, keyCaptcha)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyCaptcha)
 }
 
 func (s *Store) SetCaptcha(ctx context.Context, v Captcha) error {
@@ -181,7 +183,7 @@ func (s *Store) SetCaptcha(ctx context.Context, v Captcha) error {
 }
 
 func (s *Store) Email(ctx context.Context) (Email, error) {
-	return getIntegration[systemcodec.EmailProfile](ctx, s, keyEmail)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyEmail)
 }
 
 func (s *Store) SetEmail(ctx context.Context, v Email) error {
@@ -197,7 +199,7 @@ func (s *Store) SetSms(ctx context.Context, v Sms) error {
 }
 
 func (s *Store) Llm(ctx context.Context) (Llm, error) {
-	return getIntegration[systemcodec.LlmProfile](ctx, s, keyLlm)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyLlm)
 }
 
 func (s *Store) SetLlm(ctx context.Context, v Llm) error {
@@ -205,7 +207,7 @@ func (s *Store) SetLlm(ctx context.Context, v Llm) error {
 }
 
 func (s *Store) Oauth(ctx context.Context) (OAuth, error) {
-	return getIntegration[systemcodec.OauthProfile](ctx, s, keyOauth)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyOauth)
 }
 
 func (s *Store) SetOauth(ctx context.Context, v OAuth) error {
@@ -213,7 +215,7 @@ func (s *Store) SetOauth(ctx context.Context, v OAuth) error {
 }
 
 func (s *Store) Payment(ctx context.Context) (Payment, error) {
-	return getIntegration[systemcodec.PaymentProfile](ctx, s, keyPayment)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keyPayment)
 }
 
 func (s *Store) SetPayment(ctx context.Context, v Payment) error {

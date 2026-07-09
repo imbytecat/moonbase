@@ -11,11 +11,13 @@ package oauth
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
+	"slices"
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")
@@ -27,7 +29,7 @@ const PurposeLogin = "login"
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = integration.Catalog{PurposeLogin}
 
-type Config = kitsettings.Integration[systemcodec.OauthProfile]
+type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
 type Loader func(ctx context.Context) (Config, error)
 
@@ -63,43 +65,51 @@ type oauthOps struct {
 	// authorizeURL builds the provider's authorization page URL; state is the
 	// CSRF token round-tripped through the provider. It returns any per-flow
 	// secrets (OIDC nonce, PKCE verifier) the caller must store for Exchange.
-	authorizeURL func(ctx context.Context, p systemcodec.OauthProfile, redirectURI, state string) (string, FlowSecrets, error)
+	authorizeURL func(ctx context.Context, config map[string]any, redirectURI, state string) (string, FlowSecrets, error)
 	// exchange trades the callback code for the external identity, using the
 	// secrets minted at authorize time to verify the ID token and complete PKCE.
-	exchange func(ctx context.Context, p systemcodec.OauthProfile, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error)
+	exchange func(ctx context.Context, config map[string]any, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error)
 }
 
-var drivers = integration.Registry[systemcodec.OauthProfile, oauthOps]{
+type driver struct {
+	schema schema.Schema
+	ops    oauthOps
+}
+
+var drivers = map[string]driver{
 	"oidc": {
-		Usable: func(p systemcodec.OauthProfile) bool {
-			o := p.Oidc
-			return o.Issuer != "" && o.ClientId != "" && o.ClientSecret != ""
-		},
-		Ops: oauthOps{
+		schema: oidcSchema,
+		ops: oauthOps{
 			authorizeURL: oidcAuthorizeURL,
 			exchange:     oidcExchange,
 		},
 	},
 	"wechat": {
-		Usable: func(p systemcodec.OauthProfile) bool {
-			w := p.Wechat
-			return w.AppId != "" && w.AppSecret != ""
-		},
-		Ops: oauthOps{
+		schema: wechatSchema,
+		ops: oauthOps{
 			authorizeURL: wechatAuthorizeURL,
 			exchange:     wechatExchange,
 		},
 	},
 }
 
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
+}
+
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
 // ProfileUsable reports whether the profile's driver is fully configured.
-func ProfileUsable(p systemcodec.OauthProfile) bool {
-	return drivers.ProfileUsable(p)
+func ProfileUsable(p kitsettings.GenericProfile) bool {
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 // ProviderOption is one login-page entry.
@@ -116,7 +126,7 @@ func UsableProviders(cfg Config) []ProviderOption {
 	out := make([]ProviderOption, 0, len(bound))
 	for _, p := range bound {
 		if ProfileUsable(p) {
-			out = append(out, ProviderOption{Key: p.Key, Name: p.Name, Provider: p.Provider})
+			out = append(out, ProviderOption{Key: cfgStr(p.Config, "key"), Name: p.Name, Provider: p.Provider})
 		}
 	}
 	return out
@@ -135,17 +145,17 @@ var _ Flow = (*Client)(nil)
 // profileFor resolves a flow key to a usable profile. The profile must also
 // be bound to the login purpose — unbinding retires the /api/oauth/{key}/...
 // endpoints, the same gate the login page uses.
-func (c *Client) profileFor(ctx context.Context, key string) (systemcodec.OauthProfile, error) {
+func (c *Client) profileFor(ctx context.Context, key string) (kitsettings.GenericProfile, error) {
 	cfg, err := c.load(ctx)
 	if err != nil {
-		return systemcodec.OauthProfile{}, err
+		return kitsettings.GenericProfile{}, err
 	}
 	for _, p := range cfg.ProfilesFor(PurposeLogin) {
-		if p.Key == key && ProfileUsable(p) {
+		if cfgStr(p.Config, "key") == key && ProfileUsable(p) {
 			return p, nil
 		}
 	}
-	return systemcodec.OauthProfile{}, ErrNotConfigured
+	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
 func (c *Client) AuthorizeURL(ctx context.Context, key, redirectURI, state string) (string, FlowSecrets, error) {
@@ -153,7 +163,7 @@ func (c *Client) AuthorizeURL(ctx context.Context, key, redirectURI, state strin
 	if err != nil {
 		return "", FlowSecrets{}, err
 	}
-	return drivers[p.Provider].Ops.authorizeURL(ctx, p, redirectURI, state)
+	return drivers[p.Provider].ops.authorizeURL(ctx, p.Config, redirectURI, state)
 }
 
 func (c *Client) Exchange(ctx context.Context, key, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
@@ -161,12 +171,17 @@ func (c *Client) Exchange(ctx context.Context, key, code, redirectURI string, se
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
-	external, err := drivers[p.Provider].Ops.exchange(ctx, p, code, redirectURI, secrets)
+	external, err := drivers[p.Provider].ops.exchange(ctx, p.Config, code, redirectURI, secrets)
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
-	external.ProviderKey = p.Key
+	external.ProviderKey = cfgStr(p.Config, "key")
 	return external, nil
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }
 
 func encodeQuery(pairs ...string) string {

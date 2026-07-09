@@ -3,13 +3,14 @@ package pay
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/smartwalle/alipay/v3"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
+	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -31,88 +32,93 @@ func TestYuanRendersCents(t *testing.T) {
 }
 
 func TestAlipayUsable(t *testing.T) {
-	base := systemcodec.PaymentProfile{
+	base := kitsettings.GenericProfile{
 		Provider: "alipay",
-		Alipay: systemcodec.AlipayPaymentConfig{
-			AppId:         "2021000000000000",
-			AppPrivateKey: "key",
-		},
+		Config:   map[string]any{"appId": "2021000000000000", "appPrivateKey": "key"},
 	}
 
 	publicKey := base
-	publicKey.Alipay.AuthMethod = settings.PaymentAuthPublicKey
-	publicKey.Alipay.AlipayPublicKey = "pub"
+	publicKey.Config = cloneConfig(base.Config)
+	publicKey.Config["authMethod"] = settings.PaymentAuthPublicKey
+	publicKey.Config["alipayPublicKey"] = "pub"
 	if !ProfileUsable(publicKey) {
 		t.Error("public-key profile with platform key should be usable")
 	}
 
 	defaulted := base
-	defaulted.Alipay.AlipayPublicKey = "pub"
+	defaulted.Config = cloneConfig(base.Config)
+	defaulted.Config["alipayPublicKey"] = "pub"
 	if !ProfileUsable(defaulted) {
 		t.Error("empty auth_method should default to public-key mode")
 	}
 
 	missingKey := base
-	missingKey.Alipay.AuthMethod = settings.PaymentAuthPublicKey
+	missingKey.Config = cloneConfig(base.Config)
+	missingKey.Config["authMethod"] = settings.PaymentAuthPublicKey
 	if ProfileUsable(missingKey) {
 		t.Error("public-key profile without platform key should not be usable")
 	}
 
 	cert := base
-	cert.Alipay.AuthMethod = settings.PaymentAuthCert
-	cert.Alipay.AppCert = "a"
-	cert.Alipay.AlipayRootCert = "b"
-	cert.Alipay.AlipayPublicCert = "c"
+	cert.Config = cloneConfig(base.Config)
+	cert.Config["authMethod"] = settings.PaymentAuthCert
+	cert.Config["appCert"] = "a"
+	cert.Config["alipayRootCert"] = "b"
+	cert.Config["alipayPublicCert"] = "c"
 	if !ProfileUsable(cert) {
 		t.Error("cert profile with all three certs should be usable")
 	}
-	cert.Alipay.AlipayRootCert = ""
+	cert.Config["alipayRootCert"] = ""
 	if ProfileUsable(cert) {
 		t.Error("cert profile missing a cert should not be usable")
 	}
 }
 
 func TestWechatUsable(t *testing.T) {
-	base := systemcodec.PaymentProfile{
+	base := kitsettings.GenericProfile{
 		Provider: "wechat",
-		Wechat: systemcodec.WechatPaymentConfig{
-			MchId:           "1900000000",
-			AppId:           "wx0000000000000000",
-			MchCertSerialNo: "SN",
-			MchPrivateKey:   "key",
-			ApiV3Key:        "0123456789abcdef0123456789abcdef",
+		Config: map[string]any{
+			"mchId":           "1900000000",
+			"appId":           "wx0000000000000000",
+			"mchCertSerialNo": "SN",
+			"mchPrivateKey":   "key",
+			"apiV3Key":        "0123456789abcdef0123456789abcdef",
 		},
 	}
 
 	publicKey := base
-	publicKey.Wechat.AuthMethod = settings.PaymentAuthPublicKey
-	publicKey.Wechat.PublicKeyId = "PUB_KEY_ID_1"
-	publicKey.Wechat.PublicKey = "pub"
+	publicKey.Config = cloneConfig(base.Config)
+	publicKey.Config["authMethod"] = settings.PaymentAuthPublicKey
+	publicKey.Config["publicKeyId"] = "PUB_KEY_ID_1"
+	publicKey.Config["publicKey"] = "pub"
 	if !ProfileUsable(publicKey) {
 		t.Error("public-key profile with key id + key should be usable")
 	}
 
 	missing := base
-	missing.Wechat.AuthMethod = settings.PaymentAuthPublicKey
+	missing.Config = cloneConfig(base.Config)
+	missing.Config["authMethod"] = settings.PaymentAuthPublicKey
 	if ProfileUsable(missing) {
 		t.Error("public-key profile without wechat public key should not be usable")
 	}
 
 	platformCert := base
-	platformCert.Wechat.AuthMethod = settings.PaymentAuthPlatformCert
+	platformCert.Config = cloneConfig(base.Config)
+	platformCert.Config["authMethod"] = settings.PaymentAuthPlatformCert
 	if !ProfileUsable(platformCert) {
 		t.Error("platform-cert profile needs no local platform key")
 	}
 
 	noAPIKey := platformCert
-	noAPIKey.Wechat.ApiV3Key = ""
+	noAPIKey.Config = cloneConfig(platformCert.Config)
+	noAPIKey.Config["apiV3Key"] = ""
 	if ProfileUsable(noAPIKey) {
 		t.Error("profile without APIv3 key should not be usable")
 	}
 }
 
 func TestUnknownProviderNotUsable(t *testing.T) {
-	if ProfileUsable(systemcodec.PaymentProfile{Provider: "paypal"}) {
+	if ProfileUsable(kitsettings.GenericProfile{Provider: "paypal"}) {
 		t.Error("unregistered provider should not be usable")
 	}
 }
@@ -171,7 +177,7 @@ func TestAlipayTimeParsesBeijingTime(t *testing.T) {
 
 func TestNotifyURLShape(t *testing.T) {
 	c := NewClient(nil, "https://example.com/")
-	p := systemcodec.PaymentProfile{Id: "abc", Provider: "wechat"}
+	p := kitsettings.GenericProfile{Id: "abc", Provider: "wechat"}
 	want := "https://example.com/api/payment/notify/wechat/abc"
 	if got := c.notifyURL(p); got != want {
 		t.Errorf("notifyURL = %q, want %q", got, want)
@@ -179,7 +185,7 @@ func TestNotifyURLShape(t *testing.T) {
 }
 
 func TestOffered(t *testing.T) {
-	all := Offered(systemcodec.PaymentProfile{Provider: "alipay"})
+	all := Offered(kitsettings.GenericProfile{Provider: "alipay", Config: map[string]any{}})
 	want := []string{
 		alipayMethodPreCreate,
 		alipayMethodPagePay,
@@ -191,9 +197,9 @@ func TestOffered(t *testing.T) {
 		t.Errorf("empty methods should offer the whole alipay catalog, got %v", all)
 	}
 
-	sub := Offered(systemcodec.PaymentProfile{
+	sub := Offered(kitsettings.GenericProfile{
 		Provider: "alipay",
-		Methods:  []string{alipayMethodWapPay, "native", alipayMethodPreCreate},
+		Config:   map[string]any{"methods": []string{alipayMethodWapPay, "native", alipayMethodPreCreate}},
 	})
 	if !slices.Equal(sub, []string{alipayMethodPreCreate, alipayMethodWapPay}) {
 		t.Errorf("Offered should keep signed alipay ids in catalog order and drop foreign ids, got %v", sub)
@@ -220,17 +226,23 @@ func TestCreateRejectsUnofferedMethod(t *testing.T) {
 	}
 }
 
-func usableAlipay(methods ...string) systemcodec.PaymentProfile {
-	return systemcodec.PaymentProfile{
+func usableAlipay(methods ...string) kitsettings.GenericProfile {
+	return kitsettings.GenericProfile{
 		Provider: "alipay",
-		Methods:  methods,
-		Alipay: systemcodec.AlipayPaymentConfig{
-			AppId:           "2021000000000000",
-			AppPrivateKey:   "key",
-			AuthMethod:      settings.PaymentAuthPublicKey,
-			AlipayPublicKey: "pub",
+		Config: map[string]any{
+			"appId":           "2021000000000000",
+			"appPrivateKey":   "key",
+			"authMethod":      settings.PaymentAuthPublicKey,
+			"alipayPublicKey": "pub",
+			"methods":         methods,
 		},
 	}
+}
+
+func cloneConfig(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	maps.Copy(out, in)
+	return out
 }
 
 // TestCatalog is the behavioral spec for the whole method catalog: each

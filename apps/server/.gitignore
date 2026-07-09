@@ -1,8 +1,6 @@
 # Build artifacts: bin/ = moon run server:build|release, tmp/ = air dev hot-reload
 /bin/
 /tmp/
-# Stray plugin binary from `go build ./cmd/protoc-gen-settings` (buf runs it via `go run`)
-/protoc-gen-settings
 /protoc-gen-permissions
 /protoc-gen-paymentcatalog
 
