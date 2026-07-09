@@ -2,7 +2,7 @@
 
 Go 后端领域。领域词汇的权威真源是 `proto/`；本文件只收录本上下文里**需要被消歧或对齐**的术语，引用而非重造 proto 定义。
 
-## Language — 集成（Integration / Provider / Driver / Seam / Plugin / Domain）
+## Language — 集成（Integration / Provider / Driver / Seam / Schema / Config / Plugin / Domain）
 
 **integration（集成）**：
 一类基础设施关注点（storage / captcha / email / sms / llm / oauth / payment），统一走 profile CRUD + purpose 绑定。integration 是**关注点**，不是某个 provider 的实现，也不是它背后的持久表。（原称 channel/通道；因非通用总称且在 Go 里撞一等概念 `chan`，交叉验证后更名 integration——见 ADR-0005 术语；旧 ADR/代码里的 channel/通道 **等同** integration。）见 ADR-0003（工件归域不归 integration）、ADR-0005（integration 抽成独立模块）。
@@ -13,15 +13,23 @@ _Avoid_: channel（撞 Go `chan`，且暗示只限通讯/支付）、service 泛
 _Avoid_: 把 provider 当成独立于 driver 的东西；照 Terraform 用法拿 provider 指整个 integration / 实现体。
 
 **driver（驱动）**：
-一个 provider 的**无状态**实现，藏在 integration 的 seam 之后，独占该 provider 的怪癖。driver **不碰 DB**；持久工件归消费它的 domain（见 ADR-0003）。它是可被抽成独立 Go 模块的单元（ADR-0005）。「支付 driver」是它在 payment integration 的特例。
+一个 provider 的**无状态**实现，藏在 integration 的 seam 之后，独占该 provider 的怪癖。driver = 一份 config **schema**（声明字段 + `secret`/`immutable`/`required`）+ **Ops**（行为）——**不实现掩码**（base 按 schema 通用派发，见 ADR-0006）。driver **不碰 DB**；持久工件归消费它的 domain（见 ADR-0003）。它是 **drop-in 扩展单元**：加一个 provider = 加一个 driver，零 proto / 零前端 / 零核心。「支付 driver」是它在 payment integration 的特例。
 _Avoid_: plugin（见下）、adapter、handler。
 
 **seam（缝）**：
 integration 暴露给 base、driver 藏于其后的接口：storage 的 `ObjectStore`、captcha 的 `Verifier`、email/sms 的 `Sender`、llm 的 `Chatter`、oauth 的 `Flow`、payment 的 `Gateway`。base 只认 seam，不认具体 provider。
 _Avoid_: interface 泛指、port。
 
+**schema（配置描述）**：
+driver 发布的运行时字段描述（key/type + 结构标志 `secret`/`immutable`/`required` + 校验），是 base 与前端**共同消费的 config 契约**：base 按它做掩码/合并/校验，前端按它渲染表单。照 Terraform provider schema 塑形。见 ADR-0006。
+_Avoid_: 把 schema 当 proto（proto 只管 integration 信封 + RPC + 权限）；JSON Schema 特指（我们用最小自定义 descriptor）。
+
+**config（配置值）**：
+一个 profile 的连接参数**取值**，wire 上以 opaque `Struct` 走；形状由 driver 的 schema 定义，语义只有 driver 懂。base 不懂 config 语义，只按 schema 的结构标志处理它。
+_Avoid_: 把 config 形状写进中央 proto；纯 `bytes` blob（base 就无法逐字段脱敏）。
+
 **plugin（插件）— 保留词，当前系统没有**：
-特指**进程外、独立编译、运行时加载**的扩展（hashicorp/go-plugin 那种）。moonbase **刻意不做**（与 ADR-0002 决策 4 冲突）；编译期 driver registry **不是** plugin，go.work 多模块也**不是** plugin。除非在 go-plugin 语境，别用「插件 / 插件体系」称呼 driver / registry / 模块。见 ADR-0005 非目标。
+特指**进程外、独立编译、运行时加载**的扩展（hashicorp/go-plugin 那种）。moonbase **刻意不做**（与 ADR-0002 决策 4 冲突）；编译期 driver registry **不是** plugin，go.work 多模块**不是** plugin，schema 驱动的 provider drop-in（编译期注册 + 运行时 config schema，ADR-0006）也**不是** plugin。除非在 go-plugin 语境，别用「插件 / 插件体系」称呼 driver / registry / 模块。见 ADR-0005 非目标、ADR-0006。
 _Avoid_: 用「插件 / 插件体系」指代编译期 driver registry 或 integration 模块。
 
 **domain（域）**：

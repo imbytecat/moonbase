@@ -19,6 +19,24 @@ type Profile[P any] interface {
 	WithID(id string) P
 }
 
+// GenericProfile is the schema-driven profile carrier (ADR-0006): a driver's
+// connection config lives in an opaque map whose shape and secrets are
+// described by the driver's schema, so base masks / merges / validates it
+// generically and no per-integration profile type is needed.
+type GenericProfile struct {
+	Id       string         `json:"id"`
+	Name     string         `json:"name"`
+	Provider string         `json:"provider"`
+	Config   map[string]any `json:"config"`
+}
+
+func (p GenericProfile) ProfileID() string    { return p.Id }
+func (p GenericProfile) ProviderName() string { return p.Provider }
+func (p GenericProfile) WithID(id string) GenericProfile {
+	p.Id = id
+	return p
+}
+
 // Integration is the one shape every profile-based infrastructure integration
 // shares: operators register any number of named connection profiles and
 // bind each code-defined purpose to one or more of them. Most purposes are

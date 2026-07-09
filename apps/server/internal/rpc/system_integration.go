@@ -24,6 +24,7 @@ type integrationOps[P settings.Profile[P]] struct {
 	save        func(context.Context, settings.Integration[P]) error
 	purposes    integration.Catalog
 	keepSecrets func(updated, stored P) P
+	validate    func(P) error
 }
 
 func (o integrationOps[P]) errNotFound() error {
@@ -37,6 +38,12 @@ func (o integrationOps[P]) create(ctx context.Context, s *SystemService, in P) (
 		return zero, s.internal(ctx, "load "+o.name+" settings", err)
 	}
 	profile := in.WithID(uuid.NewString())
+	if o.validate != nil {
+		if err := o.validate(profile); err != nil {
+			var zero P
+			return zero, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+	}
 	cfg.Profiles = append(cfg.Profiles, profile)
 	if err := o.save(ctx, cfg); err != nil {
 		var zero P
@@ -56,6 +63,12 @@ func (o integrationOps[P]) update(ctx context.Context, s *SystemService, in P) (
 			continue
 		}
 		updated := o.keepSecrets(in, p).WithID(p.ProfileID())
+		if o.validate != nil {
+			if err := o.validate(updated); err != nil {
+				var zero P
+				return zero, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+		}
 		cfg.Profiles[i] = updated
 		if err := o.save(ctx, cfg); err != nil {
 			var zero P

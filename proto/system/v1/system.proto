@@ -9,6 +9,7 @@ syntax = "proto3";
 package system.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/struct.proto";
 import "moonbase/v1/options.proto";
 
 // One file-storage connection: a storage driver plus that driver's own
@@ -225,21 +226,42 @@ message CloudflareEmailConfig {
 // (sign name / template layout differ per vendor — that variance lives in
 // the driver config, only the send-code seam is shared). Operators register
 // any number of profiles and bind each SMS purpose to one of them.
-message SmsProfile {
-  option (moonbase.v1.profile) = true;
-
+// Profile is the generic, schema-driven connection profile (ADR-0006): the
+// per-provider config crosses as an opaque Struct whose shape is described by
+// the driver's schema (see DescribeSmsProviders). base masks / merges /
+// validates it generically from that schema, so the wire type carries NO
+// per-provider fields. Reused by every integration as it migrates off the
+// typed profiles.
+message Profile {
   // Server-assigned id; empty on create.
   string id = 1 [(buf.validate.field).string.max_len = 36];
   // Display name shown wherever a profile is picked.
   string name = 2 [(buf.validate.field).string.max_len = 64];
-  string provider = 3 [(buf.validate.field).string = {
-    in: [
-      "aliyun",
-      "tencent"
-    ]
-  }];
-  AliyunSmsConfig aliyun = 4;
-  TencentSmsConfig tencent = 5;
+  // Driver key; must be one the integration's DescribeProviders advertises.
+  string provider = 3 [(buf.validate.field).string.max_len = 64];
+  // Opaque connection config; keys and shape defined by the driver's schema.
+  // Secrets are masked here by base, never by the driver.
+  google.protobuf.Struct config = 4;
+}
+
+// FieldDescriptor is one config field in a driver's schema: how base handles
+// it (secret / immutable / required) and how the UI renders it (label / type /
+// options). A JSON-Schema-flavoured subset (ADR-0006).
+message FieldDescriptor {
+  string key = 1;
+  string label = 2;
+  string type = 3; // string | text | int | bool | enum
+  bool secret = 4;
+  bool immutable = 5;
+  bool required = 6;
+  repeated string options = 7; // allowed values when type == enum
+  string help = 8;
+  int32 max_len = 9;
+}
+
+// ProviderSchema is a driver's full config schema, in display order.
+message ProviderSchema {
+  repeated FieldDescriptor fields = 1;
 }
 
 // An SMS purpose is a fixed, code-defined slot the application sends
@@ -252,36 +274,17 @@ message SmsBinding {
 }
 
 message SmsSettings {
-  repeated SmsProfile profiles = 1;
+  repeated Profile profiles = 1;
   // One entry per known purpose, in catalog order.
   repeated SmsBinding bindings = 2;
 }
 
-message AliyunSmsConfig {
-  string access_key_id = 1 [(buf.validate.field).string.max_len = 128];
-  string access_key_secret = 2 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  string sign_name = 3 [(buf.validate.field).string.max_len = 64];
-  // Template with a single {code} variable.
-  string template_code = 4 [(buf.validate.field).string.max_len = 64];
-  bool access_key_secret_set = 5;
-}
+message DescribeSmsProvidersRequest {}
 
-message TencentSmsConfig {
-  string secret_id = 1 [(buf.validate.field).string.max_len = 128];
-  string secret_key = 2 [
-    (buf.validate.field).string.max_len = 128,
-    (moonbase.v1.secret) = true
-  ];
-  string sdk_app_id = 3 [(buf.validate.field).string.max_len = 32];
-  string sign_name = 4 [(buf.validate.field).string.max_len = 64];
-  // Template with a single code parameter.
-  string template_id = 5 [(buf.validate.field).string.max_len = 32];
-  // API region, e.g. ap-guangzhou.
-  string region = 6 [(buf.validate.field).string.max_len = 32];
-  bool secret_key_set = 7;
+message DescribeSmsProvidersResponse {
+  // Config schema per registered SMS provider (aliyun / tencent / ...), for
+  // the admin form renderer and base's generic mask / validate.
+  map<string, ProviderSchema> providers = 1;
 }
 
 // One AI model connection: a provider (API dialect) plus that dialect's
@@ -613,7 +616,7 @@ message SendTestSmsRequest {
     min_len: 5
     max_len: 20
   }];
-  optional SmsProfile profile = 2;
+  optional Profile profile = 2;
   string profile_id = 3 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -709,21 +712,21 @@ message BindEmailPurposeResponse {
 }
 
 message CreateSmsProfileRequest {
-  SmsProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateSmsProfileResponse {
-  SmsProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Updates the profile matching profile.id. An empty secret keeps the stored
 // value.
 message UpdateSmsProfileRequest {
-  SmsProfile profile = 1 [(buf.validate.field).required = true];
+  Profile profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateSmsProfileResponse {
-  SmsProfile profile = 1;
+  Profile profile = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -885,5 +888,6 @@ service SystemService {
   rpc TestStorageConnection(TestStorageConnectionRequest) returns (TestStorageConnectionResponse) {}
   rpc SendTestEmail(SendTestEmailRequest) returns (SendTestEmailResponse) {}
   rpc SendTestSms(SendTestSmsRequest) returns (SendTestSmsResponse) {}
+  rpc DescribeSmsProviders(DescribeSmsProvidersRequest) returns (DescribeSmsProvidersResponse) {}
   rpc TestLlm(TestLlmRequest) returns (TestLlmResponse) {}
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 	"github.com/imbytecat/moonbase/server/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
@@ -120,11 +119,11 @@ func (c *capturingSms) SendCode(_ context.Context, _, e164, code string) error {
 	return nil
 }
 
-func (c *capturingSms) SendCodeWith(ctx context.Context, _ systemcodec.SmsProfile, e164, code string) error {
+func (c *capturingSms) SendCodeWith(ctx context.Context, _ string, _ map[string]any, e164, code string) error {
 	return c.SendCode(ctx, sms.PurposeVerification, e164, code)
 }
 
-func (c *capturingSms) SendTemplateWith(ctx context.Context, _ systemcodec.SmsProfile, _, e164, content string) error {
+func (c *capturingSms) SendTemplateWith(ctx context.Context, _ string, _ map[string]any, _, e164, content string) error {
 	return c.SendCode(ctx, sms.PurposeVerification, e164, content)
 }
 

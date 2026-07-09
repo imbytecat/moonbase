@@ -92,7 +92,7 @@ type Captcha = Integration[systemcodec.CaptchaProfile]
 // generated from proto by protoc-gen-settings, so they live in systemcodec.
 type Email = Integration[systemcodec.EmailProfile]
 
-type Sms = Integration[systemcodec.SmsProfile]
+type Sms = Integration[kitsettings.GenericProfile]
 
 type Llm = Integration[systemcodec.LlmProfile]
 
@@ -189,7 +189,7 @@ func (s *Store) SetEmail(ctx context.Context, v Email) error {
 }
 
 func (s *Store) Sms(ctx context.Context) (Sms, error) {
-	return getIntegration[systemcodec.SmsProfile](ctx, s, keySms)
+	return getIntegration[kitsettings.GenericProfile](ctx, s, keySms)
 }
 
 func (s *Store) SetSms(ctx context.Context, v Sms) error {

@@ -10,6 +10,8 @@ package sms
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	openapiutil "github.com/alibabacloud-go/darabonba-openapi/v2/utils"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v5/client"
@@ -19,8 +21,8 @@ import (
 
 	"github.com/imbytecat/moonbase/server/integrationkit/integration"
 	"github.com/imbytecat/moonbase/server/integrationkit/phone"
+	"github.com/imbytecat/moonbase/server/integrationkit/schema"
 	kitsettings "github.com/imbytecat/moonbase/server/integrationkit/settings"
-	"github.com/imbytecat/moonbase/server/integrationkit/systemcodec"
 )
 
 // SMS purposes are code, not data: each is a fixed slot the application
@@ -37,59 +39,58 @@ var Purposes = integration.Catalog{PurposeVerification}
 
 var ErrNotConfigured = fmt.Errorf("sms is not configured")
 
-type Config = kitsettings.Integration[systemcodec.SmsProfile]
+type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
 type Loader func(ctx context.Context) (Config, error)
 
 // Sender delivers a verification code to an E.164 phone number, addressed by
-// purpose. SendTemplateWith delivers arbitrary template content (cloud SMS
-// only accepts pre-approved templates, so the caller names one whose single
-// variable receives the content).
+// purpose. Provider + opaque config select the driver; base has already
+// masked, merged and validated the config against the driver's schema.
+// SendTemplateWith delivers arbitrary template content (cloud SMS only accepts
+// pre-approved templates, so the caller names one whose single variable
+// receives the content).
 type Sender interface {
 	SendCode(ctx context.Context, purpose, e164, code string) error
-	SendCodeWith(ctx context.Context, profile systemcodec.SmsProfile, e164, code string) error
-	SendTemplateWith(ctx context.Context, profile systemcodec.SmsProfile, templateCode, e164, content string) error
+	SendCodeWith(ctx context.Context, provider string, config map[string]any, e164, code string) error
+	SendTemplateWith(ctx context.Context, provider string, config map[string]any, templateCode, e164, content string) error
 }
 
-type sendFunc = func(ctx context.Context, p systemcodec.SmsProfile, templateCode, e164, content string) error
+type sendFunc = func(ctx context.Context, config map[string]any, templateCode, e164, content string) error
 
-var drivers = integration.Registry[systemcodec.SmsProfile, sendFunc]{
-	"aliyun": {
-		Usable: func(p systemcodec.SmsProfile) bool {
-			a := p.Aliyun
-			return a.AccessKeyId != "" && a.SignName != "" && a.TemplateCode != ""
-		},
-		Ops: func(_ context.Context, p systemcodec.SmsProfile, templateCode, e164, content string) error {
-			return sendAliyun(p.Aliyun, templateCode, e164, content)
-		},
-	},
-	"tencent": {
-		Usable: func(p systemcodec.SmsProfile) bool {
-			t := p.Tencent
-			return t.SecretId != "" && t.SdkAppId != "" && t.SignName != "" && t.TemplateId != ""
-		},
-		Ops: func(ctx context.Context, p systemcodec.SmsProfile, templateCode, e164, content string) error {
-			return sendTencent(ctx, p.Tencent, templateCode, e164, content)
-		},
-	},
+type driver struct {
+	schema schema.Schema
+	send   sendFunc
+}
+
+var drivers = map[string]driver{
+	"aliyun":  {schema: aliyunSchema, send: sendAliyun},
+	"tencent": {schema: tencentSchema, send: sendTencent},
+}
+
+// Schemas advertises each provider's config schema, derived from the driver
+// registry — the one source base and the admin UI read.
+func Schemas() map[string]schema.Schema {
+	out := make(map[string]schema.Schema, len(drivers))
+	for name, d := range drivers {
+		out[name] = d.schema
+	}
+	return out
 }
 
 // Providers lists registered driver names, sorted.
 func Providers() []string {
-	return drivers.Names()
+	return slices.Sorted(maps.Keys(drivers))
 }
 
-// ProfileUsable reports whether the profile's driver is fully configured —
-// the same gate SendCodeWith enforces.
-func ProfileUsable(p systemcodec.SmsProfile) bool {
-	return drivers.ProfileUsable(p)
-}
-
-// Usable reports whether the purpose resolves to a usable profile — shared
-// with GetAuthConfig capability flags.
+// Usable reports whether the purpose resolves to a profile whose driver is
+// registered and fully configured — shared with GetAuthConfig capability flags.
 func Usable(cfg Config, purpose string) bool {
 	p, ok := cfg.ProfileFor(purpose)
-	return ok && ProfileUsable(p)
+	if !ok {
+		return false
+	}
+	d, ok := drivers[p.Provider]
+	return ok && d.schema.Usable(p.Config)
 }
 
 type Client struct {
@@ -111,26 +112,29 @@ func (c *Client) SendCode(ctx context.Context, purpose, e164, code string) error
 	if !ok {
 		return ErrNotConfigured
 	}
-	return c.SendCodeWith(ctx, p, e164, code)
+	return c.SendCodeWith(ctx, p.Provider, p.Config, e164, code)
 }
 
-func (c *Client) SendCodeWith(ctx context.Context, profile systemcodec.SmsProfile, e164, code string) error {
-	// An empty templateCode falls back to the profile's verification-code
-	// template inside each driver.
-	return c.SendTemplateWith(ctx, profile, "", e164, code)
+func (c *Client) SendCodeWith(ctx context.Context, provider string, config map[string]any, e164, code string) error {
+	return c.SendTemplateWith(ctx, provider, config, "", e164, code)
 }
 
-func (c *Client) SendTemplateWith(ctx context.Context, profile systemcodec.SmsProfile, templateCode, e164, content string) error {
-	send, ok := drivers.OpsFor(profile)
-	if !ok {
+func (c *Client) SendTemplateWith(ctx context.Context, provider string, config map[string]any, templateCode, e164, content string) error {
+	d, ok := drivers[provider]
+	if !ok || !d.schema.Usable(config) {
 		return ErrNotConfigured
 	}
-	return send(ctx, profile, templateCode, e164, content)
+	return d.send(ctx, config, templateCode, e164, content)
+}
+
+func cfgStr(config map[string]any, key string) string {
+	s, _ := config[key].(string)
+	return s
 }
 
 // sendAliyun formats per dysmsapi expectations: national digits for mainland
 // CN numbers, E.164 otherwise; the template takes JSON {"code": "..."}.
-func sendAliyun(cfg systemcodec.AliyunSmsConfig, templateCode, e164, content string) error {
+func sendAliyun(_ context.Context, config map[string]any, templateCode, e164, content string) error {
 	target := e164
 	if phone.RegionOf(e164) == "CN" {
 		national, err := phone.NationalNumber(e164)
@@ -140,10 +144,12 @@ func sendAliyun(cfg systemcodec.AliyunSmsConfig, templateCode, e164, content str
 		target = national
 	}
 
+	akid := cfgStr(config, "accessKeyId")
+	aksec := cfgStr(config, "accessKeySecret")
 	endpoint := "dysmsapi.aliyuncs.com"
 	client, err := dysmsapi.NewClient(&openapiutil.Config{
-		AccessKeyId:     &cfg.AccessKeyId,
-		AccessKeySecret: &cfg.AccessKeySecret,
+		AccessKeyId:     &akid,
+		AccessKeySecret: &aksec,
 		Endpoint:        &endpoint,
 	})
 	if err != nil {
@@ -151,12 +157,13 @@ func sendAliyun(cfg systemcodec.AliyunSmsConfig, templateCode, e164, content str
 	}
 
 	if templateCode == "" {
-		templateCode = cfg.TemplateCode
+		templateCode = cfgStr(config, "templateCode")
 	}
+	signName := cfgStr(config, "signName")
 	templateParam := fmt.Sprintf(`{"code":%q}`, content)
 	resp, err := client.SendSms(&dysmsapi.SendSmsRequest{
 		PhoneNumbers:  &target,
-		SignName:      &cfg.SignName,
+		SignName:      &signName,
 		TemplateCode:  &templateCode,
 		TemplateParam: &templateParam,
 	})
@@ -175,26 +182,28 @@ func sendAliyun(cfg systemcodec.AliyunSmsConfig, templateCode, e164, content str
 
 // sendTencent formats per Tencent Cloud SMS expectations: +E.164 phone
 // numbers and positional template params (the content is param {1}).
-func sendTencent(ctx context.Context, cfg systemcodec.TencentSmsConfig, templateCode, e164, content string) error {
-	region := cfg.Region
+func sendTencent(ctx context.Context, config map[string]any, templateCode, e164, content string) error {
+	region := cfgStr(config, "region")
 	if region == "" {
 		region = "ap-guangzhou"
 	}
 
-	credential := tccommon.NewCredential(cfg.SecretId, cfg.SecretKey)
+	credential := tccommon.NewCredential(cfgStr(config, "secretId"), cfgStr(config, "secretKey"))
 	client, err := tcsms.NewClient(credential, region, tcprofile.NewClientProfile())
 	if err != nil {
 		return fmt.Errorf("create sms client: %w", err)
 	}
 
 	if templateCode == "" {
-		templateCode = cfg.TemplateId
+		templateCode = cfgStr(config, "templateId")
 	}
+	sdkAppId := cfgStr(config, "sdkAppId")
+	signName := cfgStr(config, "signName")
 	req := tcsms.NewSendSmsRequest()
 	req.SetContext(ctx)
 	req.PhoneNumberSet = []*string{&e164}
-	req.SmsSdkAppId = &cfg.SdkAppId
-	req.SignName = &cfg.SignName
+	req.SmsSdkAppId = &sdkAppId
+	req.SignName = &signName
 	req.TemplateId = &templateCode
 	req.TemplateParamSet = []*string{&content}
 

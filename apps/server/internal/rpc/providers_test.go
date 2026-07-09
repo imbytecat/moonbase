@@ -13,7 +13,6 @@ import (
 	mail "github.com/imbytecat/moonbase/server/integrations/email"
 	"github.com/imbytecat/moonbase/server/integrations/llm"
 	"github.com/imbytecat/moonbase/server/integrations/oauth"
-	"github.com/imbytecat/moonbase/server/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/pay"
 	"github.com/imbytecat/moonbase/server/internal/storage"
@@ -30,7 +29,6 @@ func TestProviderRegistriesMatchContract(t *testing.T) {
 	}{
 		{&systemv1.StorageProfile{}, storage.Providers()},
 		{&systemv1.EmailProfile{}, mail.Providers()},
-		{&systemv1.SmsProfile{}, sms.Providers()},
 		{&systemv1.CaptchaProfile{}, captcha.Providers()},
 		{&systemv1.LlmProfile{}, llm.Providers()},
 		{&systemv1.OauthProfile{}, oauth.Providers()},

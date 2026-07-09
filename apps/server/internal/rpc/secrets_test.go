@@ -85,26 +85,6 @@ func TestKeepSecretsPreservesEveryMaskedField(t *testing.T) {
 			},
 		},
 		{
-			name:    "sms",
-			profile: func() proto.Message { return &systemv1.SmsProfile{} },
-			create: func(t *testing.T, svc *SystemService, p proto.Message) proto.Message {
-				t.Helper()
-				resp, err := svc.CreateSmsProfile(t.Context(), connect.NewRequest(
-					&systemv1.CreateSmsProfileRequest{Profile: p.(*systemv1.SmsProfile)}))
-				if err != nil {
-					t.Fatal(err)
-				}
-				return resp.Msg.GetProfile()
-			},
-			update: func(t *testing.T, svc *SystemService, p proto.Message) {
-				t.Helper()
-				if _, err := svc.UpdateSmsProfile(t.Context(), connect.NewRequest(
-					&systemv1.UpdateSmsProfileRequest{Profile: p.(*systemv1.SmsProfile)})); err != nil {
-					t.Fatal(err)
-				}
-			},
-		},
-		{
 			name:    "llm",
 			profile: func() proto.Message { return &systemv1.LlmProfile{} },
 			create: func(t *testing.T, svc *SystemService, p proto.Message) proto.Message {

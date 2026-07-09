@@ -3,7 +3,7 @@ import { useMutation } from '@connectrpc/connect-query'
 import {
   bindSmsPurpose,
   deleteSmsProfile,
-  type SmsProfile,
+  type Profile,
   type SmsSettings,
 } from '@moonbase/api-client'
 import { App } from 'antd'
@@ -32,7 +32,7 @@ export function SmsPanel({
   const { message } = App.useApp()
   const profiles = sms?.profiles ?? []
   const bindings = sms?.bindings ?? []
-  const [editing, setEditing] = useState<SmsProfile | 'new' | undefined>()
+  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
 
   const deleteMutation = useMutation(deleteSmsProfile, {
     onSuccess: () => {
@@ -50,8 +50,7 @@ export function SmsPanel({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const signOf = (p: SmsProfile) =>
-    p.provider === 'tencent' ? p.tencent?.signName : p.aliyun?.signName
+  const signOf = (p: Profile) => String(p.config?.signName ?? '')
 
   return (
     <>
