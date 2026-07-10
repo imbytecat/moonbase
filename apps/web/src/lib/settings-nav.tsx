@@ -1,4 +1,5 @@
 import {
+  ApiOutlined,
   CloudServerOutlined,
   IdcardOutlined,
   MailOutlined,
@@ -7,7 +8,6 @@ import {
   RobotOutlined,
   SafetyOutlined,
   UserAddOutlined,
-  WechatOutlined,
 } from '@ant-design/icons'
 import type { CurrentUser } from '@moonbase/api-client'
 import { Permission } from '@moonbase/api-client'
@@ -81,7 +81,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       {
         path: '/settings/oauth',
         label: () => '第三方登录',
-        icon: <WechatOutlined />,
+        icon: <ApiOutlined />,
         permission: Permission.SYSTEM_READ,
       },
     ],

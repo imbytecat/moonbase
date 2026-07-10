@@ -43,7 +43,7 @@ type Sender interface {
 type sendFunc = func(ctx context.Context, config map[string]any, templateCode, e164, content string) error
 
 var Registry = integration.MustRegistry([]integration.Entry[sendFunc]{
-	{Key: "aliyun", Presentation: integration.Presentation{Name: "阿里云短信", Description: "通过云短信服务发送验证码与通知", Color: "#ff6a00", IconRef: "antd:MessageOutlined"}, Config: aliyunSchema, Ops: sendAliyun},
+	{Key: "aliyun", Presentation: integration.Presentation{Name: "阿里云短信", Description: "通过云短信服务发送验证码与通知", Color: "#ff6a00", IconRef: "antd:AliyunOutlined"}, Config: aliyunSchema, Ops: sendAliyun},
 	{Key: "tencent", Presentation: integration.Presentation{Name: "腾讯云短信", Description: "通过云短信服务发送验证码与通知", Color: "#0052d9", IconRef: "antd:MessageOutlined"}, Config: tencentSchema, Ops: sendTencent},
 })
 

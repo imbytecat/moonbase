@@ -46,7 +46,7 @@ var Registry = integration.MustRegistry([]integration.Entry[completeFunc]{
 	},
 	{
 		Key:          "anthropic",
-		Presentation: integration.Presentation{Name: "Anthropic 模型", Description: "连接 Anthropic 消息协议的对话模型", Color: "#d97757", IconRef: "antd:RobotOutlined"},
+		Presentation: integration.Presentation{Name: "Anthropic 模型", Description: "连接 Anthropic 消息协议的对话模型", Color: "#d97757", IconRef: "antd:AnthropicFilled"},
 		Config:       anthropicSchema,
 		Ops:          completeAnthropic,
 	},
