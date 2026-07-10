@@ -29,7 +29,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/term v0.44.0
-	golang.org/x/text v0.38.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -79,6 +78,7 @@ require (
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	gopkg.in/ini.v1 v1.67.2 // indirect
 )
 
