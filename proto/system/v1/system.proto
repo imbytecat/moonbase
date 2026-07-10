@@ -72,28 +72,13 @@ message Profile {
   google.protobuf.Struct config = 4;
 }
 
-// FieldDescriptor is one config field in a driver's schema: how base handles
-// it (secret / immutable / required) and how the UI renders it (label / type /
-// options). A JSON-Schema-flavoured subset (ADR-0006).
-message FieldDescriptor {
-  string key = 1;
-  string label = 2;
-  string type = 3; // string | text | int | bool | enum | string_array
-  bool secret = 4;
-  bool immutable = 5;
-  bool required = 6;
-  repeated string options = 7; // allowed values when type == enum or string_array
-  string help = 8;
-  int32 max_len = 9;
-  string pattern = 10;
-  int32 min = 11;
-  int32 max = 12;
-  bool unique = 13;
-}
-
-// ProviderSchema is a driver's full config schema, in display order.
-message ProviderSchema {
-  repeated FieldDescriptor fields = 1;
+// ProviderForm is a driver's config form for the frontend: an rjsf JSON Schema
+// plus its companion uiSchema, generated in Go from the driver's typed schema.
+// That same typed schema is the server-side validation gate, so the form and
+// the gate cannot drift (ADR-0010).
+message ProviderForm {
+  google.protobuf.Struct schema = 1;
+  google.protobuf.Struct ui_schema = 2;
 }
 
 // An SMS purpose is a fixed, code-defined slot the application sends
@@ -116,7 +101,7 @@ message DescribeSmsProvidersRequest {}
 message DescribeSmsProvidersResponse {
   // Config schema per registered SMS provider (aliyun / tencent / ...), for
   // the admin form renderer and base's generic mask / validate.
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // An AI purpose is a fixed, code-defined slot the application calls models
@@ -196,7 +181,7 @@ message UpdateStorageProfileResponse {
 message DescribeStorageProvidersRequest {}
 
 message DescribeStorageProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -297,7 +282,7 @@ message UpdateLlmProfileResponse {
 message DescribeLlmProvidersRequest {}
 
 message DescribeLlmProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -339,7 +324,7 @@ message UpdateEmailProfileResponse {
 message DescribeEmailProvidersRequest {}
 
 message DescribeEmailProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -417,7 +402,7 @@ message UpdateCaptchaProfileResponse {
 message DescribeCaptchaProvidersRequest {}
 
 message DescribeCaptchaProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.
@@ -459,7 +444,7 @@ message UpdateOauthProfileResponse {
 message DescribeOauthProvidersRequest {}
 
 message DescribeOauthProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while any user identity still references the profile's key.
@@ -501,7 +486,7 @@ message UpdatePaymentProfileResponse {
 message DescribePaymentProvidersRequest {}
 
 message DescribePaymentProvidersResponse {
-  map<string, ProviderSchema> providers = 1;
+  map<string, ProviderForm> providers = 1;
 }
 
 // Fails while the profile is still bound to a purpose.

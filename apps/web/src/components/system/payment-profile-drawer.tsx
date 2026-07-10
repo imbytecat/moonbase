@@ -1,20 +1,19 @@
 import { AlipayCircleOutlined, WechatOutlined } from '@ant-design/icons'
+import type { JsonObject } from '@bufbuild/protobuf'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createPaymentProfile,
   describePaymentProviders,
   type Profile,
+  type ProviderForm,
   updatePaymentProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input } from 'antd'
+import { App } from 'antd'
+import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
-import {
-  SchemaField,
-  type SchemaProfileFormValues,
-  schemaInitialConfig,
-  schemaProfileToProto,
-} from '#components/system/schema-profile-form'
+import { ConfigForm } from '#components/system/config-form'
 import { humanizeError } from '#lib/errors'
+import { methodDesc, methodLabel } from '#lib/payments'
 
 export function PaymentProfileDrawer({
   profile,
@@ -28,10 +27,10 @@ export function PaymentProfileDrawer({
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<SchemaProfileFormValues>()
+  const [dirty, setDirty] = useState(false)
 
   const { data: describe } = useQuery(describePaymentProviders, {})
-  const schemas = describe?.providers ?? {}
+  const forms = describe?.providers ?? {}
 
   const createMutation = useMutation(createPaymentProfile, {
     onSuccess: () => {
@@ -63,58 +62,60 @@ export function PaymentProfileDrawer({
     },
   ]
 
-  const toProto = (provider: string, values: SchemaProfileFormValues) =>
-    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
-
   return (
     <ProfileFormDrawer
       open={open}
       onClose={onClose}
-      form={form}
+      dirty={dirty}
       profileProvider={profile?.provider}
       providers={providers}
     >
       {(provider) => {
-        const fields = schemas[provider]?.fields ?? []
+        const providerForm = forms[provider]
+        if (!providerForm) return null
         return (
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{
-              name: profile?.name ?? '',
-              config: schemaInitialConfig(profile, provider, fields),
-            }}
-            onFinish={(values) => {
-              const p = toProto(provider, values)
+          <ConfigForm
+            key={provider}
+            providerForm={withMethodLabels(providerForm)}
+            provider={provider}
+            profile={profile}
+            saving={createMutation.isPending || updateMutation.isPending}
+            onDirtyChange={setDirty}
+            onSubmit={(p) => {
               if (profile) updateMutation.mutate({ profile: p })
               else createMutation.mutate({ profile: p })
             }}
-          >
-            <Form.Item
-              name="name"
-              label={'配置名称'}
-              rules={[{ required: true, message: '请输入配置名称' }]}
-            >
-              <Input placeholder={'例如：主体 A 支付宝'} />
-            </Form.Item>
-
-            <div className="grid grid-cols-2 gap-4">
-              {fields.map((field) => (
-                <SchemaField key={field.key} field={field} profile={profile} />
-              ))}
-            </div>
-
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {'保存'}
-            </Button>
-          </Form>
+          />
         )
       }}
     </ProfileFormDrawer>
   )
+}
+
+interface MethodOption {
+  const: string
+  title?: string
+}
+interface MethodsView {
+  properties?: { methods?: { items?: { oneOf?: MethodOption[] } } }
+}
+
+// Methods are ADR-0009's fixed-catalog exception: the driver ships value-only
+// options and the Chinese copy lives in payments.ts (same source as checkout).
+// Fill the labels/descriptions into the JSON Schema before rjsf renders it.
+function withMethodLabels(providerForm: ProviderForm): ProviderForm {
+  const schema = structuredClone(providerForm.schema ?? {}) as JsonObject
+  const oneOf = (schema as unknown as MethodsView).properties?.methods?.items?.oneOf
+  if (!oneOf) return providerForm
+  const descriptions: Record<string, string> = {}
+  for (const option of oneOf) {
+    option.title = methodLabel(option.const)
+    const desc = methodDesc(option.const)
+    if (desc) descriptions[option.const] = desc
+  }
+  const uiSchema = structuredClone(providerForm.uiSchema ?? {}) as JsonObject
+  const current = (uiSchema.methods as JsonObject | undefined) ?? {}
+  const options = (current['ui:options'] as JsonObject | undefined) ?? {}
+  uiSchema.methods = { ...current, 'ui:options': { ...options, descriptions } }
+  return { ...providerForm, schema, uiSchema }
 }

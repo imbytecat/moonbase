@@ -44,13 +44,31 @@ type Field struct {
 	Secret    bool     // masked on read; kept from stored on an empty update
 	Immutable bool     // always kept from stored on update (e.g. a stable key)
 	Required  bool     // must be present for the profile to be Usable
-	Options   []string // the allowed values when Type is Enum
+	Options   []Option // the allowed choices when Type is Enum or Strings
 	Help      string
 	MaxLen    int // 0 = unbounded
 	Pattern   string
 	Min       int
 	Max       int
 	Unique    bool
+	// When set, the field applies only if the config value of ShowWhen.Field is
+	// one of ShowWhen.Values. Inactive fields are skipped by Validate/Usable and
+	// hidden by the form.
+	ShowWhen *ShowWhen
+}
+
+// ShowWhen makes a Field conditional on another field's value.
+type ShowWhen struct {
+	Field  string
+	Values []string
+}
+
+// Option is one allowed choice of an Enum or Strings field: the stored Value
+// plus the driver-written Label and Description the form renderer shows.
+type Option struct {
+	Value       string
+	Label       string
+	Description string
 }
 
 // Schema is a driver's whole config contract, in display order.
@@ -120,6 +138,9 @@ func (s Schema) Validate(cfg map[string]any) error {
 		return fmt.Errorf("未知配置字段 %q", key)
 	}
 	for _, f := range s.Fields {
+		if !s.fieldActive(f, cfg) {
+			continue
+		}
 		v := cfg[f.Key]
 		if isEmpty(v) {
 			if f.Required {
@@ -132,6 +153,17 @@ func (s Schema) Validate(cfg map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// fieldActive reports whether a field applies given the current config: fields
+// with no ShowWhen always apply; conditional fields apply only when the
+// referenced field's value is one of the allowed values.
+func (s Schema) fieldActive(f Field, cfg map[string]any) bool {
+	if f.ShowWhen == nil {
+		return true
+	}
+	current, _ := cfg[f.ShowWhen.Field].(string)
+	return slices.Contains(f.ShowWhen.Values, current)
 }
 
 func validateValue(f Field, v any) error {
@@ -186,8 +218,8 @@ func validateString(f Field, str string) error {
 			return fmt.Errorf("配置字段 %q 格式不正确", f.Key)
 		}
 	}
-	if len(f.Options) > 0 && !slices.Contains(f.Options, str) {
-		return fmt.Errorf("配置字段 %q 必须是 %v 之一", f.Key, f.Options)
+	if len(f.Options) > 0 && !slices.ContainsFunc(f.Options, func(o Option) bool { return o.Value == str }) {
+		return fmt.Errorf("配置字段 %q 必须是所列选项之一", f.Key)
 	}
 	return nil
 }
@@ -243,7 +275,7 @@ func duplicates(values []string) bool {
 // A stored config has already passed Validate, so presence is all Usable needs.
 func (s Schema) Usable(cfg map[string]any) bool {
 	for _, f := range s.Fields {
-		if f.Required && isEmpty(cfg[f.Key]) {
+		if f.Required && s.fieldActive(f, cfg) && isEmpty(cfg[f.Key]) {
 			return false
 		}
 	}

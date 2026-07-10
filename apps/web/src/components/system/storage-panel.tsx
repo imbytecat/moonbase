@@ -7,10 +7,10 @@ import {
   type StorageSettings,
 } from '@moonbase/api-client'
 import { App, Tag } from 'antd'
-import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { StorageProfileDrawer } from '#components/system/storage-profile-drawer'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   avatars: () => '用户头像',
@@ -32,7 +32,7 @@ export function StoragePanel({
   const { message } = App.useApp()
   const profiles = storage?.profiles ?? []
   const bindings = storage?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deleteStorageProfile, {
     onSuccess: () => {
@@ -93,8 +93,8 @@ export function StoragePanel({
             ? String(p.config?.directory || 'data/storage')
             : `${String(p.config?.endpoint ?? '')} / ${String(p.config?.bucket ?? '')}`
         }
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, ids) => bindMutation.mutate({ purpose, profileId: ids[0] ?? '' })}
@@ -102,12 +102,12 @@ export function StoragePanel({
       />
 
       <StorageProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />

@@ -55,7 +55,7 @@ func Providers() []string {
 // the same gate every Gateway call enforces.
 func ProfileUsable(p kitsettings.GenericProfile) bool {
 	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config) && paymentAuthUsable(p)
+	return ok && d.schema.Usable(p.Config)
 }
 
 // Catalog lists a provider's products in display order.

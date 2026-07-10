@@ -7,10 +7,10 @@ import {
   type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
-import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { OauthProfileDrawer } from '#components/system/oauth-profile-drawer'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   login: () => '登录页',
@@ -31,7 +31,7 @@ export function OauthPanel({
   const { message } = App.useApp()
   const profiles = oauth?.profiles ?? []
   const bindings = oauth?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deleteOauthProfile, {
     onSuccess: () => {
@@ -77,8 +77,8 @@ export function OauthPanel({
         profileDescription={(p) =>
           p.provider === 'wechat' ? String(p.config?.appId ?? '') : String(p.config?.issuer ?? '')
         }
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, profileIds) => bindMutation.mutate({ purpose, profileIds })}
@@ -86,12 +86,12 @@ export function OauthPanel({
       />
 
       <OauthProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />

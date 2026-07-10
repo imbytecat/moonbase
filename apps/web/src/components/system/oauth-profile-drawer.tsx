@@ -6,14 +6,10 @@ import {
   type Profile,
   updateOauthProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input, Typography } from 'antd'
+import { App, Typography } from 'antd'
+import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
-import {
-  SchemaField,
-  type SchemaProfileFormValues,
-  schemaInitialConfig,
-  schemaProfileToProto,
-} from '#components/system/schema-profile-form'
+import { ConfigForm } from '#components/system/config-form'
 import { humanizeError } from '#lib/errors'
 
 export function OauthProfileDrawer({
@@ -28,12 +24,10 @@ export function OauthProfileDrawer({
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<SchemaProfileFormValues>()
-  const isNew = !profile
-  const watchedKey = Form.useWatch(['config', 'key'], form) ?? String(profile?.config?.key || '')
+  const [dirty, setDirty] = useState(false)
 
   const { data: describe } = useQuery(describeOauthProviders, {})
-  const schemas = describe?.providers ?? {}
+  const forms = describe?.providers ?? {}
 
   const createMutation = useMutation(createOauthProfile, {
     onSuccess: () => {
@@ -65,67 +59,39 @@ export function OauthProfileDrawer({
     },
   ]
 
-  const toProto = (provider: string, values: SchemaProfileFormValues) =>
-    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
-
-  const callbackUrl = `${window.location.origin}/api/oauth/${watchedKey || '…'}/callback`
-
   return (
     <ProfileFormDrawer
       open={open}
       onClose={onClose}
-      form={form}
+      dirty={dirty}
       profileProvider={profile?.provider}
       providers={providers}
     >
       {(provider) => {
-        const fields = schemas[provider]?.fields ?? []
+        const providerForm = forms[provider]
+        if (!providerForm) return null
         return (
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{
-              name: profile?.name ?? '',
-              config: schemaInitialConfig(profile, provider, fields),
+          <ConfigForm
+            key={provider}
+            providerForm={providerForm}
+            provider={provider}
+            profile={profile}
+            saving={createMutation.isPending || updateMutation.isPending}
+            onDirtyChange={setDirty}
+            nameField={{ label: '显示名称', placeholder: 'Google', help: '登录按钮上显示的文字' }}
+            onSubmit={(p) => {
+              if (profile) updateMutation.mutate({ profile: p })
+              else createMutation.mutate({ profile: p })
             }}
-            onFinish={(values) => {
-              const p = toProto(provider, values)
-              if (isNew) createMutation.mutate({ profile: p })
-              else updateMutation.mutate({ profile: p })
-            }}
-          >
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item
-                name="name"
-                label={'显示名称'}
-                extra={'登录按钮上显示的文字'}
-                rules={[{ required: true, message: '请输入配置名称' }]}
-              >
-                <Input placeholder="Google" />
-              </Form.Item>
-              {fields.map((field) => (
-                <SchemaField key={field.key} field={field} profile={profile} />
-              ))}
-            </div>
-            {!isNew ? (
-              <Typography.Paragraph type="secondary">{'创建后不可修改'}</Typography.Paragraph>
-            ) : null}
-
-            <Form.Item label={'回调地址'} extra={'在身份服务的应用设置中登记此地址'}>
-              <Typography.Text code copyable>
-                {callbackUrl}
-              </Typography.Text>
-            </Form.Item>
-
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {'保存'}
-            </Button>
-          </Form>
+            banner={(current) => (
+              <Typography.Paragraph type="secondary" className="!mb-0">
+                {'回调地址（在身份服务的应用设置中登记）：'}
+                <Typography.Text code copyable>
+                  {`${window.location.origin}/api/oauth/${String(current.config.key || '…')}/callback`}
+                </Typography.Text>
+              </Typography.Paragraph>
+            )}
+          />
         )
       }}
     </ProfileFormDrawer>

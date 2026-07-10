@@ -49,10 +49,11 @@ func validateProfile(name string, schemas map[string]schema.Schema, p kitsetting
 	return sch.Validate(p.Config)
 }
 
-func describeProviders(schemas map[string]schema.Schema) map[string]*systemv1.ProviderSchema {
-	providers := make(map[string]*systemv1.ProviderSchema, len(schemas))
+func describeProviders(schemas map[string]schema.Schema) map[string]*systemv1.ProviderForm {
+	providers := make(map[string]*systemv1.ProviderForm, len(schemas))
 	for name, sch := range schemas {
-		providers[name] = &systemv1.ProviderSchema{Fields: fieldDescriptors(sch)}
+		js, ui := sch.JSONForm()
+		providers[name] = &systemv1.ProviderForm{Schema: toStruct(js), UiSchema: toStruct(ui)}
 	}
 	return providers
 }
@@ -168,26 +169,15 @@ func profileToProto(p kitsettings.GenericProfile, sch schema.Schema) *systemv1.P
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: cfg}
 }
 
-func fieldDescriptors(sch schema.Schema) []*systemv1.FieldDescriptor {
-	out := make([]*systemv1.FieldDescriptor, len(sch.Fields))
-	for i, f := range sch.Fields {
-		out[i] = &systemv1.FieldDescriptor{
-			Key:       f.Key,
-			Label:     f.Label,
-			Type:      string(f.Type),
-			Secret:    f.Secret,
-			Immutable: f.Immutable,
-			Required:  f.Required,
-			Options:   f.Options,
-			Help:      f.Help,
-			MaxLen:    int32(f.MaxLen),
-			Pattern:   f.Pattern,
-			Min:       int32(f.Min),
-			Max:       int32(f.Max),
-			Unique:    f.Unique,
-		}
+// toStruct encodes a JSONForm map (only strings, numbers, bools, maps and
+// slices) as a Struct; encoding cannot fail, so an empty Struct is a safe
+// fallback that keeps callers error-free.
+func toStruct(m map[string]any) *structpb.Struct {
+	s, err := structpb.NewStruct(m)
+	if err != nil {
+		return &structpb.Struct{}
 	}
-	return out
+	return s
 }
 
 func toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {

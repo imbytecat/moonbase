@@ -9,17 +9,13 @@ import {
   type Profile,
   updateCaptchaProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input } from 'antd'
+import { App } from 'antd'
 import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
-import {
-  SchemaField,
-  type SchemaProfileFormValues,
-  schemaInitialConfig,
-  schemaProfileToProto,
-} from '#components/system/schema-profile-form'
+import { ConfigForm } from '#components/system/config-form'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   auth: () => '登录与注册',
@@ -41,7 +37,7 @@ export function CaptchaPanel({
   const { message } = App.useApp()
   const profiles = captcha?.profiles ?? []
   const bindings = captcha?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deleteCaptchaProfile, {
     onSuccess: () => {
@@ -83,8 +79,8 @@ export function CaptchaPanel({
             : String(p.provider === 'geetest' ? p.config?.captchaId : p.config?.siteKey) ||
               '站点密钥'
         }
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, ids) => bindMutation.mutate({ purpose, profileId: ids[0] ?? '' })}
@@ -92,12 +88,12 @@ export function CaptchaPanel({
       />
 
       <CaptchaProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />
@@ -117,10 +113,10 @@ function CaptchaProfileDrawer({
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<SchemaProfileFormValues>()
+  const [dirty, setDirty] = useState(false)
 
   const { data: describe } = useQuery(describeCaptchaProviders, {})
-  const schemas = describe?.providers ?? {}
+  const forms = describe?.providers ?? {}
 
   const createMutation = useMutation(createCaptchaProfile, {
     onSuccess: () => {
@@ -158,56 +154,30 @@ function CaptchaProfileDrawer({
     },
   ]
 
-  const toProto = (provider: string, values: SchemaProfileFormValues) =>
-    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
-
   return (
     <ProfileFormDrawer
       open={open}
       onClose={onClose}
-      form={form}
+      dirty={dirty}
       profileProvider={profile?.provider}
       providers={providers}
     >
       {(provider) => {
-        const fields = schemas[provider]?.fields ?? []
+        const providerForm = forms[provider]
+        if (!providerForm) return null
         return (
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{
-              name: profile?.name ?? '',
-              config: schemaInitialConfig(profile, provider, fields),
-            }}
-            onFinish={(values) => {
-              const p = toProto(provider, values)
+          <ConfigForm
+            key={provider}
+            providerForm={providerForm}
+            provider={provider}
+            profile={profile}
+            saving={createMutation.isPending || updateMutation.isPending}
+            onDirtyChange={setDirty}
+            onSubmit={(p) => {
               if (profile) updateMutation.mutate({ profile: p })
               else createMutation.mutate({ profile: p })
             }}
-          >
-            <Form.Item
-              name="name"
-              label={'配置名称'}
-              rules={[{ required: true, message: '请输入配置名称' }]}
-            >
-              <Input placeholder={'如：登录保护'} />
-            </Form.Item>
-
-            <div className="grid grid-cols-2 gap-4">
-              {fields.map((field) => (
-                <SchemaField key={field.key} field={field} profile={profile} />
-              ))}
-            </div>
-
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {'保存'}
-            </Button>
-          </Form>
+          />
         )
       }}
     </ProfileFormDrawer>

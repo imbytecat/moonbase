@@ -10,7 +10,11 @@ var (
 		{Key: "port", Label: "端口", Type: schema.Int, Min: 0, Max: 65535},
 		{Key: "username", Label: "用户名", Type: schema.String, MaxLen: 128},
 		{Key: "password", Label: "密码", Type: schema.String, Secret: true, MaxLen: 128},
-		{Key: "encryption", Label: "加密方式", Type: schema.Enum, Options: []string{"", "starttls", "ssl", "none"}},
+		{Key: "encryption", Label: "加密方式", Type: schema.Enum, Options: []schema.Option{
+			{Value: "starttls", Label: "STARTTLS", Description: "常用 587 端口，先明文连接再升级为加密；留空即默认此项"},
+			{Value: "ssl", Label: "SSL/TLS", Description: "常用 465 端口，全程加密"},
+			{Value: "none", Label: "不加密", Description: "明文传输，仅用于本地调试"},
+		}},
 	}}
 
 	cloudflareSchema = schema.Schema{Fields: []schema.Field{

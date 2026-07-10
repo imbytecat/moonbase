@@ -254,25 +254,6 @@ func ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Requ
 	return d.ops.parseNotify(ctx, p, r)
 }
 
-func paymentAuthUsable(p kitsettings.GenericProfile) bool {
-	switch p.Provider {
-	case "alipay":
-		if cfgStr(p.Config, "authMethod") == AuthCert {
-			return cfgStr(p.Config, "appCert") != "" &&
-				cfgStr(p.Config, "alipayRootCert") != "" &&
-				cfgStr(p.Config, "alipayPublicCert") != ""
-		}
-		return cfgStr(p.Config, "alipayPublicKey") != ""
-	case "wechat":
-		if cfgStr(p.Config, "authMethod") == AuthPlatformCert {
-			return true
-		}
-		return cfgStr(p.Config, "publicKeyId") != "" && cfgStr(p.Config, "publicKey") != ""
-	default:
-		return false
-	}
-}
-
 func cfgStr(config map[string]any, key string) string {
 	s, _ := config[key].(string)
 	return s

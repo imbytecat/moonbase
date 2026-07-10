@@ -1,5 +1,5 @@
 import { LeftOutlined } from '@ant-design/icons'
-import { App, Button, type FormInstance, Tag } from 'antd'
+import { App, Button, Tag } from 'antd'
 import { type ReactNode, useState } from 'react'
 import { FormDrawer } from '#components/form-drawer'
 
@@ -18,14 +18,14 @@ export interface ProviderOption {
 export function ProfileFormDrawer({
   open,
   onClose,
-  form,
+  dirty,
   profileProvider,
   providers,
   children,
 }: {
   open: boolean
   onClose: () => void
-  form: FormInstance
+  dirty: boolean
   profileProvider: string | undefined
   providers: ProviderOption[]
   children: (provider: string) => ReactNode
@@ -36,11 +36,8 @@ export function ProfileFormDrawer({
   const active = providers.find((p) => p.value === picked)
 
   const backToPicker = () => {
-    const discard = () => {
-      form.resetFields()
-      setPicked(undefined)
-    }
-    if (!form.isFieldsTouched()) {
+    const discard = () => setPicked(undefined)
+    if (!dirty) {
       discard()
       return
     }
@@ -59,7 +56,7 @@ export function ProfileFormDrawer({
       title={isNew ? '添加配置' : '编辑配置'}
       open={open}
       onClose={onClose}
-      form={active ? form : undefined}
+      dirty={active ? dirty : false}
     >
       {active ? (
         <>

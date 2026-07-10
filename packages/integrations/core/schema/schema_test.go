@@ -8,10 +8,10 @@ func demoSchema() Schema {
 		{Key: "access_key_id", Type: String, Required: true, MaxLen: 8},
 		{Key: "access_key_secret", Type: String, Secret: true, Required: true},
 		{Key: "key", Type: String, Immutable: true, Pattern: "^[a-z][a-z0-9-]{1,31}$"},
-		{Key: "region", Type: Enum, Options: []string{"cn", "us"}},
+		{Key: "region", Type: Enum, Options: []Option{{Value: "cn"}, {Value: "us"}}},
 		{Key: "port", Type: Int, Min: 0, Max: 65535},
 		{Key: "enabled", Type: Bool},
-		{Key: "methods", Type: Strings, Options: []string{"native", "h5"}, Unique: true},
+		{Key: "methods", Type: Strings, Options: []Option{{Value: "native"}, {Value: "h5"}}, Unique: true},
 	}}
 }
 

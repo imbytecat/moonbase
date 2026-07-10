@@ -10,18 +10,14 @@ import {
   testLlm,
   updateLlmProfile,
 } from '@moonbase/api-client'
-import { App, Button, Form, Input } from 'antd'
+import { App, Button } from 'antd'
 import { useState } from 'react'
 import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
-import {
-  SchemaField,
-  type SchemaProfileFormValues,
-  schemaInitialConfig,
-  schemaProfileToProto,
-} from '#components/system/schema-profile-form'
+import { ConfigForm } from '#components/system/config-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   chat: () => '通用对话',
@@ -42,7 +38,7 @@ export function LlmPanel({
   const { message } = App.useApp()
   const profiles = llm?.profiles ?? []
   const bindings = llm?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deleteLlmProfile, {
     onSuccess: () => {
@@ -87,8 +83,8 @@ export function LlmPanel({
         }
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
         profileDescription={(p) => modelOf(p) || '模型'}
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, ids) => bindMutation.mutate({ purpose, profileId: ids[0] ?? '' })}
@@ -96,12 +92,12 @@ export function LlmPanel({
       />
 
       <LlmProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />
@@ -121,11 +117,11 @@ function LlmProfileDrawer({
   onChanged: () => void
 }) {
   const { message } = App.useApp()
-  const [form] = Form.useForm<SchemaProfileFormValues>()
+  const [dirty, setDirty] = useState(false)
   const [result, setResult] = useState<TestState>()
 
   const { data: describe } = useQuery(describeLlmProviders, {})
-  const schemas = describe?.providers ?? {}
+  const forms = describe?.providers ?? {}
 
   const createMutation = useMutation(createLlmProfile, {
     onSuccess: () => {
@@ -161,68 +157,42 @@ function LlmProfileDrawer({
     },
   ]
 
-  const toProto = (provider: string, values: SchemaProfileFormValues) =>
-    schemaProfileToProto(profile, provider, schemas[provider]?.fields ?? [], values)
-
   return (
     <ProfileFormDrawer
       open={open}
       onClose={onClose}
-      form={form}
+      dirty={dirty}
       profileProvider={profile?.provider}
       providers={providers}
     >
       {(provider) => {
-        const fields = schemas[provider]?.fields ?? []
+        const providerForm = forms[provider]
+        if (!providerForm) return null
         return (
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{
-              name: profile?.name ?? '',
-              config: schemaInitialConfig(profile, provider, fields),
-            }}
-            onFinish={(values) => {
-              const p = toProto(provider, values)
+          <ConfigForm
+            key={provider}
+            providerForm={providerForm}
+            provider={provider}
+            profile={profile}
+            saving={createMutation.isPending || updateMutation.isPending}
+            onDirtyChange={setDirty}
+            onSubmit={(p) => {
               if (profile) updateMutation.mutate({ profile: p })
               else createMutation.mutate({ profile: p })
             }}
-          >
-            <Form.Item
-              name="name"
-              label={'配置名称'}
-              rules={[{ required: true, message: '请输入配置名称' }]}
-            >
-              <Input placeholder={'如：快速模型、推理模型'} />
-            </Form.Item>
-
-            <div className="grid grid-cols-2 gap-4">
-              {fields.map((field) => (
-                <SchemaField key={field.key} field={field} profile={profile} />
-              ))}
-            </div>
-
-            <TestAlert result={result} />
-            <div className="flex gap-2">
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={createMutation.isPending || updateMutation.isPending}
-              >
-                {'保存'}
-              </Button>
+            banner={() => <TestAlert result={result} />}
+            actions={(current) => (
               <Button
                 loading={testMutation.isPending}
                 onClick={() => {
                   setResult(undefined)
-                  testMutation.mutate({ profile: toProto(provider, form.getFieldsValue()) })
+                  testMutation.mutate({ profile: current })
                 }}
               >
                 {'测试对话'}
               </Button>
-            </div>
-          </Form>
+            )}
+          />
         )
       }}
     </ProfileFormDrawer>

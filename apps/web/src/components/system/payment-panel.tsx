@@ -7,10 +7,10 @@ import {
   type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
-import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { PaymentProfileDrawer } from '#components/system/payment-profile-drawer'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   checkout: () => '收银台',
@@ -31,7 +31,7 @@ export function PaymentPanel({
   const { message } = App.useApp()
   const profiles = payment?.profiles ?? []
   const bindings = payment?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deletePaymentProfile, {
     onSuccess: () => {
@@ -86,8 +86,8 @@ export function PaymentPanel({
         }
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
         profileDescription={(p) => descriptionOf(p)}
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, ids) => bindMutation.mutate({ purpose, profileIds: ids })}
@@ -95,12 +95,12 @@ export function PaymentPanel({
       />
 
       <PaymentProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />

@@ -7,10 +7,10 @@ import {
   type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
-import { useState } from 'react'
 import { ProfileManager, ProviderTag } from '#components/profile-manager'
 import { EmailProfileDrawer } from '#components/system/email-profile-drawer'
 import { humanizeError } from '#lib/errors'
+import { useEditingTarget } from '#lib/use-editing-target'
 
 const PURPOSE_LABELS: Record<string, () => string> = {
   auth: () => '账号验证邮件',
@@ -31,7 +31,7 @@ export function EmailPanel({
   const { message } = App.useApp()
   const profiles = email?.profiles ?? []
   const bindings = email?.bindings ?? []
-  const [editing, setEditing] = useState<Profile | 'new' | undefined>()
+  const drawer = useEditingTarget<Profile>()
 
   const deleteMutation = useMutation(deleteEmailProfile, {
     onSuccess: () => {
@@ -71,8 +71,8 @@ export function EmailPanel({
         profileIcon={() => <MailOutlined className="text-lg text-(--ant-color-primary)" />}
         profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider] ?? p.provider} />}
         profileDescription={(p) => String(p.config?.fromAddress || '发件地址')}
-        onAdd={() => setEditing('new')}
-        onEdit={(p) => setEditing(p)}
+        onAdd={drawer.add}
+        onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
         deleting={deleteMutation.isPending}
         onBind={(purpose, ids) => bindMutation.mutate({ purpose, profileId: ids[0] ?? '' })}
@@ -80,12 +80,12 @@ export function EmailPanel({
       />
 
       <EmailProfileDrawer
-        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
-        profile={editing === 'new' ? undefined : editing}
-        open={editing !== undefined}
-        onClose={() => setEditing(undefined)}
+        key={drawer.drawerKey}
+        profile={drawer.profile}
+        open={drawer.open}
+        onClose={drawer.close}
         onChanged={() => {
-          setEditing(undefined)
+          drawer.close()
           onChanged()
         }}
       />
