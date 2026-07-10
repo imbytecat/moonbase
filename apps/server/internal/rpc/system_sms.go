@@ -2,15 +2,15 @@ package rpc
 
 import (
 	"context"
-	"fmt"
-	"strings"
+	"errors"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	configcontract "github.com/imbytecat/moonbase/integrations/core/config"
 	"github.com/imbytecat/moonbase/integrations/core/integration"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	smsint "github.com/imbytecat/moonbase/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -23,41 +23,7 @@ func (s *SystemService) smsOps() integrationOps[kitsettings.GenericProfile] {
 		load:     s.settings.Sms,
 		save:     s.settings.SetSms,
 		purposes: sms.Purposes,
-		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(sms.Registry, updated, stored)
-		},
-		validate: func(profile kitsettings.GenericProfile) error {
-			return validateProfile("sms", sms.Registry, profile)
-		},
 	}
-}
-
-func mergeProfile[Ops any](registry integration.Registry[Ops], updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-	if merged, ok := registry.Merge(updated.Provider, updated.Config, stored.Config); ok {
-		updated.Config = merged
-	}
-	return updated
-}
-
-func validateProfile[Ops any](name string, registry integration.Registry[Ops], profile kitsettings.GenericProfile) error {
-	if err := registry.Validate(profile.Provider, profile.Config); err != nil {
-		return fmt.Errorf("invalid %s profile: %w", name, err)
-	}
-	return nil
-}
-
-func describeProviders[Ops any](registry integration.Registry[Ops]) []*systemv1.ProviderDescriptor {
-	descriptors := registry.Descriptors()
-	providers := make([]*systemv1.ProviderDescriptor, len(descriptors))
-	for i, descriptor := range descriptors {
-		js, ui := descriptor.Config.JSONForm()
-		providers[i] = &systemv1.ProviderDescriptor{
-			Key:          descriptor.Key,
-			Presentation: presentationToProto(descriptor.Presentation),
-			Config:       &systemv1.ProviderForm{Schema: toStruct(js), UiSchema: toStruct(ui)},
-		}
-	}
-	return providers
 }
 
 func describePurposes(catalog integration.Catalog) []*systemv1.PurposeDescriptor {
@@ -89,12 +55,22 @@ func (s *SystemService) CreateSmsProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateSmsProfileRequest],
 ) (*connect.Response[systemv1.CreateSmsProfileResponse], error) {
-	profile, err := s.smsOps().create(ctx, s, profileFromProto(req.Msg.GetProfile()))
+	input := req.Msg.GetProfile()
+	cfg, err := s.settings.Sms(ctx)
 	if err != nil {
-		return nil, err
+		return nil, s.internal(ctx, "load sms settings", err)
+	}
+	canonical, err := s.smsRegistry.CreateConfig(input.GetProvider(), configValues(input.GetConfig()), input.GetConfig().GetSecrets())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	profile := kitsettings.GenericProfile{Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical}
+	cfg.Profiles = append(cfg.Profiles, profile)
+	if err := s.settings.SetSms(ctx, cfg); err != nil {
+		return nil, s.internal(ctx, "save sms settings", err)
 	}
 	return connect.NewResponse(&systemv1.CreateSmsProfileResponse{
-		Profile: smsProfileToProto(profile),
+		Profile: s.smsProfileToProto(profile),
 	}), nil
 }
 
@@ -102,13 +78,30 @@ func (s *SystemService) UpdateSmsProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateSmsProfileRequest],
 ) (*connect.Response[systemv1.UpdateSmsProfileResponse], error) {
-	profile, err := s.smsOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
+	input := req.Msg.GetProfile()
+	cfg, err := s.settings.Sms(ctx)
 	if err != nil {
-		return nil, err
+		return nil, s.internal(ctx, "load sms settings", err)
 	}
-	return connect.NewResponse(&systemv1.UpdateSmsProfileResponse{
-		Profile: smsProfileToProto(profile),
-	}), nil
+	for i, stored := range cfg.Profiles {
+		if stored.Id != input.GetId() {
+			continue
+		}
+		if stored.Provider != input.GetProvider() {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("sms provider cannot be changed"))
+		}
+		canonical, err := s.smsRegistry.UpdateConfig(stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		profile := kitsettings.GenericProfile{Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical}
+		cfg.Profiles[i] = profile
+		if err := s.settings.SetSms(ctx, cfg); err != nil {
+			return nil, s.internal(ctx, "save sms settings", err)
+		}
+		return connect.NewResponse(&systemv1.UpdateSmsProfileResponse{Profile: s.smsProfileToProto(profile)}), nil
+	}
+	return nil, s.smsOps().errNotFound()
 }
 
 func (s *SystemService) DeleteSmsProfile(
@@ -130,7 +123,7 @@ func (s *SystemService) BindSmsPurpose(
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindSmsPurposeResponse{
-		Sms: toProtoSms(cfg),
+		Sms: s.toProtoSms(cfg),
 	}), nil
 }
 
@@ -138,12 +131,7 @@ func (s *SystemService) SendTestSms(
 	ctx context.Context,
 	req *connect.Request[systemv1.SendTestSmsRequest],
 ) (*connect.Response[systemv1.SendTestSmsResponse], error) {
-	var in *kitsettings.GenericProfile
-	if req.Msg.GetProfile() != nil {
-		p := profileFromProto(req.Msg.GetProfile())
-		in = &p
-	}
-	profile, err := s.smsOps().resolveTestProfile(ctx, s, in, req.Msg.GetProfileId())
+	profile, err := s.resolveSmsTestProfile(ctx, req.Msg.GetProfile(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +139,7 @@ func (s *SystemService) SendTestSms(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, phone.ErrInvalid)
 	}
-	if err := s.smser.SendCodeWith(ctx, profile.Provider, profile.Config, e164, "123456"); err != nil {
+	if err := s.smser.SendCodeWith(ctx, profile, e164, "123456"); err != nil {
 		return connect.NewResponse(&systemv1.SendTestSmsResponse{
 			Ok:      false,
 			Message: testFailureMessage(err, sms.ErrNotConfigured, "sms is not configured: fill in provider credentials and sign name"),
@@ -160,65 +148,59 @@ func (s *SystemService) SendTestSms(
 	return connect.NewResponse(&systemv1.SendTestSmsResponse{Ok: true}), nil
 }
 
+func (s *SystemService) resolveSmsTestProfile(ctx context.Context, input *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
+	cfg, err := s.settings.Sms(ctx)
+	if err != nil {
+		return kitsettings.GenericProfile{}, s.internal(ctx, "load sms settings", err)
+	}
+	if input != nil {
+		if stored, ok := cfg.Profile(input.GetId()); ok {
+			if stored.Provider != input.GetProvider() {
+				return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, errors.New("sms provider cannot be changed"))
+			}
+			canonical, err := s.smsRegistry.UpdateConfig(stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+			if err != nil {
+				return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			return kitsettings.GenericProfile{Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical}, nil
+		}
+		canonical, err := s.smsRegistry.CreateConfig(input.GetProvider(), configValues(input.GetConfig()), input.GetConfig().GetSecrets())
+		if err != nil {
+			return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		return kitsettings.GenericProfile{Id: input.GetId(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical}, nil
+	}
+	if id != "" {
+		if stored, ok := cfg.Profile(id); ok {
+			return stored, nil
+		}
+		return kitsettings.GenericProfile{}, s.smsOps().errNotFound()
+	}
+	return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, errors.New("provide a profile or profile_id to test"))
+}
+
 func (s *SystemService) DescribeSmsProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeSmsProvidersRequest],
 ) (*connect.Response[systemv1.DescribeSmsProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeSmsProvidersResponse{
 		Purposes:  describePurposes(sms.Purposes),
-		Providers: describeProviders(sms.Registry),
+		Providers: describeSmsProviders(s.smsRegistry),
 	}), nil
 }
 
-func profileFromProto(p *systemv1.ProfileInput) kitsettings.GenericProfile {
-	values := map[string]any{}
-	if config := p.GetConfig(); config != nil && config.GetValues() != nil {
-		values = config.GetValues().AsMap()
+func describeSmsProviders(registry smsint.Registry) []*systemv1.ProviderDescriptor {
+	descriptors := registry.Descriptors()
+	out := make([]*systemv1.ProviderDescriptor, len(descriptors))
+	for i, d := range descriptors {
+		out[i] = &systemv1.ProviderDescriptor{Key: d.Key, Presentation: presentationToProto(d.Presentation), Config: &systemv1.ProviderForm{Schema: toStruct(d.JSONSchema), UiSchema: toStruct(d.UISchema)}}
 	}
-	config, err := configcontract.MergeWrite(values, p.GetConfig().GetSecrets())
-	if err != nil {
-		config = values
-		config["$invalid-secret-write"] = err.Error()
-	}
-	return kitsettings.GenericProfile{
-		Id:       p.GetId(),
-		Name:     p.GetName(),
-		Provider: p.GetProvider(),
-		Config:   config,
-	}
+	return out
 }
 
-func smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, sms.Registry)
-}
-
-// profileToProto masks the config via the provider's schema — secrets never
-// leave the server — then encodes it as a Struct. The masked map holds only
-// strings and *_set bools, so structpb encoding cannot fail.
-func profileToProto[Ops any](p kitsettings.GenericProfile, registry integration.Registry[Ops]) *systemv1.Profile {
-	masked, known := registry.Mask(p.Provider, p.Config)
-	valid := known && registry.Validate(p.Provider, p.Config) == nil
-	setSecretPaths := []string{}
-	for key, value := range masked {
-		if !strings.HasSuffix(key, "_set") {
-			continue
-		}
-		secretKey := strings.TrimSuffix(key, "_set")
-		if set, _ := value.(bool); set {
-			setSecretPaths = append(setSecretPaths, "/"+strings.ReplaceAll(strings.ReplaceAll(secretKey, "~", "~0"), "/", "~1"))
-		}
-		delete(masked, key)
-		delete(masked, secretKey)
-	}
-	cfg, err := structpb.NewStruct(masked)
-	if err != nil {
-		cfg = &structpb.Struct{}
-	}
-	return &systemv1.Profile{
-		Id: p.Id, Name: p.Name, Provider: p.Provider,
-		Config:      &systemv1.ConfigView{Values: cfg, SetSecretPaths: setSecretPaths},
-		ConfigValid: valid,
-	}
+func (s *SystemService) smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	view, valid := s.smsRegistry.ViewConfig(p.Provider, p.Config)
+	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }
 
 // toStruct encodes a JSONForm map (only strings, numbers, bools, maps and
@@ -232,10 +214,10 @@ func toStruct(m map[string]any) *structpb.Struct {
 	return s
 }
 
-func toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {
+func (s *SystemService) toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = smsProfileToProto(p)
+		profiles[i] = s.smsProfileToProto(p)
 	}
 	bindings := make([]*systemv1.SmsBinding, len(sms.Purposes))
 	for i, purpose := range sms.Purposes {

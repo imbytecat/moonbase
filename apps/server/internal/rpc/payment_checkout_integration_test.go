@@ -22,14 +22,24 @@ type checkoutGateway struct {
 	profile kitsettings.GenericProfile
 }
 
+func (checkoutGateway) Describe(provider string) (pay.ProviderDescriptor, bool) {
+	return pay.NewRegistry().Describe(provider)
+}
+func (checkoutGateway) ProfileProducts(profile kitsettings.GenericProfile) []string {
+	return pay.NewRegistry().ConfiguredProducts(profile.Provider, profile.Config)
+}
+func (checkoutGateway) RenderHostedFlow(provider, product, payload string) ([]byte, error) {
+	return pay.NewRegistry().RenderHostedFlow(provider, product, payload)
+}
+
 func (g checkoutGateway) ProfilesFor(context.Context, string) ([]kitsettings.GenericProfile, error) {
 	return []kitsettings.GenericProfile{g.profile}, nil
 }
 func (g checkoutGateway) ProfileByID(context.Context, string) (kitsettings.GenericProfile, error) {
 	return g.profile, nil
 }
-func (checkoutGateway) Plan(context.Context, kitsettings.GenericProfile, pay.PlanRequest) (pay.PlanResult, error) {
-	descriptor, _ := pay.Describe("wechat")
+func (g checkoutGateway) Plan(context.Context, kitsettings.GenericProfile, pay.PlanRequest) (pay.PlanResult, error) {
+	descriptor, _ := g.Describe("wechat")
 	return pay.PlanResult{ProductID: "native", Input: descriptor.Products[0].Input}, nil
 }
 func (checkoutGateway) Create(context.Context, kitsettings.GenericProfile, pay.CreateRequest) (pay.Action, error) {

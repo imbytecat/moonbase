@@ -167,10 +167,11 @@ func TestFileHandlerRedirectsPublicS3ToStableURL(t *testing.T) {
 			Name:     "s3",
 			Provider: "s3",
 			Config: map[string]any{
-				"endpoint":      "s3.test",
-				"bucket":        "b",
-				"accessKeyId":   "k",
-				"publicBaseUrl": "https://cdn.test",
+				"endpoint":        "s3.test",
+				"bucket":          "b",
+				"accessKeyId":     "k",
+				"secretAccessKey": "secret",
+				"publicBaseUrl":   "https://cdn.test",
 			},
 		}},
 		Bindings: map[string][]string{PurposeAvatars: {"s3"}},
@@ -179,7 +180,7 @@ func TestFileHandlerRedirectsPublicS3ToStableURL(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /f/{file_id}", NewFileHandler(store, NewClient(store), files,
+	mux.Handle("GET /f/{file_id}", NewFileHandler(store, NewClient(store, NewRegistry()), files,
 		slog.New(slog.NewTextHandler(io.Discard, nil))))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

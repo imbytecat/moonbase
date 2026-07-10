@@ -33,7 +33,7 @@ type View struct {
 }
 
 // MergeWrite combines ordinary values with non-empty secret replacements.
-// The result is suitable for Contract.Create/Update or a legacy schema adapter.
+// The result is suitable for Contract.Create/Update.
 func MergeWrite(values map[string]any, secrets map[string]string) (map[string]any, error) {
 	out, err := cloneMap(values)
 	if err != nil {

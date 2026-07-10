@@ -53,7 +53,7 @@ func TestReclaimUnattachedSweepsOldOrphansOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.SetStorage(context.Background(), settings.Storage{}) })
-	objects := storage.NewClient(store)
+	objects := storage.NewClient(store, storage.NewRegistry())
 
 	uploader := uuid.New()
 	// Both files are created 48h ago so they clear a 24h grace cutoff.

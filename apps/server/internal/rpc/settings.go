@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/nyaruka/phonenumbers"
 
+	smsint "github.com/imbytecat/moonbase/integrations/sms"
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/settings/v1/settingsv1connect"
 	mail "github.com/imbytecat/moonbase/server/internal/mail"
@@ -25,19 +26,21 @@ import (
 // SettingsService is the BUSINESS settings surface (settings.*). The
 // infrastructure integrations live in SystemService behind system.*.
 type SettingsService struct {
-	settings *settings.Store
-	repo     repository.Querier
-	mailer   mail.Sender
-	logger   *slog.Logger
+	settings    *settings.Store
+	repo        repository.Querier
+	mailer      mail.Sender
+	smsRegistry smsint.Registry
+	logger      *slog.Logger
 }
 
 func NewSettingsService(
 	store *settings.Store,
 	repo repository.Querier,
 	mailer mail.Sender,
+	smsRegistry smsint.Registry,
 	logger *slog.Logger,
 ) *SettingsService {
-	return &SettingsService{settings: store, repo: repo, mailer: mailer, logger: logger}
+	return &SettingsService{settings: store, repo: repo, mailer: mailer, smsRegistry: smsRegistry, logger: logger}
 }
 
 var _ settingsv1connect.SettingsServiceHandler = (*SettingsService)(nil)
@@ -186,7 +189,8 @@ func (s *SettingsService) validateAuthSettings(ctx context.Context, next setting
 		if err != nil {
 			return s.internal(ctx, "load sms settings", err)
 		}
-		if !sms.Usable(smsCfg, sms.PurposeVerification) {
+		profile, ok := smsCfg.ProfileFor(sms.PurposeVerification)
+		if !ok || !s.smsRegistry.ConfigUsable(profile.Provider, profile.Config) {
 			return connect.NewError(connect.CodeFailedPrecondition,
 				errors.New("phone signup requires a configured SMS channel"))
 		}

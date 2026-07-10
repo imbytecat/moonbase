@@ -12,6 +12,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	smsint "github.com/imbytecat/moonbase/integrations/sms"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -38,6 +39,7 @@ type AuthService struct {
 	captcha      captcha.Verifier
 	mailer       mail.Sender
 	smser        sms.Sender
+	smsRegistry  smsint.Registry
 	oauth        oauth.Flow
 	verifier     *verify.Service
 	logger       *slog.Logger
@@ -47,15 +49,16 @@ type AuthService struct {
 }
 
 type AuthServiceDeps struct {
-	Repo     repository.Querier
-	Settings *settings.Store
-	Captcha  captcha.Verifier
-	Mailer   mail.Sender
-	Smser    sms.Sender
-	Oauth    oauth.Flow
-	Verifier *verify.Service
-	Logger   *slog.Logger
-	Policy   auth.SessionPolicy
+	Repo        repository.Querier
+	Settings    *settings.Store
+	Captcha     captcha.Verifier
+	Mailer      mail.Sender
+	Smser       sms.Sender
+	SmsRegistry smsint.Registry
+	Oauth       oauth.Flow
+	Verifier    *verify.Service
+	Logger      *slog.Logger
+	Policy      auth.SessionPolicy
 	// SecureCookie sets the cookie Secure flag (and the __Host- name).
 	SecureCookie bool
 	// PublicURL is the origin used in emailed links, e.g. https://app.example.com.
@@ -69,6 +72,7 @@ func NewAuthService(d AuthServiceDeps) *AuthService {
 		captcha:      d.Captcha,
 		mailer:       d.Mailer,
 		smser:        d.Smser,
+		smsRegistry:  d.SmsRegistry,
 		oauth:        d.Oauth,
 		verifier:     d.Verifier,
 		logger:       d.Logger,
@@ -385,11 +389,11 @@ func (s *AuthService) GetAuthConfig(
 		AllowedPhoneRegions: authCfg.AllowedPhoneRegions,
 		SignupIdentifiers:   authCfg.EffectiveSignupIdentifiers(),
 	}
-	capCfg, err := s.settings.Captcha(ctx)
+	provider, siteKey, ok, err := s.captcha.Widget(ctx, captcha.PurposeAuth)
 	if err != nil {
 		return nil, s.internal(ctx, "load captcha settings", err)
 	}
-	if provider, siteKey, ok := captcha.Widget(capCfg, captcha.PurposeAuth); ok {
+	if ok {
 		out.CaptchaProvider = provider
 		out.CaptchaSiteKey = siteKey
 	}
@@ -402,12 +406,13 @@ func (s *AuthService) GetAuthConfig(
 	if err != nil {
 		return nil, s.internal(ctx, "load sms settings", err)
 	}
-	out.SmsEnabled = sms.Usable(smsCfg, sms.PurposeVerification)
-	oauthCfg, err := s.settings.Oauth(ctx)
+	profile, ok := smsCfg.ProfileFor(sms.PurposeVerification)
+	out.SmsEnabled = ok && s.smsRegistry.ConfigUsable(profile.Provider, profile.Config)
+	oauthOptions, err := s.oauth.ProviderOptions(ctx)
 	if err != nil {
 		return nil, s.internal(ctx, "load oauth settings", err)
 	}
-	for _, opt := range oauth.UsableProviders(oauthCfg) {
+	for _, opt := range oauthOptions {
 		out.OauthProviders = append(out.OauthProviders, &authv1.OauthProviderOption{
 			Key:      opt.Key,
 			Name:     opt.Name,

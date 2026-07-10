@@ -59,6 +59,6 @@ secret 写入只支持 policy 声明的非空字符串叶子，并以 RFC 6901 J
 - SMTP、Cloudflare 等 provider 各自拥有配置类型和实现，只在 email seam 后组合；不再共享 integration 级配置 union 或散落的 `cfgStr`/`cfgInt`。
 - 可复用 integration 包不再依赖 settings 或接受 purpose；应用 facade 先把 purpose 解析成已选 Profile，再调用 registry 执行。下游项目增删业务用途无需修改 `packages/integrations/*`。
 - 本项目编译的 provider 集合与顺序由应用 facade 的 `registry.go` 选择，服务器启动时构造并注入同一个不可变 registry；不提供 reusable `builtin` 集合或包级全局 registry。
-- proto 的 profile 写入/读取形状、Web secret widget、registry 和现有 `config.Schema` 需要一次性不兼容重构。
+- proto 的 profile 写入/读取形状、Web secret widget、registry 与旧配置引擎已经完成一次性不兼容重构；当前 `Contract[T]` 是唯一 provider config lifecycle。
 - core 仍需维护一个薄且表驱动的 lifecycle module；这是应用状态语义，不是重复实现 JSON Schema validator。
 - 契约测试必须守卫 schema 可同时被 Santhosh/Ajv 编译、严格解码、secret 不泄露、create-only、普通零值与 provider registration 原子性。

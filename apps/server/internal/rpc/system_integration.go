@@ -2,82 +2,27 @@ package rpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"connectrpc.com/connect"
-	"github.com/google/uuid"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-// integrationOps is the one implementation behind every profile-based
-// integration's Create/Update/Delete/Bind RPCs. Each integration supplies its
-// catalog, schema-aware secret merge, and optional validation; the lifecycle
-// rules are shared: create assigns the id, update keeps stored secrets when the
-// wire value is empty, delete refuses while bound, bind validates the purpose
-// catalog.
+// integrationOps keeps only the lifecycle shared across every profile-based
+// integration: delete refuses while bound, and bind validates the application
+// purpose catalog. Typed registries own Create/Update/View/Describe/Test config
+// behavior because their Contract and operations are integration-specific.
 type integrationOps[P settings.Profile[P]] struct {
-	name        string
-	load        func(context.Context) (settings.Integration[P], error)
-	save        func(context.Context, settings.Integration[P]) error
-	purposes    integration.Catalog
-	keepSecrets func(updated, stored P) P
-	validate    func(P) error
+	name     string
+	load     func(context.Context) (settings.Integration[P], error)
+	save     func(context.Context, settings.Integration[P]) error
+	purposes integration.Catalog
 }
 
 func (o integrationOps[P]) errNotFound() error {
 	return connect.NewError(connect.CodeNotFound, fmt.Errorf("%s profile not found", o.name))
-}
-
-func (o integrationOps[P]) create(ctx context.Context, s *SystemService, in P) (P, error) {
-	cfg, err := o.load(ctx)
-	if err != nil {
-		var zero P
-		return zero, s.internal(ctx, "load "+o.name+" settings", err)
-	}
-	profile := in.WithID(uuid.NewString())
-	if o.validate != nil {
-		if err := o.validate(profile); err != nil {
-			var zero P
-			return zero, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-	}
-	cfg.Profiles = append(cfg.Profiles, profile)
-	if err := o.save(ctx, cfg); err != nil {
-		var zero P
-		return zero, s.internal(ctx, "save "+o.name+" settings", err)
-	}
-	return profile, nil
-}
-
-func (o integrationOps[P]) update(ctx context.Context, s *SystemService, in P) (P, error) {
-	cfg, err := o.load(ctx)
-	if err != nil {
-		var zero P
-		return zero, s.internal(ctx, "load "+o.name+" settings", err)
-	}
-	for i, p := range cfg.Profiles {
-		if p.ProfileID() != in.ProfileID() {
-			continue
-		}
-		updated := o.keepSecrets(in, p).WithID(p.ProfileID())
-		if o.validate != nil {
-			if err := o.validate(updated); err != nil {
-				var zero P
-				return zero, connect.NewError(connect.CodeInvalidArgument, err)
-			}
-		}
-		cfg.Profiles[i] = updated
-		if err := o.save(ctx, cfg); err != nil {
-			var zero P
-			return zero, s.internal(ctx, "save "+o.name+" settings", err)
-		}
-		return updated, nil
-	}
-	var zero P
-	return zero, o.errNotFound()
 }
 
 func (o integrationOps[P]) delete(ctx context.Context, s *SystemService, id string) error {
@@ -143,34 +88,6 @@ func (o integrationOps[P]) bind(ctx context.Context, s *SystemService, purpose, 
 		ids = []string{profileID}
 	}
 	return o.bindMany(ctx, s, purpose, ids)
-}
-
-// resolveTestProfile implements the shared test-RPC convention: pass a
-// profile to test unsaved form values (missing secrets fall back to the stored
-// profile with the same id), or a profile id to test a stored profile as-is.
-func (o integrationOps[P]) resolveTestProfile(ctx context.Context, s *SystemService, in *P, id string) (P, error) {
-	var zero P
-	cfg, err := o.load(ctx)
-	if err != nil {
-		return zero, s.internal(ctx, "load "+o.name+" settings", err)
-	}
-	switch {
-	case in != nil:
-		profile := *in
-		if stored, ok := cfg.Profile(profile.ProfileID()); ok {
-			profile = o.keepSecrets(profile, stored).WithID(stored.ProfileID())
-		}
-		return profile, nil
-	case id != "":
-		stored, ok := cfg.Profile(id)
-		if !ok {
-			return zero, o.errNotFound()
-		}
-		return stored, nil
-	default:
-		return zero, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("provide a profile or profile_id to test"))
-	}
 }
 
 // firstID renders a single-valued binding for the wire (empty = unbound).

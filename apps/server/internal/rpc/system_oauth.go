@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	oauthint "github.com/imbytecat/moonbase/integrations/oauth"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -19,10 +21,6 @@ func (s *SystemService) oauthOps() integrationOps[kitsettings.GenericProfile] {
 		load:     s.settings.Oauth,
 		save:     s.settings.SetOauth,
 		purposes: oauth.Purposes,
-		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(oauth.Registry, updated, stored)
-		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("oauth", oauth.Registry, p) },
 	}
 }
 
@@ -30,22 +28,28 @@ func (s *SystemService) CreateOauthProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateOauthProfileRequest],
 ) (*connect.Response[systemv1.CreateOauthProfileResponse], error) {
-	in := profileFromProto(req.Msg.GetProfile())
+	input := req.Msg.GetProfile()
 	cfg, err := s.settings.Oauth(ctx)
 	if err != nil {
 		return nil, s.internal(ctx, "load oauth settings", err)
 	}
-	key := profileConfigString(in, "key")
+	values := configValues(input.GetConfig())
+	key := configString(values, "key")
 	if _, exists := settings.ProfileByKey(cfg, key); exists {
 		return nil, connect.NewError(connect.CodeAlreadyExists,
 			fmt.Errorf("a login provider with key %q already exists", key))
 	}
-	profile, err := s.oauthOps().create(ctx, s, in)
+	canonical, err := s.oauthRegistry.CreateConfig(input.GetProvider(), values, input.GetConfig().GetSecrets())
 	if err != nil {
-		return nil, err
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	profile := kitsettings.GenericProfile{Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical}
+	cfg.Profiles = append(cfg.Profiles, profile)
+	if err := s.settings.SetOauth(ctx, cfg); err != nil {
+		return nil, s.internal(ctx, "save oauth settings", err)
 	}
 	return connect.NewResponse(&systemv1.CreateOauthProfileResponse{
-		Profile: oauthProfileToProto(profile),
+		Profile: s.oauthProfileToProto(profile),
 	}), nil
 }
 
@@ -53,13 +57,35 @@ func (s *SystemService) UpdateOauthProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateOauthProfileRequest],
 ) (*connect.Response[systemv1.UpdateOauthProfileResponse], error) {
-	profile, err := s.oauthOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
+	input := req.Msg.GetProfile()
+	cfg, err := s.settings.Oauth(ctx)
 	if err != nil {
-		return nil, err
+		return nil, s.internal(ctx, "load oauth settings", err)
 	}
-	return connect.NewResponse(&systemv1.UpdateOauthProfileResponse{
-		Profile: oauthProfileToProto(profile),
-	}), nil
+	for i, stored := range cfg.Profiles {
+		if stored.Id != input.GetId() {
+			continue
+		}
+		if stored.Provider != input.GetProvider() {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("oauth provider cannot be changed"))
+		}
+		canonical, err := s.oauthRegistry.UpdateConfig(stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		key := configString(canonical, "key")
+		if existing, exists := settings.ProfileByKey(cfg, key); exists && existing.Id != stored.Id {
+			return nil, connect.NewError(connect.CodeAlreadyExists,
+				fmt.Errorf("a login provider with key %q already exists", key))
+		}
+		updated := kitsettings.GenericProfile{Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical}
+		cfg.Profiles[i] = updated
+		if err := s.settings.SetOauth(ctx, cfg); err != nil {
+			return nil, s.internal(ctx, "save oauth settings", err)
+		}
+		return connect.NewResponse(&systemv1.UpdateOauthProfileResponse{Profile: s.oauthProfileToProto(updated)}), nil
+	}
+	return nil, s.oauthOps().errNotFound()
 }
 
 func (s *SystemService) BindOauthPurpose(
@@ -71,7 +97,7 @@ func (s *SystemService) BindOauthPurpose(
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindOauthPurposeResponse{
-		Oauth: toProtoOauth(cfg),
+		Oauth: s.toProtoOauth(cfg),
 	}), nil
 }
 
@@ -89,7 +115,8 @@ func (s *SystemService) DeleteOauthProfile(
 	}
 	// Bound identities would become unreachable orphans; unbinding the
 	// login purpose is the reversible way to retire a provider.
-	count, err := s.repo.CountIdentitiesByProvider(ctx, profileConfigString(profile, "key"))
+	view, _ := s.oauthRegistry.ViewConfig(profile.Provider, profile.Config)
+	count, err := s.repo.CountIdentitiesByProvider(ctx, configString(view.Values, "key"))
 	if err != nil {
 		return nil, s.internal(ctx, "count identities", err)
 	}
@@ -103,10 +130,10 @@ func (s *SystemService) DeleteOauthProfile(
 	return connect.NewResponse(&systemv1.DeleteOauthProfileResponse{}), nil
 }
 
-func toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings {
+func (s *SystemService) toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = oauthProfileToProto(p)
+		profiles[i] = s.oauthProfileToProto(p)
 	}
 	// Bindings are emitted in catalog order so the UI renders a stable list.
 	bindings := make([]*systemv1.OauthBinding, len(oauth.Purposes))
@@ -124,15 +151,25 @@ func (s *SystemService) DescribeOauthProviders(
 	_ *connect.Request[systemv1.DescribeOauthProvidersRequest],
 ) (*connect.Response[systemv1.DescribeOauthProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeOauthProvidersResponse{
-		Purposes: describePurposes(oauth.Purposes), Providers: describeProviders(oauth.Registry),
+		Purposes: describePurposes(oauth.Purposes), Providers: describeOauthProviders(s.oauthRegistry),
 	}), nil
 }
 
-func oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, oauth.Registry)
+func describeOauthProviders(registry oauthint.Registry) []*systemv1.ProviderDescriptor {
+	descriptors := registry.Descriptors()
+	out := make([]*systemv1.ProviderDescriptor, len(descriptors))
+	for i, descriptor := range descriptors {
+		out[i] = &systemv1.ProviderDescriptor{Key: descriptor.Key, Presentation: presentationToProto(descriptor.Presentation), Config: &systemv1.ProviderForm{Schema: toStruct(descriptor.JSONSchema), UiSchema: toStruct(descriptor.UISchema)}}
+	}
+	return out
 }
 
-func profileConfigString(p kitsettings.GenericProfile, key string) string {
-	s, _ := p.Config[key].(string)
+func (s *SystemService) oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	view, valid := s.oauthRegistry.ViewConfig(p.Provider, p.Config)
+	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
+}
+
+func configString(values map[string]any, key string) string {
+	s, _ := values[key].(string)
 	return s
 }

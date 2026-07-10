@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -61,13 +60,13 @@ func newLocalFixture(t *testing.T) (*settings.Store, *Client) {
 	if err := store.SetStorage(t.Context(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	return store, NewClient(store)
+	return store, NewClient(store, NewRegistry())
 }
 
 func TestLocalPutThenGetRoundtrip(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 
@@ -110,7 +109,7 @@ func TestLocalPutThenGetRoundtrip(t *testing.T) {
 func TestLocalServesPublicPurposeWithoutSignature(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 
@@ -148,7 +147,7 @@ func TestLocalServesPublicPurposeWithoutSignature(t *testing.T) {
 func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
 	const privatePurpose = "private-test"
 	store, client := newLocalFixture(t)
-	handler := NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux := http.NewServeMux()
 	mux.Handle("/files/{purpose}/{key...}", handler)
 
@@ -204,11 +203,12 @@ func TestLocalResolveURLPublicPurposeIsUnsignedAndStable(t *testing.T) {
 }
 
 func TestLocalObjectPathRejectsTraversal(t *testing.T) {
-	cfg := map[string]any{"directory": "/srv/data"}
-	if _, err := storageint.LocalObjectPath(cfg, "../etc/passwd"); err == nil {
+	registry := NewRegistry()
+	profile := kitsettings.GenericProfile{Provider: "local", Config: map[string]any{"directory": "/srv/data"}}
+	if _, err := registry.ObjectPath(profile.Provider, profile.Config, "../etc/passwd"); err == nil {
 		t.Fatal("path traversal must be rejected")
 	}
-	if _, err := storageint.LocalObjectPath(cfg, "avatars/u1/pic.png"); err != nil {
+	if _, err := registry.ObjectPath(profile.Provider, profile.Config, "avatars/u1/pic.png"); err != nil {
 		t.Fatalf("legit key rejected: %v", err)
 	}
 }
@@ -231,7 +231,7 @@ func TestLocalTestProvesDirectoryWritable(t *testing.T) {
 func TestLocalDeleteRemovesObjectAndIsIdempotent(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 

@@ -3,24 +3,16 @@ package pay
 import (
 	"fmt"
 	"slices"
-
-	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-func Providers() []string { return Registry.Names() }
-
-func ProfileUsable(profile kitsettings.GenericProfile) bool {
-	return Registry.ProfileUsable(profile.Provider, profile.Config)
-}
 
 // ProfileProducts returns the signed products in driver declaration order.
 // An empty stored products list means every product published by the driver.
-func ProfileProducts(profile kitsettings.GenericProfile) []string {
-	descriptor, ok := Describe(profile.Provider)
+func (r Registry) ConfiguredProducts(provider string, values map[string]any) []string {
+	descriptor, ok := r.Describe(provider)
 	if !ok {
 		return nil
 	}
-	configured := profileConfiguredProducts(profile)
+	configured := configuredProductIDs(values)
 	out := make([]string, 0, len(descriptor.Products))
 	for _, product := range descriptor.Products {
 		if len(configured) == 0 || slices.Contains(configured, product.ID) {
@@ -30,8 +22,8 @@ func ProfileProducts(profile kitsettings.GenericProfile) []string {
 	return out
 }
 
-func profileConfiguredProducts(profile kitsettings.GenericProfile) []string {
-	switch raw := profile.Config["products"].(type) {
+func configuredProductIDs(values map[string]any) []string {
+	switch raw := values["products"].(type) {
 	case []string:
 		return raw
 	case []any:
@@ -47,12 +39,8 @@ func profileConfiguredProducts(profile kitsettings.GenericProfile) []string {
 	}
 }
 
-func ProfileConfiguredProducts(profile kitsettings.GenericProfile) []string {
-	return profileConfiguredProducts(profile)
-}
-
-func ValidateProducts(provider string, products []string) error {
-	descriptor, ok := Describe(provider)
+func (r Registry) ValidateProducts(provider string, products []string) error {
+	descriptor, ok := r.Describe(provider)
 	if !ok {
 		return ErrNotConfigured
 	}

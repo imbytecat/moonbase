@@ -5,7 +5,7 @@
 
 ## 结论先行
 
-> 2026-07-11 更新：在“完全不考虑兼容、最终模型优先”的新前提下，本文最终推荐已改为第七节的 schema-first 方案。下面“保留现有 producer”的结论只适用于最低迁移路径，不再是 greenfield 推荐。
+> 2026-07-11 更新：第七节的 schema-first 方案现已完整落地，`config.Contract[T]` 是唯一 provider config lifecycle，旧 `config.Schema` 与 generic provider registry 已删除。下文对旧实现及最低迁移路径的讨论仅保留为决策研究记录，不描述当前仓库状态。
 
 **没有一个 Go 库可以完美替代 moonbase 的 `integrations/core/form` 与 `integrations/core/config`。唯一推荐是：保留它们作为规则、JSON Schema、UI Schema 和领域元数据的单一 producer，只引入 `github.com/santhosh-tekuri/jsonschema/v6` 作为服务端 Draft 2020-12 编译与验证引擎；验证通过后用标准库 `encoding/json` 解码为 provider 私有 `T`。**
 
@@ -90,7 +90,7 @@ no schema with key or ref "https://json-schema.org/draft/2020-12/schema"
 - `if/then` 条件字段；
 - `ui:order`、widget、placeholder、help 和 option descriptions。
 
-[`config.Schema`](../../packages/integrations/core/config/config.go) 又集中拥有 `secret`、`immutable`、`Mask`、`Merge` 与 `Usable`。这些都不是通用 JSON Schema 库应该理解的 provider 生命周期语义。
+当时的 `config.Schema` 又集中拥有 `secret`、`immutable`、`Mask`、`Merge` 与 `Usable`。这些都不是通用 JSON Schema 库应该理解的 provider 生命周期语义；该实现现已由 [`config.Contract[T]`](../../packages/integrations/core/config/contract.go) 取代。
 
 Santhosh 不生成 schema，也不解码 struct；这在本项目反而是优势：它只取代 `form.Validate` 中手写的标准协议校验，不争夺领域模型的所有权。
 

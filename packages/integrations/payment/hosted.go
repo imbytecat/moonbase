@@ -7,7 +7,7 @@ import (
 
 // RenderHostedFlow returns provider-owned same-origin HTML for products whose
 // client lifecycle cannot be represented by QR, redirect, or form actions.
-func renderHostedFlow(provider, product, payload string) ([]byte, error) {
+func RenderHostedFlowForProvider(provider, product, payload string) ([]byte, error) {
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/imbytecat/moonbase/integrations/core/settings"
 	"github.com/imbytecat/moonbase/integrations/email"
 )
 
@@ -39,14 +38,11 @@ func TestRegistrationSendsWithPrivateTypedConfig(t *testing.T) {
 	})}
 	registry := email.MustRegistry(New(client))
 
-	err := registry.Send(t.Context(), settings.GenericProfile{
-		Provider: "cloudflare",
-		Config: map[string]any{
-			"fromAddress": "noreply@example.com",
-			"fromName":    "Moonbase",
-			"accountId":   "account-1",
-			"apiToken":    "token-1",
-		},
+	err := registry.Send(t.Context(), "cloudflare", map[string]any{
+		"fromAddress": "noreply@example.com",
+		"fromName":    "Moonbase",
+		"accountId":   "account-1",
+		"apiToken":    "token-1",
 	}, email.Message{To: "user@example.com", Subject: "主题", TextBody: "正文"})
 	if err != nil {
 		t.Fatal(err)

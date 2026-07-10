@@ -23,11 +23,12 @@ const maxLocalObjectSize = 32 << 20
 // request time.
 type Handler struct {
 	store  *settings.Store
+	client *Client
 	logger *slog.Logger
 }
 
-func NewHandler(store *settings.Store, logger *slog.Logger) *Handler {
-	return &Handler{store: store, logger: logger}
+func NewHandler(store *settings.Store, client *Client, logger *slog.Logger) *Handler {
+	return &Handler{store: store, client: client, logger: logger}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +66,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "storage not configured", http.StatusNotFound)
 		return
 	}
-	path, err := storageint.LocalObjectPath(cfg.Config, key)
+	path, err := h.client.ObjectPath(cfg, key)
 	if err != nil {
 		http.Error(w, "invalid object key", http.StatusBadRequest)
 		return

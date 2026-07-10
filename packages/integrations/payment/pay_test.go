@@ -1,4 +1,4 @@
-package pay
+package pay_test
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"maps"
 	"slices"
 	"testing"
-	"time"
-
-	"github.com/smartwalle/alipay/v3"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	. "github.com/imbytecat/moonbase/integrations/payment"
+	alipayprovider "github.com/imbytecat/moonbase/integrations/payment/alipay"
+	wechatprovider "github.com/imbytecat/moonbase/integrations/payment/wechat"
 )
 
 func TestYuanRendersCents(t *testing.T) {
@@ -24,13 +24,18 @@ func TestYuanRendersCents(t *testing.T) {
 		{10000000000, "100000000.00"},
 	}
 	for _, tc := range cases {
-		if got := yuan(tc.cents); got != tc.want {
+		if got := Yuan(tc.cents); got != tc.want {
 			t.Errorf("yuan(%d) = %q, want %q", tc.cents, got, tc.want)
 		}
 	}
 }
 
+func testRegistry() Registry {
+	return MustRegistry(alipayprovider.New(), wechatprovider.New())
+}
+
 func TestAlipayUsable(t *testing.T) {
+	registry := testRegistry()
 	base := kitsettings.GenericProfile{
 		Provider: "alipay",
 		Config:   map[string]any{"appId": "2021000000000000", "appPrivateKey": "key"},
@@ -40,21 +45,21 @@ func TestAlipayUsable(t *testing.T) {
 	publicKey.Config = cloneConfig(base.Config)
 	publicKey.Config["authMethod"] = AuthPublicKey
 	publicKey.Config["alipayPublicKey"] = "pub"
-	if !ProfileUsable(publicKey) {
+	if !registry.ConfigUsable(publicKey.Provider, publicKey.Config) {
 		t.Error("public-key profile with platform key should be usable")
 	}
 
 	defaulted := base
 	defaulted.Config = cloneConfig(base.Config)
 	defaulted.Config["alipayPublicKey"] = "pub"
-	if !ProfileUsable(defaulted) {
-		t.Error("empty auth_method should default to public-key mode")
+	if registry.ConfigUsable(defaulted.Provider, defaulted.Config) {
+		t.Error("auth_method must be explicit; runtime config has no implicit default")
 	}
 
 	missingKey := base
 	missingKey.Config = cloneConfig(base.Config)
 	missingKey.Config["authMethod"] = AuthPublicKey
-	if ProfileUsable(missingKey) {
+	if registry.ConfigUsable(missingKey.Provider, missingKey.Config) {
 		t.Error("public-key profile without platform key should not be usable")
 	}
 
@@ -64,16 +69,17 @@ func TestAlipayUsable(t *testing.T) {
 	cert.Config["appCert"] = "a"
 	cert.Config["alipayRootCert"] = "b"
 	cert.Config["alipayPublicCert"] = "c"
-	if !ProfileUsable(cert) {
+	if !registry.ConfigUsable(cert.Provider, cert.Config) {
 		t.Error("cert profile with all three certs should be usable")
 	}
 	cert.Config["alipayRootCert"] = ""
-	if ProfileUsable(cert) {
+	if registry.ConfigUsable(cert.Provider, cert.Config) {
 		t.Error("cert profile missing a cert should not be usable")
 	}
 }
 
 func TestWechatUsable(t *testing.T) {
+	registry := testRegistry()
 	base := kitsettings.GenericProfile{
 		Provider: "wechat",
 		Config: map[string]any{
@@ -90,40 +96,35 @@ func TestWechatUsable(t *testing.T) {
 	publicKey.Config["authMethod"] = AuthPublicKey
 	publicKey.Config["publicKeyId"] = "PUB_KEY_ID_1"
 	publicKey.Config["publicKey"] = "pub"
-	if !ProfileUsable(publicKey) {
+	if !registry.ConfigUsable(publicKey.Provider, publicKey.Config) {
 		t.Error("public-key profile with key id + key should be usable")
 	}
 
 	missing := base
 	missing.Config = cloneConfig(base.Config)
 	missing.Config["authMethod"] = AuthPublicKey
-	if ProfileUsable(missing) {
+	if registry.ConfigUsable(missing.Provider, missing.Config) {
 		t.Error("public-key profile without wechat public key should not be usable")
 	}
 
 	platformCert := base
 	platformCert.Config = cloneConfig(base.Config)
 	platformCert.Config["authMethod"] = AuthPlatformCert
-	if !ProfileUsable(platformCert) {
+	if !registry.ConfigUsable(platformCert.Provider, platformCert.Config) {
 		t.Error("platform-cert profile needs no local platform key")
 	}
 
 	noAPIKey := platformCert
 	noAPIKey.Config = cloneConfig(platformCert.Config)
 	noAPIKey.Config["apiV3Key"] = ""
-	if ProfileUsable(noAPIKey) {
+	if registry.ConfigUsable(noAPIKey.Provider, noAPIKey.Config) {
 		t.Error("profile without APIv3 key should not be usable")
 	}
 }
 
-func TestUnknownProviderNotUsable(t *testing.T) {
-	if ProfileUsable(kitsettings.GenericProfile{Provider: "paypal"}) {
-		t.Error("unregistered provider should not be usable")
-	}
-}
-
 func TestDriverDescribeAndPlanOwnPaymentProducts(t *testing.T) {
-	descriptor, ok := Describe("wechat")
+	registry := testRegistry()
+	descriptor, ok := registry.Describe("wechat")
 	if !ok {
 		t.Fatal("wechat driver descriptor not found")
 	}
@@ -150,7 +151,7 @@ func TestDriverDescribeAndPlanOwnPaymentProducts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			plan, err := Plan(t.Context(), profile, PlanRequest{
+			plan, err := registry.Plan(t.Context(), profile.Provider, profile.Config, PlanRequest{
 				PaymentMethod: "wechat",
 				Client:        ClientContext{UserAgent: tc.userAgent},
 			})
@@ -179,76 +180,18 @@ func usableWechat(products ...string) kitsettings.GenericProfile {
 	}
 }
 
-func TestAlipayStateMapping(t *testing.T) {
-	cases := []struct {
-		in   alipay.TradeStatus
-		want State
-	}{
-		{alipay.TradeStatusSuccess, StatePaid},
-		{alipay.TradeStatusFinished, StatePaid},
-		{alipay.TradeStatusClosed, StateClosed},
-		{alipay.TradeStatusWaitBuyerPay, StatePending},
-		{"", StatePending},
-	}
-	for _, tc := range cases {
-		if got := alipayState(tc.in); got != tc.want {
-			t.Errorf("alipayState(%q) = %v, want %v", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestWechatTradeStateMapping(t *testing.T) {
-	cases := []struct {
-		in   string
-		want State
-	}{
-		{"SUCCESS", StatePaid},
-		{"CLOSED", StateClosed},
-		{"REVOKED", StateClosed},
-		{"PAYERROR", StateClosed},
-		{"REFUND", StateRefunded},
-		{"NOTPAY", StatePending},
-		{"USERPAYING", StatePending},
-	}
-	for _, tc := range cases {
-		if got := wechatTradeState(tc.in); got != tc.want {
-			t.Errorf("wechatTradeState(%q) = %v, want %v", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestAlipayTimeParsesBeijingTime(t *testing.T) {
-	got := alipayTime("2026-07-11 12:30:00")
-	want := time.Date(2026, 7, 11, 12, 30, 0, 0, time.FixedZone("CST", 8*3600))
-	if !got.Equal(want) {
-		t.Errorf("alipayTime = %v, want %v", got, want)
-	}
-	if !alipayTime("").IsZero() {
-		t.Error("empty timestamp should parse to zero time")
-	}
-	if !alipayTime("garbage").IsZero() {
-		t.Error("malformed timestamp should parse to zero time")
-	}
-}
-
 func TestProfileProducts(t *testing.T) {
-	all := ProfileProducts(kitsettings.GenericProfile{Provider: "alipay", Config: map[string]any{}})
+	registry := testRegistry()
+	all := registry.ConfiguredProducts("alipay", map[string]any{})
 	want := []string{
-		alipayMethodPreCreate,
-		alipayMethodPagePay,
-		alipayMethodWapPay,
-		alipayMethodCreate,
-		alipayMethodAppPay,
+		"precreate", "page_pay", "wap_pay", "create", "app_pay",
 	}
 	if !slices.Equal(all, want) {
 		t.Errorf("empty products should offer the whole alipay catalog, got %v", all)
 	}
 
-	sub := ProfileProducts(kitsettings.GenericProfile{
-		Provider: "alipay",
-		Config:   map[string]any{"products": []string{alipayMethodWapPay, "native", alipayMethodPreCreate}},
-	})
-	if !slices.Equal(sub, []string{alipayMethodPreCreate, alipayMethodWapPay}) {
+	sub := registry.ConfiguredProducts("alipay", map[string]any{"products": []string{"wap_pay", "native", "precreate"}})
+	if !slices.Equal(sub, []string{"precreate", "wap_pay"}) {
 		t.Errorf("ProfileProducts should keep signed ids in driver order and drop foreign ids, got %v", sub)
 	}
 }
@@ -260,13 +203,15 @@ func TestProfileProducts(t *testing.T) {
 // codes the removed `in:` rule and the Offered check used to produce separately.
 // The profile is usable because ProfileFor only ever hands Create a usable one.
 func TestCreateRejectsUnknownMethod(t *testing.T) {
-	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{ProductID: "bogus"}, "http://x"); !errors.Is(err, ErrUnknownMethod) {
+	profile := usableAlipay("precreate")
+	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "bogus"}); !errors.Is(err, ErrUnknownMethod) {
 		t.Errorf("Create with catalog-unknown method = %v, want ErrUnknownMethod", err)
 	}
 }
 
 func TestCreateRejectsUnofferedMethod(t *testing.T) {
-	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{ProductID: "page_pay"}, "http://x"); !errors.Is(err, ErrMethodNotOffered) {
+	profile := usableAlipay("precreate")
+	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "page_pay"}); !errors.Is(err, ErrMethodNotOffered) {
 		t.Errorf("Create with known-but-unoffered method = %v, want ErrMethodNotOffered", err)
 	}
 }

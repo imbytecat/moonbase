@@ -56,7 +56,7 @@ func TestPermanentFileURLPrivatePurposeAuthThenSignedRedirect(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM files WHERE id = $1`, fileID)
 	})
 
-	objects := storage.NewClient(store)
+	objects := storage.NewClient(store, storage.NewRegistry())
 	putURL, err := objects.PresignPut(ctx, privatePurpose, "m1/doc.txt", "text/plain", time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestPermanentFileURLPrivatePurposeS3SignedRedirect(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM files WHERE id = $1`, fileID)
 	})
 
-	objects := storage.NewClient(store)
+	objects := storage.NewClient(store, storage.NewRegistry())
 	putURL, err := objects.PresignPut(ctx, privatePurpose, key, "text/plain", time.Minute)
 	if err != nil {
 		t.Fatal(err)

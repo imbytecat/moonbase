@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
 
+	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/captcha"
@@ -49,18 +50,23 @@ import (
 // NewRouter builds the full HTTP handler chain. engine may be nil (tests
 // without a workflow executor); the workflow RPCs then answer
 // FailedPrecondition.
-func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, logger *slog.Logger) http.Handler {
+func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, logger *slog.Logger, storageRegistry storageint.Registry) http.Handler {
 	repo := repository.New(pool)
 	settingsStore := settings.NewStore(repo)
-	s3 := storage.NewClient(settingsStore)
+	s3 := storage.NewClient(settingsStore, storageRegistry)
 	emailRegistry := mail.NewRegistry(nil)
 	mailer := mail.NewClient(settingsStore.Email, emailRegistry)
-	smser := sms.NewClient(settingsStore.Sms)
-	chatter := llm.NewClient(settingsStore.Llm)
-	captchaVerifier := captcha.NewClient(settingsStore)
-	oauthFlow := oauth.NewClient(settingsStore.Oauth)
+	smsRegistry := sms.NewRegistry()
+	smser := sms.NewClient(settingsStore.Sms, smsRegistry)
+	llmRegistry := llm.NewRegistry()
+	chatter := llm.NewClient(settingsStore.Llm, llmRegistry)
+	captchaRegistry := captcha.NewRegistry(settingsStore)
+	captchaVerifier := captcha.NewClient(settingsStore, captchaRegistry)
+	oauthRegistry := oauth.NewRegistry()
+	oauthFlow := oauth.NewClient(settingsStore.Oauth, oauthRegistry)
 	notifier := notification.NewProducer(repo)
-	payGateway := pay.NewClient(settingsStore, cfg.Server.PublicURL)
+	paymentRegistry := pay.NewRegistry()
+	payGateway := pay.NewClient(settingsStore, cfg.Server.PublicURL, paymentRegistry)
 
 	healthH := handler.NewHealthHandler(pool)
 	policy := auth.SessionPolicy{
@@ -74,6 +80,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 		Captcha:      captchaVerifier,
 		Mailer:       mailer,
 		Smser:        smser,
+		SmsRegistry:  smsRegistry,
 		Oauth:        oauthFlow,
 		Verifier:     verify.NewService(repo),
 		Logger:       logger,
@@ -83,8 +90,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	})
 	userSvc := rpc.NewUserService(repo, notifier, logger)
 	roleSvc := rpc.NewRoleService(repo, logger)
-	settingsSvc := rpc.NewSettingsService(settingsStore, repo, mailer, logger)
-	systemSvc := rpc.NewSystemService(settingsStore, repo, s3, emailRegistry, mailer, smser, chatter, logger)
+	settingsSvc := rpc.NewSettingsService(settingsStore, repo, mailer, smsRegistry, logger)
+	systemSvc := rpc.NewSystemService(settingsStore, repo, s3, storageRegistry, captchaRegistry, llmRegistry, emailRegistry, oauthRegistry, paymentRegistry, smsRegistry, mailer, smser, chatter, logger)
 	storageSvc := rpc.NewStorageService(repo, s3, logger)
 	workflowSvc := rpc.NewWorkflowService(engine, logger)
 	auditSvc := rpc.NewAuditService(repo, logger)
@@ -129,7 +136,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	api.HandleFunc("GET /oauth/{provider}/callback", authSvc.OauthCallback)
 	// Local-storage signed URLs (issued by the "local" storage driver); the
 	// HMAC signature is the authorization, no session required.
-	api.Handle("/files/{purpose}/{key...}", storage.NewHandler(settingsStore, logger))
+	api.Handle("/files/{purpose}/{key...}", storage.NewHandler(settingsStore, s3, logger))
 	// Built-in ALTCHA captcha challenges are public plain HTTP (the widget
 	// fetches them before any session exists); solutions verify via the same
 	// captcha token fields as every other provider.

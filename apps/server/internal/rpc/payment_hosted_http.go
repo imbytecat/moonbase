@@ -29,7 +29,7 @@ func (s *PaymentService) HostedFlow(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	body, err := pay.RenderHostedFlow(order.Provider, order.ProductID, action.HostedFlow.Payload)
+	body, err := s.core.gateway.RenderHostedFlow(order.Provider, order.ProductID, action.HostedFlow.Payload)
 	if err != nil {
 		http.Error(w, "无法加载支付页面", http.StatusInternalServerError)
 		return

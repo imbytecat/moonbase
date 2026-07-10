@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/auth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -85,7 +84,7 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch cfg.Provider {
 	case "local":
-		h.serveLocal(w, r, cfg.Config, file)
+		h.serveLocal(w, r, cfg, file)
 	default:
 		h.redirect(w, r, cfg, file)
 	}
@@ -94,8 +93,8 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // serveLocal streams the bytes directly — a 302 back to the same server is a
 // pointless round trip. Files are spiritually immutable (ADR-0003), so the
 // year-long immutable cache is sound.
-func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, config map[string]any, file repository.File) {
-	path, err := storageint.LocalObjectPath(config, file.ObjectKey)
+func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, profile kitsettings.GenericProfile, file repository.File) {
+	path, err := h.client.ObjectPath(profile, file.ObjectKey)
 	if err != nil {
 		http.NotFound(w, r)
 		return

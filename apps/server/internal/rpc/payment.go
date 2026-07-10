@@ -111,7 +111,7 @@ func (s *PaymentCheckoutService) PlanCheckout(
 		if session.PaymentMethod != req.Msg.GetPaymentMethod() {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("checkout path is already locked"))
 		}
-		descriptor, ok := pay.Describe(session.Provider)
+		descriptor, ok := s.core.gateway.Describe(session.Provider)
 		if !ok {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, pay.ErrNotConfigured)
 		}
@@ -163,7 +163,7 @@ func (s *PaymentCheckoutService) ConfirmCheckout(
 	if req.Msg.GetInputs() != nil {
 		inputs = req.Msg.GetInputs().AsMap()
 	}
-	descriptor, ok := pay.Describe(session.Provider)
+	descriptor, ok := s.core.gateway.Describe(session.Provider)
 	if !ok {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, pay.ErrNotConfigured)
 	}
@@ -252,11 +252,11 @@ func (c *paymentCore) availableMethods(ctx context.Context, purpose string) ([]*
 	seen := map[string]struct{}{}
 	var out []*paymentv1.CheckoutPaymentMethod
 	for _, profile := range profiles {
-		descriptor, ok := pay.Describe(profile.Provider)
+		descriptor, ok := c.gateway.Describe(profile.Provider)
 		if !ok {
 			continue
 		}
-		offered := pay.ProfileProducts(profile)
+		offered := c.gateway.ProfileProducts(profile)
 		for _, method := range descriptor.Methods {
 			if _, ok := seen[method.Key]; ok {
 				continue

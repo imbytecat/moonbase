@@ -17,8 +17,6 @@ var Purposes = integration.Catalog{{
 	Key: PurposeCheckout, Name: "在线收款", Description: "业务订单使用的托管收银台", Cardinality: integration.Multiple,
 }}
 
-var Registry = payment.Registry
-
 var (
 	ErrNotConfigured    = payment.ErrNotConfigured
 	ErrUnknownMethod    = payment.ErrUnknownMethod
@@ -53,6 +51,9 @@ type RefundResult = payment.RefundResult
 type NotifyResult = payment.NotifyResult
 
 type Gateway interface {
+	Describe(provider string) (ProviderDescriptor, bool)
+	ProfileProducts(profile kitsettings.GenericProfile) []string
+	RenderHostedFlow(provider, product, payload string) ([]byte, error)
 	ProfilesFor(ctx context.Context, purpose string) ([]kitsettings.GenericProfile, error)
 	ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error)
 	Plan(ctx context.Context, profile kitsettings.GenericProfile, req PlanRequest) (PlanResult, error)
@@ -63,38 +64,34 @@ type Gateway interface {
 	ParseNotify(ctx context.Context, profile kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
 }
 
-func Providers() []string { return payment.Providers() }
-func ProfileUsable(profile kitsettings.GenericProfile) bool {
-	return payment.ProfileUsable(profile)
-}
-func Describe(provider string) (ProviderDescriptor, bool) { return payment.Describe(provider) }
-func ProfileProducts(profile kitsettings.GenericProfile) []string {
-	return payment.ProfileProducts(profile)
-}
-func ProfileConfiguredProducts(profile kitsettings.GenericProfile) []string {
-	return payment.ProfileConfiguredProducts(profile)
-}
-func ValidateProducts(provider string, products []string) error {
-	return payment.ValidateProducts(provider, products)
-}
 func Currency(provider string) string { return payment.Currency(provider) }
-func RenderHostedFlow(provider, product, payload string) ([]byte, error) {
-	return payment.RenderHostedFlow(provider, product, payload)
-}
 
 type Client struct {
 	store     *settings.Store
 	publicURL string
+	registry  payment.Registry
 }
 
-func NewClient(store *settings.Store, publicURL string) *Client {
-	return &Client{store: store, publicURL: strings.TrimSuffix(publicURL, "/")}
+func NewClient(store *settings.Store, publicURL string, registry payment.Registry) *Client {
+	return &Client{store: store, publicURL: strings.TrimSuffix(publicURL, "/"), registry: registry}
 }
 
 var _ Gateway = (*Client)(nil)
 
 func (c *Client) notifyURL(profile kitsettings.GenericProfile) string {
 	return c.publicURL + "/api/payment/notify/" + profile.Provider + "/" + profile.Id
+}
+
+func (c *Client) Describe(provider string) (ProviderDescriptor, bool) {
+	return c.registry.Describe(provider)
+}
+
+func (c *Client) ProfileProducts(profile kitsettings.GenericProfile) []string {
+	return c.registry.ConfiguredProducts(profile.Provider, profile.Config)
+}
+
+func (c *Client) RenderHostedFlow(provider, product, payload string) ([]byte, error) {
+	return c.registry.RenderHostedFlow(provider, product, payload)
 }
 
 func (c *Client) ProfilesFor(ctx context.Context, purpose string) ([]kitsettings.GenericProfile, error) {
@@ -105,7 +102,7 @@ func (c *Client) ProfilesFor(ctx context.Context, purpose string) ([]kitsettings
 	bound := cfg.ProfilesFor(purpose)
 	out := make([]kitsettings.GenericProfile, 0, len(bound))
 	for _, profile := range bound {
-		if ProfileUsable(profile) {
+		if c.registry.ConfigUsable(profile.Provider, profile.Config) {
 			out = append(out, profile)
 		}
 	}
@@ -117,32 +114,34 @@ func (c *Client) ProfileByID(ctx context.Context, profileID string) (kitsettings
 	if err != nil {
 		return kitsettings.GenericProfile{}, err
 	}
-	if profile, ok := cfg.Profile(profileID); ok && ProfileUsable(profile) {
+	if profile, ok := cfg.Profile(profileID); ok && c.registry.ConfigUsable(profile.Provider, profile.Config) {
 		return profile, nil
 	}
 	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
 func (c *Client) Plan(ctx context.Context, profile kitsettings.GenericProfile, req PlanRequest) (PlanResult, error) {
-	return payment.Plan(ctx, profile, req)
+	return c.registry.Plan(ctx, profile.Provider, profile.Config, req)
 }
 
 func (c *Client) Create(ctx context.Context, profile kitsettings.GenericProfile, req CreateRequest) (Action, error) {
-	return payment.Create(ctx, profile, req, c.notifyURL(profile))
+	req.NotifyURL = c.notifyURL(profile)
+	return c.registry.Create(ctx, profile.Provider, profile.Config, req)
 }
 
 func (c *Client) Query(ctx context.Context, profile kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
-	return payment.Query(ctx, profile, outTradeNo)
+	return c.registry.Query(ctx, profile.Provider, profile.Config, outTradeNo)
 }
 
 func (c *Client) Refund(ctx context.Context, profile kitsettings.GenericProfile, req RefundRequest) (RefundResult, error) {
-	return payment.Refund(ctx, profile, req, c.notifyURL(profile))
+	req.NotifyURL = c.notifyURL(profile)
+	return c.registry.Refund(ctx, profile.Provider, profile.Config, req)
 }
 
 func (c *Client) QueryRefund(ctx context.Context, profile kitsettings.GenericProfile, refundNo string) (bool, error) {
-	return payment.QueryRefund(ctx, profile, refundNo)
+	return c.registry.QueryRefund(ctx, profile.Provider, profile.Config, refundNo)
 }
 
 func (c *Client) ParseNotify(ctx context.Context, profile kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
-	return payment.ParseNotify(ctx, profile, r)
+	return c.registry.ParseNotify(ctx, profile.Provider, profile.Config, r)
 }

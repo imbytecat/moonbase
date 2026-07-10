@@ -34,6 +34,10 @@ func (f *fakeOauthFlow) Exchange(context.Context, string, string, string, oauth.
 	return f.external, f.err
 }
 
+func (f *fakeOauthFlow) ProviderOptions(context.Context) ([]oauth.ProviderOption, error) {
+	return nil, f.err
+}
+
 func (f *fakeAuthQuerier) ConsumeOauthSignupTicket(ctx context.Context, secretHash []byte) (repository.OauthSignupTicket, error) {
 	return f.consumeTicket(ctx, secretHash)
 }

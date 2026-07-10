@@ -17,6 +17,7 @@ import (
 	authv1 "github.com/imbytecat/moonbase/server/internal/gen/auth/v1"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
 
@@ -107,17 +108,21 @@ type allowAllCaptcha struct{}
 
 func (allowAllCaptcha) Enabled(context.Context, string) (bool, error)        { return false, nil }
 func (allowAllCaptcha) Verify(context.Context, string, string, string) error { return nil }
+func (allowAllCaptcha) Widget(context.Context, string) (string, string, bool, error) {
+	return "", "", false, nil
+}
 
 func newAuthService(q repository.Querier) *AuthService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return NewAuthService(AuthServiceDeps{
-		Repo:      q,
-		Settings:  settings.NewStore(q),
-		Captcha:   allowAllCaptcha{},
-		Verifier:  verify.NewService(q),
-		Logger:    logger,
-		Policy:    auth.SessionPolicy{TTL: time.Hour, MaxLifetime: 24 * time.Hour},
-		PublicURL: "http://localhost:5173",
+		Repo:        q,
+		Settings:    settings.NewStore(q),
+		Captcha:     allowAllCaptcha{},
+		SmsRegistry: sms.NewRegistry(),
+		Verifier:    verify.NewService(q),
+		Logger:      logger,
+		Policy:      auth.SessionPolicy{TTL: time.Hour, MaxLifetime: 24 * time.Hour},
+		PublicURL:   "http://localhost:5173",
 	})
 }
 

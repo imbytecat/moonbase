@@ -25,7 +25,7 @@ driver 对外发布的自描述，由 provider key、provider presentation 与 c
 _Avoid_: 把 JSON Schema 当作整个 driver 的元数据容器；让前端补齐 descriptor。
 
 **driver（驱动）**：
-一个 provider 的**无状态**实现，藏在 integration 的 seam 之后，独占该 provider 的怪癖。一个有序 registry entry 把 driver 的 presentation、config schema 与 Ops 组合成完整 descriptor；driver **不实现掩码**（base 按 config schema 通用派发，见 ADR-0006），也**不碰 DB**，持久工件归消费它的 domain（见 ADR-0003）。它是 **drop-in 扩展单元**：加一个 provider = 加一个 entry，零 proto / 零前端 / 零核心。「支付 driver」是它在 payment integration 的特例。
+一个 provider 的**无状态**实现，藏在 integration 的 seam 之后，独占该 provider 的怪癖。一个有序 typed registration 把 driver 的 presentation、`config.Contract[T]` 与 Ops 原子组合成完整 descriptor；driver 不实现 secret 投影或 lifecycle 合并，也**不碰 DB**，持久工件归消费它的 domain（见 ADR-0003）。它是 **drop-in 扩展单元**：加一个 provider = 加一个 entry，零 proto / 零前端 / 零核心。「支付 driver」是它在 payment integration 的特例。
 _Avoid_: plugin（见下）、adapter、handler。
 
 **seam（缝）**：

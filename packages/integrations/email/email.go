@@ -12,7 +12,6 @@ import (
 
 	"github.com/imbytecat/moonbase/integrations/core/config"
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 var ErrNotConfigured = errors.New("email is not configured")
@@ -141,12 +140,12 @@ func (r Registry) Providers() []string {
 	return out
 }
 
-func (r Registry) Send(ctx context.Context, profile kitsettings.GenericProfile, message Message) error {
-	entry, ok := r.entry(profile.Provider)
+func (r Registry) Send(ctx context.Context, provider string, values map[string]any, message Message) error {
+	entry, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured
 	}
-	if err := entry.send(ctx, profile.Config, message); err != nil {
+	if err := entry.send(ctx, values, message); err != nil {
 		return err
 	}
 	return nil
@@ -185,8 +184,8 @@ func (r Registry) ViewConfig(provider string, stored map[string]any) (config.Vie
 	return entry.contract.view(stored)
 }
 
-func (r Registry) ProfileUsable(profile kitsettings.GenericProfile) bool {
-	_, valid := r.ViewConfig(profile.Provider, profile.Config)
+func (r Registry) ConfigUsable(provider string, values map[string]any) bool {
+	_, valid := r.ViewConfig(provider, values)
 	return valid
 }
 

@@ -6,7 +6,13 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
+	captchaint "github.com/imbytecat/moonbase/integrations/captcha"
 	emailint "github.com/imbytecat/moonbase/integrations/email"
+	llmint "github.com/imbytecat/moonbase/integrations/llm"
+	oauthint "github.com/imbytecat/moonbase/integrations/oauth"
+	paymentint "github.com/imbytecat/moonbase/integrations/payment"
+	smsint "github.com/imbytecat/moonbase/integrations/sms"
+	storageint "github.com/imbytecat/moonbase/integrations/storage"
 
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/system/v1/systemv1connect"
@@ -26,35 +32,53 @@ import (
 // write-only over the wire; testable integrations have a test RPC so operators
 // can validate config before relying on it.
 type SystemService struct {
-	settings      *settings.Store
-	repo          repository.Querier
-	storageTester storage.ConnectionTester
-	mailer        mail.ProfileSender
-	emailRegistry emailint.Registry
-	smser         sms.Sender
-	chatter       llm.Chatter
-	logger        *slog.Logger
+	settings        *settings.Store
+	repo            repository.Querier
+	storageTester   storage.ConnectionTester
+	storageRegistry storageint.Registry
+	captchaRegistry captchaint.Registry
+	llmRegistry     llmint.Registry
+	mailer          mail.ProfileSender
+	emailRegistry   emailint.Registry
+	oauthRegistry   oauthint.Registry
+	paymentRegistry paymentint.Registry
+	smsRegistry     smsint.Registry
+	smser           sms.ProfileSender
+	chatter         llm.Chatter
+	logger          *slog.Logger
 }
 
 func NewSystemService(
 	store *settings.Store,
 	repo repository.Querier,
 	storageTester storage.ConnectionTester,
+	storageRegistry storageint.Registry,
+	captchaRegistry captchaint.Registry,
+	llmRegistry llmint.Registry,
 	emailRegistry emailint.Registry,
+	oauthRegistry oauthint.Registry,
+	paymentRegistry paymentint.Registry,
+	smsRegistry smsint.Registry,
 	mailer mail.ProfileSender,
-	smser sms.Sender,
+	smser sms.ProfileSender,
 	chatter llm.Chatter,
 	logger *slog.Logger,
 ) *SystemService {
 	return &SystemService{
-		settings:      store,
-		repo:          repo,
-		storageTester: storageTester,
-		emailRegistry: emailRegistry,
-		mailer:        mailer,
-		smser:         smser,
-		chatter:       chatter,
-		logger:        logger,
+		settings:        store,
+		repo:            repo,
+		storageTester:   storageTester,
+		storageRegistry: storageRegistry,
+		captchaRegistry: captchaRegistry,
+		llmRegistry:     llmRegistry,
+		emailRegistry:   emailRegistry,
+		oauthRegistry:   oauthRegistry,
+		paymentRegistry: paymentRegistry,
+		smsRegistry:     smsRegistry,
+		mailer:          mailer,
+		smser:           smser,
+		chatter:         chatter,
+		logger:          logger,
 	}
 }
 
@@ -101,13 +125,13 @@ func (s *SystemService) snapshot(ctx context.Context) (*systemv1.GetSystemSettin
 		return nil, s.internal(ctx, "load payment settings", err)
 	}
 	return &systemv1.GetSystemSettingsResponse{
-		Storage: toProtoStorage(st),
-		Captcha: toProtoCaptcha(captchaCfg),
+		Storage: s.toProtoStorage(st),
+		Captcha: s.toProtoCaptcha(captchaCfg),
 		Email:   s.toProtoEmail(emailCfg),
-		Sms:     toProtoSms(smsCfg),
-		Llm:     toProtoLlm(llmCfg),
-		Oauth:   toProtoOauth(oauthCfg),
-		Payment: toProtoPayment(paymentCfg),
+		Sms:     s.toProtoSms(smsCfg),
+		Llm:     s.toProtoLlm(llmCfg),
+		Oauth:   s.toProtoOauth(oauthCfg),
+		Payment: s.toProtoPayment(paymentCfg),
 	}, nil
 }
 

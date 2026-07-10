@@ -87,23 +87,13 @@ type ConnectionTester interface {
 	TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error
 }
 
-var Registry = storageint.Registry
-
-// Providers lists the registered driver names, sorted.
-func Providers() []string {
-	return storageint.Providers()
-}
-
-func ProfileUsable(p kitsettings.GenericProfile) bool {
-	return storageint.ProfileUsable(p)
-}
-
 type Client struct {
-	store *settings.Store
+	store    *settings.Store
+	registry storageint.Registry
 }
 
-func NewClient(store *settings.Store) *Client {
-	return &Client{store: store}
+func NewClient(store *settings.Store, registry storageint.Registry) *Client {
+	return &Client{store: store, registry: registry}
 }
 
 func (c *Client) LocalSignedURL(ctx context.Context, method, purpose, key string, expires time.Duration) (string, error) {
@@ -120,49 +110,51 @@ var (
 )
 
 func (c *Client) PresignPut(ctx context.Context, purpose, key, contentType string, expires time.Duration) (string, error) {
-	ops, cfg, err := c.opsFor(ctx, purpose)
+	cfg, err := c.profileFor(ctx, purpose)
 	if err != nil {
 		return "", err
 	}
-	return ops.PresignPut(c, ctx, cfg, purpose, key, contentType, expires)
+	return c.registry.PresignPut(c, ctx, cfg.Provider, cfg.Config, purpose, key, contentType, expires)
 }
 
 func (c *Client) ResolveURL(ctx context.Context, purpose, key string, expires time.Duration) (string, error) {
-	ops, cfg, err := c.opsFor(ctx, purpose)
+	cfg, err := c.profileFor(ctx, purpose)
 	if err != nil {
 		return "", err
 	}
-	return ops.ResolveURL(c, ctx, cfg, purpose, key, expires)
+	return c.registry.ResolveURL(c, ctx, cfg.Provider, cfg.Config, purpose, key, expires)
 }
 
 func (c *Client) Delete(ctx context.Context, purpose, key string) error {
-	ops, cfg, err := c.opsFor(ctx, purpose)
+	cfg, err := c.profileFor(ctx, purpose)
 	if err != nil {
 		return err
 	}
-	return ops.Delete(c, ctx, cfg, purpose, key)
+	return c.registry.Delete(c, ctx, cfg.Provider, cfg.Config, purpose, key)
 }
 
 func (c *Client) TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error {
-	d, ok := storageint.DriverFor(cfg.Provider)
-	if !ok || !d.Config.Usable(cfg.Config) {
+	if !c.registry.ConfigUsable(cfg.Provider, cfg.Config) {
 		return ErrNotConfigured
 	}
-	return d.Ops.Test(c, ctx, cfg)
+	return c.registry.Test(ctx, c, cfg.Provider, cfg.Config)
 }
 
-func (c *Client) opsFor(ctx context.Context, purpose string) (storageint.Ops, kitsettings.GenericProfile, error) {
+func (c *Client) ObjectPath(profile kitsettings.GenericProfile, key string) (string, error) {
+	return c.registry.ObjectPath(profile.Provider, profile.Config, key)
+}
+
+func (c *Client) profileFor(ctx context.Context, purpose string) (kitsettings.GenericProfile, error) {
 	st, err := c.store.Storage(ctx)
 	if err != nil {
-		return storageint.Ops{}, kitsettings.GenericProfile{}, err
+		return kitsettings.GenericProfile{}, err
 	}
 	cfg, ok := st.ProfileFor(purpose)
 	if !ok {
-		return storageint.Ops{}, cfg, ErrNotConfigured
+		return cfg, ErrNotConfigured
 	}
-	d, ok := storageint.DriverFor(cfg.Provider)
-	if !ok || !d.Config.Usable(cfg.Config) {
-		return storageint.Ops{}, cfg, ErrNotConfigured
+	if !c.registry.ConfigUsable(cfg.Provider, cfg.Config) {
+		return cfg, ErrNotConfigured
 	}
-	return d.Ops, cfg, nil
+	return cfg, nil
 }

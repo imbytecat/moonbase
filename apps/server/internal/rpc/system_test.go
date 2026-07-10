@@ -13,10 +13,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	"github.com/imbytecat/moonbase/server/internal/captcha"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/llm"
 	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
+	"github.com/imbytecat/moonbase/server/internal/pay"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 	"github.com/imbytecat/moonbase/server/internal/sms"
@@ -57,8 +59,9 @@ func (t *okTester) TestConnection(_ context.Context, cfg kitsettings.GenericProf
 func newSystemService(q repository.Querier) (*SystemService, *okTester) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	tester := &okTester{}
+	store := settings.NewStore(q)
 	return NewSystemService(
-		settings.NewStore(q), nil, tester, mail.NewRegistry(nil), nil, nil, nil, logger,
+		store, nil, tester, stg.NewRegistry(), captcha.NewRegistry(store), llm.NewRegistry(), mail.NewRegistry(nil), oauth.NewRegistry(), pay.NewRegistry(), sms.NewRegistry(), nil, nil, nil, logger,
 	), tester
 }
 
@@ -99,7 +102,7 @@ func TestEmailProfileUsesTypedContractAndWriteOnlySecrets(t *testing.T) {
 	q := newMemSettingsQuerier()
 	registry := mail.NewRegistry(nil)
 	svc := NewSystemService(
-		settings.NewStore(q), nil, nil, registry, nil, nil, nil,
+		settings.NewStore(q), nil, nil, stg.NewRegistry(), captcha.NewRegistry(settings.NewStore(q)), llm.NewRegistry(), registry, oauth.NewRegistry(), pay.NewRegistry(), sms.NewRegistry(), nil, nil, nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
 
@@ -174,13 +177,12 @@ func TestStorageProfileCRUDAndBinding(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "public assets",
 			Provider: "s3",
-			Config: profileConfig(t, map[string]any{
-				"endpoint":        "s3.example.com",
-				"bucket":          "assets",
-				"accessKeyId":     "AK",
-				"secretAccessKey": "SECRET",
-				"publicBaseUrl":   "https://cdn.example.com",
-			}),
+			Config: profileWrite(t, map[string]any{
+				"endpoint":      "s3.example.com",
+				"bucket":        "assets",
+				"accessKeyId":   "AK",
+				"publicBaseUrl": "https://cdn.example.com",
+			}, map[string]string{"/secretAccessKey": "SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -250,12 +252,11 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "private",
 			Provider: "s3",
-			Config: profileConfig(t, map[string]any{
-				"endpoint":        "s3.example.com",
-				"bucket":          "files",
-				"accessKeyId":     "AK",
-				"secretAccessKey": "ORIGINAL",
-			}),
+			Config: profileWrite(t, map[string]any{
+				"endpoint":    "s3.example.com",
+				"bucket":      "files",
+				"accessKeyId": "AK",
+			}, map[string]string{"/secretAccessKey": "ORIGINAL"}),
 		},
 	}))
 	if err != nil {
@@ -303,12 +304,11 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "private",
 			Provider: "s3",
-			Config: profileConfig(t, map[string]any{
-				"endpoint":        "s3.example.com",
-				"bucket":          "files",
-				"accessKeyId":     "AK",
-				"secretAccessKey": "STORED-SECRET",
-			}),
+			Config: profileWrite(t, map[string]any{
+				"endpoint":    "s3.example.com",
+				"bucket":      "files",
+				"accessKeyId": "AK",
+			}, map[string]string{"/secretAccessKey": "STORED-SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -365,25 +365,6 @@ func TestSnapshotEmitsBindingsInCatalogOrder(t *testing.T) {
 	}
 }
 
-func TestDescribeSmsProvidersReturnsOrderedSelfDescriptions(t *testing.T) {
-	svc, _ := newSystemService(newMemSettingsQuerier())
-	resp, err := svc.DescribeSmsProviders(t.Context(), connect.NewRequest(&systemv1.DescribeSmsProvidersRequest{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	purposes := resp.Msg.GetPurposes()
-	if len(purposes) != 1 || purposes[0].GetKey() != sms.PurposeVerification || purposes[0].GetPresentation().GetName() != "短信验证码" {
-		t.Fatalf("purposes = %+v, want verification descriptor", purposes)
-	}
-	providers := resp.Msg.GetProviders()
-	if len(providers) != 2 || providers[0].GetKey() != "aliyun" || providers[1].GetKey() != "tencent" {
-		t.Fatalf("providers = %+v, want registry declaration order", providers)
-	}
-	if providers[0].GetPresentation().GetName() != "阿里云短信" || providers[0].GetConfig().GetSchema() == nil {
-		t.Fatalf("aliyun descriptor incomplete: %+v", providers[0])
-	}
-}
-
 type recordingChatter struct{ lastProfile kitsettings.GenericProfile }
 
 func (c *recordingChatter) Complete(_ context.Context, _, _, _ string) (string, error) {
@@ -399,7 +380,7 @@ func newLlmSystemService(q repository.Querier) (*SystemService, *recordingChatte
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	chatter := &recordingChatter{}
 	return NewSystemService(
-		settings.NewStore(q), nil, nil, mail.NewRegistry(nil), nil, nil, chatter, logger,
+		settings.NewStore(q), nil, nil, stg.NewRegistry(), captcha.NewRegistry(settings.NewStore(q)), llm.NewRegistry(), mail.NewRegistry(nil), oauth.NewRegistry(), pay.NewRegistry(), sms.NewRegistry(), nil, nil, chatter, logger,
 	), chatter
 }
 
@@ -412,7 +393,7 @@ func TestLlmProfileCRUDAndBinding(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
-			Config:   profileConfig(t, map[string]any{"apiKey": "SECRET", "model": "gpt-4o-mini"}),
+			Config:   profileWrite(t, map[string]any{"model": "gpt-4o-mini"}, map[string]string{"/apiKey": "SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -482,7 +463,7 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
-			Config:   profileConfig(t, map[string]any{"apiKey": "ORIGINAL", "model": "gpt-4o-mini"}),
+			Config:   profileWrite(t, map[string]any{"model": "gpt-4o-mini"}, map[string]string{"/apiKey": "ORIGINAL"}),
 		},
 	}))
 	if err != nil {
@@ -526,7 +507,7 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
-			Config:   profileConfig(t, map[string]any{"apiKey": "STORED-SECRET", "model": "gpt-4o-mini"}),
+			Config:   profileWrite(t, map[string]any{"model": "gpt-4o-mini"}, map[string]string{"/apiKey": "STORED-SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -567,7 +548,7 @@ func newOauthSystemService() (*SystemService, *memIdentityQuerier) {
 		identityCounts:     map[string]int64{},
 	}
 	return NewSystemService(
-		settings.NewStore(q), q, nil, mail.NewRegistry(nil), nil, nil, nil, logger,
+		settings.NewStore(q), q, nil, stg.NewRegistry(), captcha.NewRegistry(settings.NewStore(q)), llm.NewRegistry(), mail.NewRegistry(nil), oauth.NewRegistry(), pay.NewRegistry(), sms.NewRegistry(), nil, nil, nil, logger,
 	), q
 }
 
@@ -579,12 +560,11 @@ func TestOauthLoginBinding(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "Google",
 			Provider: "oidc",
-			Config: profileConfig(t, map[string]any{
-				"key":          "google",
-				"issuer":       "https://accounts.google.com",
-				"clientId":     "cid",
-				"clientSecret": "SECRET",
-			}),
+			Config: profileWrite(t, map[string]any{
+				"key":      "google",
+				"issuer":   "https://accounts.google.com",
+				"clientId": "cid",
+			}, map[string]string{"/clientSecret": "SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -647,12 +627,11 @@ func TestOauthProfileCRUD(t *testing.T) {
 		Profile: &systemv1.ProfileInput{
 			Name:     "Google",
 			Provider: "oidc",
-			Config: profileConfig(t, map[string]any{
-				"key":          "google",
-				"issuer":       "https://accounts.google.com",
-				"clientId":     "cid",
-				"clientSecret": "SECRET",
-			}),
+			Config: profileWrite(t, map[string]any{
+				"key":      "google",
+				"issuer":   "https://accounts.google.com",
+				"clientId": "cid",
+			}, map[string]string{"/clientSecret": "SECRET"}),
 		},
 	}))
 	if err != nil {
@@ -681,7 +660,7 @@ func TestOauthProfileCRUD(t *testing.T) {
 		t.Fatalf("duplicate key: code = %v, want already_exists", connect.CodeOf(err))
 	}
 
-	updated, err := svc.UpdateOauthProfile(ctx, connect.NewRequest(&systemv1.UpdateOauthProfileRequest{
+	_, err = svc.UpdateOauthProfile(ctx, connect.NewRequest(&systemv1.UpdateOauthProfileRequest{
 		Profile: &systemv1.ProfileInput{
 			Id:       profile.GetId(),
 			Name:     "Google (renamed)",
@@ -691,6 +670,16 @@ func TestOauthProfileCRUD(t *testing.T) {
 				"issuer":   "https://accounts.google.com",
 				"clientId": "cid2",
 			}),
+		},
+	}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("changed create-only key: code=%v, want invalid_argument", connect.CodeOf(err))
+	}
+
+	updated, err := svc.UpdateOauthProfile(ctx, connect.NewRequest(&systemv1.UpdateOauthProfileRequest{
+		Profile: &systemv1.ProfileInput{
+			Id: profile.GetId(), Name: "Google (renamed)", Provider: "oidc",
+			Config: profileConfig(t, map[string]any{"issuer": "https://accounts.google.com", "clientId": "cid2"}),
 		},
 	}))
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/gen/user/v1/userv1connect"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/server"
+	"github.com/imbytecat/moonbase/server/internal/storage"
 
 	"net/http/httptest"
 )
@@ -73,7 +74,7 @@ func newStackWithPool(t *testing.T) (baseURL string, client *http.Client, pool *
 	cfg := &config.Config{}
 	cfg.Auth.SessionTTLHours = 1
 	cfg.Auth.SessionMaxLifetimeHours = 24
-	handler := server.NewRouter(cfg, pool, nil, logger)
+	handler := server.NewRouter(cfg, pool, nil, logger, storage.NewRegistry())
 
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)

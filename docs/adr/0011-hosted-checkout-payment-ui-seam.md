@@ -32,7 +32,7 @@ Payment driver 的核心 interface 要求 descriptor、`Plan`、`Create` 与 `Qu
 
 Base 必须先持久化 action 再向浏览器返回。若进程在 provider 建单后、action 落库前崩溃，恢复先 query 原 provider/out_trade_no：订单不存在则同 key 重试 Create，已终态则协调本地状态，pending 且 action 缺失时优先调用可选 `ActionRecoveryDriver`。无法恢复 action 的 attempt 进入带内部原因的 `failed`，由业务用新 idempotency key 创建新 session/order；当前 order 不切换路径，也不为该窗口提前引入通用 provider state。
 
-现有 driver schema 拆成中立 `form.Schema` 与 settings 专属 `config.Schema`：前者拥有字段类型、选项、条件、校验及 JSON Schema/UI Schema 转换；后者组合 form 字段并增加 `Secret`、`Immutable`、Mask/Merge/Usable。provider profile 使用 config schema，payment product inputs 使用 form schema，前端继续复用同一个 rjsf renderer。
+payment product input 使用中立 `form.Schema` 描述字段、条件与校验；provider profile config 已由 ADR-0014 修订为私有 Go struct + `config.Contract[T]`，lifecycle policy 独立声明 secret/create-only。两者输出标准 JSON Schema，前端继续复用同一个 rjsf renderer。
 
 Hosted checkout 只消费有限、provider 无关的 typed payment action（展示二维码、跳转、提交表单、等待）。JSON Schema 只描述“收集什么输入”，不扩张为执行任意客户端 SDK 的脚本 DSL。极少数无法声明的 SDK 流程可由 driver 通过受限的 hosted flow HTTP seam 提供同源、短寿命页面；base 统一验证 token、设置安全响应头并分派，driver 不能直接写订单状态，也不能要求 Web 运行时加载任意远程模块。
 

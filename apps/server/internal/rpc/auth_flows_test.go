@@ -132,14 +132,15 @@ var _ sms.Sender = (*capturingSms)(nil)
 func newFlowService(q repository.Querier, smser sms.Sender) *AuthService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return NewAuthService(AuthServiceDeps{
-		Repo:      q,
-		Settings:  settings.NewStore(q),
-		Captcha:   allowAllCaptcha{},
-		Smser:     smser,
-		Verifier:  verify.NewService(q),
-		Logger:    logger,
-		Policy:    auth.SessionPolicy{TTL: time.Hour, MaxLifetime: 24 * time.Hour},
-		PublicURL: "http://localhost:5173",
+		Repo:        q,
+		Settings:    settings.NewStore(q),
+		Captcha:     allowAllCaptcha{},
+		Smser:       smser,
+		SmsRegistry: sms.NewRegistry(),
+		Verifier:    verify.NewService(q),
+		Logger:      logger,
+		Policy:      auth.SessionPolicy{TTL: time.Hour, MaxLifetime: 24 * time.Hour},
+		PublicURL:   "http://localhost:5173",
 	})
 }
 

@@ -1,6 +1,6 @@
 # 选项显示含义归 driver：`FieldDescriptor.options` 升级为结构化 `OptionDescriptor`
 
-> **状态**：accepted，wire 与渲染机制已被 ADR-0010 超越；其中 payment 固定目录例外又被 ADR-0011/0012 超越。选项显示含义仍归 driver，且继续延续 ADR-0008（driver 的 `label`/`help` 直接写中文，选项文案同理）；但 `FieldDescriptor` / `OptionDescriptor` 已删除，当前由 Go `form.Schema` / `config.Schema` 生成 JSON Schema，并由 rjsf 的 `ProviderForm` 渲染。
+> **状态**：accepted，wire 与渲染机制已被 ADR-0010 超越；其中 payment 固定目录例外又被 ADR-0011/0012 超越。选项显示含义仍归 driver，且继续延续 ADR-0008（driver 的 `label`/`help` 直接写中文，选项文案同理）；provider config 由 ADR-0014 的私有 Go struct + `config.Contract[T]` 生成标准 JSON Schema，payment product input 仍使用 `form.Schema`，两者都由 rjsf 渲染。
 
 ## 背景
 

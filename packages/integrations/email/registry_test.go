@@ -25,10 +25,7 @@ func TestRegistryDecodesTypedConfigBeforeSending(t *testing.T) {
 		},
 	))
 
-	err := registry.Send(t.Context(), kitsettings.GenericProfile{
-		Provider: "test",
-		Config:   map[string]any{"endpoint": "https://mail.example.com"},
-	}, Message{To: "user@example.com", Subject: "主题", TextBody: "正文"})
+	err := registry.Send(t.Context(), "test", map[string]any{"endpoint": "https://mail.example.com"}, Message{To: "user@example.com", Subject: "主题", TextBody: "正文"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +37,7 @@ func TestRegistryDecodesTypedConfigBeforeSending(t *testing.T) {
 		{Provider: "missing", Config: map[string]any{}},
 		{Provider: "test", Config: map[string]any{"endpoint": "", "unknown": true}},
 	} {
-		if err := registry.Send(t.Context(), profile, Message{}); err == nil {
+		if err := registry.Send(t.Context(), profile.Provider, profile.Config, Message{}); err == nil {
 			t.Fatalf("Send(%+v) must fail", profile)
 		}
 	}

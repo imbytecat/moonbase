@@ -15,6 +15,7 @@ import (
 	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 )
 
 type fakeSettingsQuerier struct {
@@ -52,7 +53,7 @@ func newSettingsService(q repository.Querier) *SettingsService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := settings.NewStore(q)
 	mailer := mail.NewClient(store.Email, mail.NewRegistry(nil))
-	return NewSettingsService(store, q, mailer, logger)
+	return NewSettingsService(store, q, mailer, sms.NewRegistry(), logger)
 }
 
 func TestUpdateSettingsPhoneSignupRequiresSmsChannel(t *testing.T) {
@@ -132,7 +133,7 @@ func TestGetSiteInfoResolvesAssetURLsFromFileIDs(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := settings.NewStore(q)
-	svc := NewSettingsService(store, q, mail.NewClient(store.Email, mail.NewRegistry(nil)), logger)
+	svc := NewSettingsService(store, q, mail.NewClient(store.Email, mail.NewRegistry(nil)), sms.NewRegistry(), logger)
 
 	resp, err := svc.GetSiteInfo(t.Context(), connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
 	if err != nil {

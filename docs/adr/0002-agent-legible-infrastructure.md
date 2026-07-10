@@ -20,14 +20,14 @@
 
 1. **不可表达 > 可被糊弄。** 能做成**确定性、agent 无法蒙混**的约束（生成的表 / 类型 / 位置构造器 / drift-gate）时，优先于**可被 agent hack 到绿**的护栏测试或散文清单。测试**保留**，但降级为**行为兜底**，不作为结构真源。
 2. **proto = 单一 wire spec。** 跨端 RPC 信封、权限与枚举目录的唯一结构化真源；provider 配置形状由 ADR-0006 的 driver schema 声明。
-3. **无决策的机械目录 → build-time 生成；provider config → schema 运行时处理。** 权限/支付目录仍生成；密钥掩码、空密钥保留和不可变字段已改由 `integrationkit/schema` + `channelOps` 按 schema 处理。
+3. **无决策的机械目录 → build-time 生成；provider config → typed Contract 运行时处理。** 权限/支付目录仍生成；secret/create-only lifecycle 由 `config.Contract[T]` 执行，状态通过 `set_secret_paths` 独立投影。
 4. **反射不用于策略 / 目录表。** authz、权限目录、provider 派发保持**字面可 grep 的提交源**（如 `internal/server/authz.go` 的决策表），绝不改成启动时反射描述符建表。
 5. **跨语言镜像用 drift-gate。** 必须镜像的目录（当前仅 `permissions.ts`）要有一个把漂移变成**构建失败**的确定性闸（锚 + verify，或直接从 proto 生成），而非无兜底、也非可糊弄的测试。Integration/provider/payment 目录不再镜像，由 driver descriptor 运行时下发。
 6. **每个横切关注点保留一个「完整布线的范例」** 作 agent 的主教材（本仓库每个 channel 即是）；`AGENTS.md` 散文是**薄导航**，非主信号。
 
 ## 现状符合度（审计锚点）
 
-**当前符合（经 ADR-0005/0006 修订后）**：统一形状 `Integration[GenericProfile]`（`settings/settings.go`）+ `channelOps`（`rpc/system_channel.go`）+ provider schema/registry + `Catalog`；密钥掩码/合并由 schema 通用处理；策略表零反射、字面可读（`authz.go`）。
+**当前符合（经 ADR-0005/0014 修订后）**：统一形状 `Integration[GenericProfile]`（`internal/settings`）+ 各 integration typed registry + 应用组合根 + `Catalog`；`config.Contract[T]` 统一严格解码、canonical config 与 secret/create-only lifecycle，system 公共逻辑只保留绑定/删除；策略表零反射、字面可读（`authz.go`）。
 
 **可被糊弄的缝（决策 1 的整改对象）**：`config.go` 的平行 `SetDefault` ↔ `TestLoadEnvOverrides`;`auth.Catalog` ↔ `Permission` 枚举;provider/method schema ↔ Go 注册表 / `pay.Methods()`;`authz` 表 ↔ 覆盖测试——仍需继续把漂移前移到生成或类型层。
 

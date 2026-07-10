@@ -92,7 +92,8 @@ func run() error {
 	// Postgres. The engine recovers interrupted runs on startup and runs the
 	// scheduled unattached-file sweep against storage + the file ledger.
 	reclaimRepo := repository.New(pool)
-	reclaimObjects := storage.NewClient(settings.NewStore(reclaimRepo))
+	storageRegistry := storage.NewRegistry()
+	reclaimObjects := storage.NewClient(settings.NewStore(reclaimRepo), storageRegistry)
 	engine, err := workflow.New(ctx, cfg.Database.URL, "moonbase", reclaimRepo, reclaimObjects, logger)
 	if err != nil {
 		return err
@@ -101,7 +102,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Addr(),
-		Handler:           server.NewRouter(cfg, pool, engine, logger),
+		Handler:           server.NewRouter(cfg, pool, engine, logger, storageRegistry),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
