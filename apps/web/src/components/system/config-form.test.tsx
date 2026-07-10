@@ -4,7 +4,12 @@ import type { RJSFSchema } from '@rjsf/utils'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { ConfigForm, prepareConfigSchema, splitConfigWrite } from '#components/system/config-form'
+import {
+  ConfigForm,
+  prepareConfigSchema,
+  prepareConfigUiSchema,
+  splitConfigWrite,
+} from '#components/system/config-form'
 import { jsonSchemaValidator } from '#lib/json-schema-validator'
 
 describe('ConfigForm', () => {
@@ -80,6 +85,39 @@ describe('ConfigForm', () => {
       username: 'mailer',
     })
     expect(result.errors).toBeUndefined()
+  })
+
+  it('编辑时仍要求补齐尚未设置的 required secret', () => {
+    const editSchema = prepareConfigSchema(
+      {
+        type: 'object',
+        properties: { password: { type: 'string', minLength: 1 } },
+        required: ['password'],
+      },
+      true,
+      new Set(),
+      '配置名称',
+    )
+    const result = jsonSchemaValidator.rawValidation(editSchema, { name: '待修复邮件' })
+    expect(result.errors).toHaveLength(1)
+  })
+
+  it('只禁用已有值的 create-only 字段', () => {
+    const ui = { key: { 'ui:options': { immutable: true } } }
+    const missing = prepareConfigUiSchema(
+      ui,
+      create(ProfileSchema, { config: create(ConfigViewSchema, { values: {} }) }),
+      {},
+    )
+    const existing = prepareConfigUiSchema(
+      ui,
+      create(ProfileSchema, {
+        config: create(ConfigViewSchema, { values: { key: 'stable' } }),
+      }),
+      {},
+    )
+    expect(missing.uiSchema.key?.['ui:disabled']).toBeUndefined()
+    expect(existing.uiSchema.key?.['ui:disabled']).toBe(true)
   })
 
   it('按嵌套 JSON Pointer 拆分普通值与 secret', () => {

@@ -103,6 +103,16 @@ function pointerTokens(pointer: string): string[] {
     .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
 
+function hasValueAtPointer(values: JsonObject | undefined, pointer: string): boolean {
+  let current: unknown = values
+  for (const token of pointerTokens(pointer)) {
+    if (typeof current !== 'object' || current === null || Array.isArray(current)) return false
+    if (!Object.hasOwn(current, token)) return false
+    current = (current as JsonObject)[token]
+  }
+  return true
+}
+
 function initialFormData(profile: Profile | undefined): JsonObject {
   const out: JsonObject = { name: profile?.name ?? '' }
   for (const [key, val] of Object.entries(profile?.config?.values ?? {})) {
@@ -111,13 +121,14 @@ function initialFormData(profile: Profile | undefined): JsonObject {
   return out
 }
 
-function prepareUiSchema(
+export function prepareConfigUiSchema(
   base: UiSchema,
   profile: Profile | undefined,
   nameField: NameField,
-): { uiSchema: UiSchema; secretPaths: Set<string> } {
+): { uiSchema: UiSchema; secretPaths: Set<string>; keptSecretPaths: Set<string> } {
   const isEdit = profile !== undefined
   const secretPaths = new Set<string>()
+  const keptSecretPaths = new Set(profile?.config?.setSecretPaths ?? [])
   const order = (base['ui:order'] as string[] | undefined) ?? []
   const nameUi: Record<string, unknown> = {
     'ui:placeholder': nameField.placeholder ?? '便于识别的名称',
@@ -138,14 +149,16 @@ function prepareUiSchema(
       secretPaths.add(pointer)
       opts.secretSet = profile?.config?.setSecretPaths.includes(pointer) === true
     }
-    if (opts.immutable && isEdit) out['ui:disabled'] = true
+    if (opts.immutable && isEdit && hasValueAtPointer(profile.config?.values, pointer)) {
+      out['ui:disabled'] = true
+    }
     if (Object.keys(opts).length > 0) out['ui:options'] = opts as never
     return out
   }
   const uiSchema = visit(base, [])
   uiSchema.name = nameUi
   if (order.length > 0) uiSchema['ui:order'] = ['name', ...order]
-  return { uiSchema, secretPaths }
+  return { uiSchema, secretPaths, keptSecretPaths }
 }
 
 export function prepareConfigSchema(
@@ -258,8 +271,8 @@ export function ConfigForm({
   actions?: (current: ConfigProfileInput) => ReactNode
 }) {
   const isEdit = profile !== undefined
-  const { uiSchema, secretPaths } = useMemo(
-    () => prepareUiSchema((providerForm.uiSchema ?? {}) as UiSchema, profile, nameField),
+  const { uiSchema, secretPaths, keptSecretPaths } = useMemo(
+    () => prepareConfigUiSchema((providerForm.uiSchema ?? {}) as UiSchema, profile, nameField),
     [providerForm, profile, nameField],
   )
   const schema = useMemo(
@@ -267,10 +280,10 @@ export function ConfigForm({
       prepareConfigSchema(
         (providerForm.schema ?? {}) as RJSFSchema,
         isEdit,
-        secretPaths,
+        keptSecretPaths,
         nameField.label ?? '配置名称',
       ),
-    [providerForm, isEdit, secretPaths, nameField.label],
+    [providerForm, isEdit, keptSecretPaths, nameField.label],
   )
   const initialJson = useMemo(() => JSON.stringify(initialFormData(profile)), [profile])
   const [formData, setFormData] = useState<JsonObject>(() => initialFormData(profile))

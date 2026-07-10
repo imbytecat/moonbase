@@ -59,3 +59,8 @@ tasks:
       - 'src/**/*'
       - 'vitest.config.ts'
       - 'package.json'
+      # The provider contract test compiles the actual Go-reflected schemas in Ajv.
+      - '/packages/integrations/core/config/**/*.go'
+      - '/packages/integrations/email/**/*.go'
+      - '/packages/integrations/go.mod'
+      - '/packages/integrations/go.sum'
