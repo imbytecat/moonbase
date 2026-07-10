@@ -38,10 +38,10 @@ func configureSmtp(t *testing.T, baseURL string, client *http.Client) {
 	t.Helper()
 	sys := systemv1connect.NewSystemServiceClient(client, baseURL)
 	created, err := sys.CreateEmailProfile(t.Context(), connect.NewRequest(&systemv1.CreateEmailProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "test smtp",
 			Provider: "smtp",
-			Config: mustStruct(t, map[string]any{
+			Config: mustConfigWrite(t, map[string]any{
 				"fromAddress": "noreply@example.com",
 				"fromName":    "test",
 				"host":        "localhost",

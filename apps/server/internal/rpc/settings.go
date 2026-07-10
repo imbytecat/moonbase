@@ -27,11 +27,17 @@ import (
 type SettingsService struct {
 	settings *settings.Store
 	repo     repository.Querier
+	mailer   mail.Sender
 	logger   *slog.Logger
 }
 
-func NewSettingsService(store *settings.Store, repo repository.Querier, logger *slog.Logger) *SettingsService {
-	return &SettingsService{settings: store, repo: repo, logger: logger}
+func NewSettingsService(
+	store *settings.Store,
+	repo repository.Querier,
+	mailer mail.Sender,
+	logger *slog.Logger,
+) *SettingsService {
+	return &SettingsService{settings: store, repo: repo, mailer: mailer, logger: logger}
 }
 
 var _ settingsv1connect.SettingsServiceHandler = (*SettingsService)(nil)
@@ -186,11 +192,11 @@ func (s *SettingsService) validateAuthSettings(ctx context.Context, next setting
 		}
 	}
 	if slices.Contains(next.SignupIdentifiers, settings.SignupIdentifierEmail) {
-		emailCfg, err := s.settings.Email(ctx)
+		usable, err := s.mailer.Usable(ctx, mail.PurposeAuth)
 		if err != nil {
 			return s.internal(ctx, "load email settings", err)
 		}
-		if !mail.Usable(emailCfg, mail.PurposeAuth) {
+		if !usable {
 			return connect.NewError(connect.CodeFailedPrecondition,
 				errors.New("email signup requires a configured email channel"))
 		}

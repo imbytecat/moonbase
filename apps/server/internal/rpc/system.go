@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
+	emailint "github.com/imbytecat/moonbase/integrations/email"
 
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/system/v1/systemv1connect"
@@ -28,7 +29,8 @@ type SystemService struct {
 	settings      *settings.Store
 	repo          repository.Querier
 	storageTester storage.ConnectionTester
-	mailer        mail.Sender
+	mailer        mail.ProfileSender
+	emailRegistry emailint.Registry
 	smser         sms.Sender
 	chatter       llm.Chatter
 	logger        *slog.Logger
@@ -38,7 +40,8 @@ func NewSystemService(
 	store *settings.Store,
 	repo repository.Querier,
 	storageTester storage.ConnectionTester,
-	mailer mail.Sender,
+	emailRegistry emailint.Registry,
+	mailer mail.ProfileSender,
 	smser sms.Sender,
 	chatter llm.Chatter,
 	logger *slog.Logger,
@@ -47,6 +50,7 @@ func NewSystemService(
 		settings:      store,
 		repo:          repo,
 		storageTester: storageTester,
+		emailRegistry: emailRegistry,
 		mailer:        mailer,
 		smser:         smser,
 		chatter:       chatter,
@@ -99,7 +103,7 @@ func (s *SystemService) snapshot(ctx context.Context) (*systemv1.GetSystemSettin
 	return &systemv1.GetSystemSettingsResponse{
 		Storage: toProtoStorage(st),
 		Captcha: toProtoCaptcha(captchaCfg),
-		Email:   toProtoEmail(emailCfg),
+		Email:   s.toProtoEmail(emailCfg),
 		Sms:     toProtoSms(smsCfg),
 		Llm:     toProtoLlm(llmCfg),
 		Oauth:   toProtoOauth(oauthCfg),

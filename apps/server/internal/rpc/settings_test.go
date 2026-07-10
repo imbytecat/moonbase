@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	settingsv1 "github.com/imbytecat/moonbase/server/internal/gen/settings/v1"
+	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -49,7 +50,9 @@ func (f *fakeSettingsQuerier) SetSiteWithAssets(ctx context.Context, arg reposit
 
 func newSettingsService(q repository.Querier) *SettingsService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewSettingsService(settings.NewStore(q), q, logger)
+	store := settings.NewStore(q)
+	mailer := mail.NewClient(store.Email, mail.NewRegistry(nil))
+	return NewSettingsService(store, q, mailer, logger)
 }
 
 func TestUpdateSettingsPhoneSignupRequiresSmsChannel(t *testing.T) {
@@ -128,7 +131,8 @@ func TestGetSiteInfoResolvesAssetURLsFromFileIDs(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc := NewSettingsService(settings.NewStore(q), q, logger)
+	store := settings.NewStore(q)
+	svc := NewSettingsService(store, q, mail.NewClient(store.Email, mail.NewRegistry(nil)), logger)
 
 	resp, err := svc.GetSiteInfo(t.Context(), connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
 	if err != nil {

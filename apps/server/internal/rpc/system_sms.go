@@ -3,10 +3,12 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	configcontract "github.com/imbytecat/moonbase/integrations/core/config"
 	"github.com/imbytecat/moonbase/integrations/core/integration"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
@@ -168,10 +170,15 @@ func (s *SystemService) DescribeSmsProviders(
 	}), nil
 }
 
-func profileFromProto(p *systemv1.Profile) kitsettings.GenericProfile {
-	var config map[string]any
-	if c := p.GetConfig(); c != nil {
-		config = c.AsMap()
+func profileFromProto(p *systemv1.ProfileInput) kitsettings.GenericProfile {
+	values := map[string]any{}
+	if config := p.GetConfig(); config != nil && config.GetValues() != nil {
+		values = config.GetValues().AsMap()
+	}
+	config, err := configcontract.MergeWrite(values, p.GetConfig().GetSecrets())
+	if err != nil {
+		config = values
+		config["$invalid-secret-write"] = err.Error()
 	}
 	return kitsettings.GenericProfile{
 		Id:       p.GetId(),
@@ -189,12 +196,29 @@ func smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 // leave the server — then encodes it as a Struct. The masked map holds only
 // strings and *_set bools, so structpb encoding cannot fail.
 func profileToProto[Ops any](p kitsettings.GenericProfile, registry integration.Registry[Ops]) *systemv1.Profile {
-	masked, _ := registry.Mask(p.Provider, p.Config)
+	masked, known := registry.Mask(p.Provider, p.Config)
+	valid := known && registry.Validate(p.Provider, p.Config) == nil
+	setSecretPaths := []string{}
+	for key, value := range masked {
+		if !strings.HasSuffix(key, "_set") {
+			continue
+		}
+		secretKey := strings.TrimSuffix(key, "_set")
+		if set, _ := value.(bool); set {
+			setSecretPaths = append(setSecretPaths, "/"+strings.ReplaceAll(strings.ReplaceAll(secretKey, "~", "~0"), "/", "~1"))
+		}
+		delete(masked, key)
+		delete(masked, secretKey)
+	}
 	cfg, err := structpb.NewStruct(masked)
 	if err != nil {
 		cfg = &structpb.Struct{}
 	}
-	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: cfg}
+	return &systemv1.Profile{
+		Id: p.Id, Name: p.Name, Provider: p.Provider,
+		Config:      &systemv1.ConfigView{Values: cfg, SetSecretPaths: setSecretPaths},
+		ConfigValid: valid,
+	}
 }
 
 // toStruct encodes a JSONForm map (only strings, numbers, bools, maps and

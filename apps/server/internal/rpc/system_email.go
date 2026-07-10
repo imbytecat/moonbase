@@ -2,10 +2,13 @@ package rpc
 
 import (
 	"context"
+	"errors"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	emailint "github.com/imbytecat/moonbase/integrations/email"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -17,10 +20,6 @@ func (s *SystemService) emailOps() integrationOps[kitsettings.GenericProfile] {
 		load:     s.settings.Email,
 		save:     s.settings.SetEmail,
 		purposes: mail.Purposes,
-		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(mail.Registry, updated, stored)
-		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("email", mail.Registry, p) },
 	}
 }
 
@@ -28,12 +27,25 @@ func (s *SystemService) CreateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateEmailProfileRequest],
 ) (*connect.Response[systemv1.CreateEmailProfileResponse], error) {
-	profile, err := s.emailOps().create(ctx, s, profileFromProto(req.Msg.GetProfile()))
+	input := req.Msg.GetProfile()
+	settings, err := s.settings.Email(ctx)
 	if err != nil {
-		return nil, err
+		return nil, s.internal(ctx, "load email settings", err)
+	}
+	canonical, err := s.emailRegistry.CreateConfig(
+		input.GetProvider(), configValues(input.GetConfig()), input.GetConfig().GetSecrets())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	profile := kitsettings.GenericProfile{
+		Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical,
+	}
+	settings.Profiles = append(settings.Profiles, profile)
+	if err := s.settings.SetEmail(ctx, settings); err != nil {
+		return nil, s.internal(ctx, "save email settings", err)
 	}
 	return connect.NewResponse(&systemv1.CreateEmailProfileResponse{
-		Profile: emailProfileToProto(profile),
+		Profile: s.emailProfileToProto(profile),
 	}), nil
 }
 
@@ -41,13 +53,36 @@ func (s *SystemService) UpdateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateEmailProfileRequest],
 ) (*connect.Response[systemv1.UpdateEmailProfileResponse], error) {
-	profile, err := s.emailOps().update(ctx, s, profileFromProto(req.Msg.GetProfile()))
+	input := req.Msg.GetProfile()
+	settings, err := s.settings.Email(ctx)
 	if err != nil {
-		return nil, err
+		return nil, s.internal(ctx, "load email settings", err)
 	}
-	return connect.NewResponse(&systemv1.UpdateEmailProfileResponse{
-		Profile: emailProfileToProto(profile),
-	}), nil
+	for i, stored := range settings.Profiles {
+		if stored.Id != input.GetId() {
+			continue
+		}
+		if stored.Provider != input.GetProvider() {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				errors.New("email provider cannot be changed"))
+		}
+		canonical, err := s.emailRegistry.UpdateConfig(
+			stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		updated := kitsettings.GenericProfile{
+			Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical,
+		}
+		settings.Profiles[i] = updated
+		if err := s.settings.SetEmail(ctx, settings); err != nil {
+			return nil, s.internal(ctx, "save email settings", err)
+		}
+		return connect.NewResponse(&systemv1.UpdateEmailProfileResponse{
+			Profile: s.emailProfileToProto(updated),
+		}), nil
+	}
+	return nil, s.emailOps().errNotFound()
 }
 
 func (s *SystemService) DeleteEmailProfile(
@@ -69,7 +104,7 @@ func (s *SystemService) BindEmailPurpose(
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindEmailPurposeResponse{
-		Email: toProtoEmail(cfg),
+		Email: s.toProtoEmail(cfg),
 	}), nil
 }
 
@@ -77,12 +112,7 @@ func (s *SystemService) SendTestEmail(
 	ctx context.Context,
 	req *connect.Request[systemv1.SendTestEmailRequest],
 ) (*connect.Response[systemv1.SendTestEmailResponse], error) {
-	var in *kitsettings.GenericProfile
-	if req.Msg.GetProfile() != nil {
-		p := profileFromProto(req.Msg.GetProfile())
-		in = &p
-	}
-	profile, err := s.emailOps().resolveTestProfile(ctx, s, in, req.Msg.GetProfileId())
+	profile, err := s.resolveEmailTestProfile(ctx, req.Msg.GetProfile(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +127,60 @@ func (s *SystemService) SendTestEmail(
 	return connect.NewResponse(&systemv1.SendTestEmailResponse{Ok: true}), nil
 }
 
-func toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
+func (s *SystemService) resolveEmailTestProfile(
+	ctx context.Context,
+	input *systemv1.ProfileInput,
+	id string,
+) (kitsettings.GenericProfile, error) {
+	settings, err := s.settings.Email(ctx)
+	if err != nil {
+		return kitsettings.GenericProfile{}, s.internal(ctx, "load email settings", err)
+	}
+	if input != nil {
+		if stored, ok := settings.Profile(input.GetId()); ok {
+			if stored.Provider != input.GetProvider() {
+				return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument,
+					errors.New("email provider cannot be changed"))
+			}
+			canonical, err := s.emailRegistry.UpdateConfig(
+				stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+			if err != nil {
+				return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			return kitsettings.GenericProfile{
+				Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical,
+			}, nil
+		}
+		canonical, err := s.emailRegistry.CreateConfig(
+			input.GetProvider(), configValues(input.GetConfig()), input.GetConfig().GetSecrets())
+		if err != nil {
+			return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		return kitsettings.GenericProfile{
+			Id: input.GetId(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical,
+		}, nil
+	}
+	if id != "" {
+		if stored, ok := settings.Profile(id); ok {
+			return stored, nil
+		}
+		return kitsettings.GenericProfile{}, s.emailOps().errNotFound()
+	}
+	return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument,
+		errors.New("provide a profile or profile_id to test"))
+}
+
+func configValues(write *systemv1.ConfigWrite) map[string]any {
+	if write == nil || write.GetValues() == nil {
+		return map[string]any{}
+	}
+	return write.GetValues().AsMap()
+}
+
+func (s *SystemService) toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
-		profiles[i] = emailProfileToProto(p)
+		profiles[i] = s.emailProfileToProto(p)
 	}
 	// Bindings are emitted in catalog order so the UI renders a stable list.
 	bindings := make([]*systemv1.EmailBinding, len(mail.Purposes))
@@ -118,10 +198,32 @@ func (s *SystemService) DescribeEmailProviders(
 	_ *connect.Request[systemv1.DescribeEmailProvidersRequest],
 ) (*connect.Response[systemv1.DescribeEmailProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeEmailProvidersResponse{
-		Purposes: describePurposes(mail.Purposes), Providers: describeProviders(mail.Registry),
+		Purposes: describePurposes(mail.Purposes), Providers: describeEmailProviders(s.emailRegistry),
 	}), nil
 }
 
-func emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, mail.Registry)
+func describeEmailProviders(registry emailint.Registry) []*systemv1.ProviderDescriptor {
+	descriptors := registry.Descriptors()
+	out := make([]*systemv1.ProviderDescriptor, len(descriptors))
+	for i, descriptor := range descriptors {
+		out[i] = &systemv1.ProviderDescriptor{
+			Key:          descriptor.Key,
+			Presentation: presentationToProto(descriptor.Presentation),
+			Config: &systemv1.ProviderForm{
+				Schema: toStruct(descriptor.JSONSchema), UiSchema: toStruct(descriptor.UISchema),
+			},
+		}
+	}
+	return out
+}
+
+func (s *SystemService) emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+	view, valid := s.emailRegistry.ViewConfig(p.Provider, p.Config)
+	return &systemv1.Profile{
+		Id: p.Id, Name: p.Name, Provider: p.Provider,
+		Config: &systemv1.ConfigView{
+			Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths,
+		},
+		ConfigValid: valid,
+	}
 }

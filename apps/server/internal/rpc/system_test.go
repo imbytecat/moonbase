@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -14,6 +15,7 @@ import (
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/llm"
+	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -55,23 +57,112 @@ func (t *okTester) TestConnection(_ context.Context, cfg kitsettings.GenericProf
 func newSystemService(q repository.Querier) (*SystemService, *okTester) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	tester := &okTester{}
-	return NewSystemService(settings.NewStore(q), nil, tester, nil, nil, nil, logger), tester
+	return NewSystemService(
+		settings.NewStore(q), nil, tester, mail.NewRegistry(nil), nil, nil, nil, logger,
+	), tester
 }
 
-func profileConfig(t *testing.T, config map[string]any) *structpb.Struct {
+func profileConfig(t *testing.T, config map[string]any) *systemv1.ConfigWrite {
 	t.Helper()
 	out, err := structpb.NewStruct(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return out
+	return &systemv1.ConfigWrite{Values: out}
+}
+
+func profileWrite(
+	t *testing.T,
+	values map[string]any,
+	secrets map[string]string,
+) *systemv1.ConfigWrite {
+	t.Helper()
+	out, err := structpb.NewStruct(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &systemv1.ConfigWrite{Values: out, Secrets: secrets}
 }
 
 func configMap(p *systemv1.Profile) map[string]any {
 	if p.GetConfig() == nil {
 		return nil
 	}
-	return p.GetConfig().AsMap()
+	return p.GetConfig().GetValues().AsMap()
+}
+
+func secretSet(p *systemv1.Profile, path string) bool {
+	return slices.Contains(p.GetConfig().GetSetSecretPaths(), path)
+}
+
+func TestEmailProfileUsesTypedContractAndWriteOnlySecrets(t *testing.T) {
+	q := newMemSettingsQuerier()
+	registry := mail.NewRegistry(nil)
+	svc := NewSystemService(
+		settings.NewStore(q), nil, nil, registry, nil, nil, nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	created, err := svc.CreateEmailProfile(t.Context(), connect.NewRequest(&systemv1.CreateEmailProfileRequest{
+		Profile: &systemv1.ProfileInput{
+			Name:     "Cloudflare",
+			Provider: "cloudflare",
+			Config: profileWrite(t, map[string]any{
+				"fromAddress": "noreply@example.com",
+				"accountId":   "account-1",
+			}, map[string]string{"/apiToken": "token-1"}),
+		},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := created.Msg.GetProfile()
+	if !profile.GetConfigValid() {
+		t.Fatal("created profile must be valid")
+	}
+	if _, ok := configMap(profile)["apiToken"]; ok {
+		t.Fatal("secret must not appear in ConfigView.values")
+	}
+	if !secretSet(profile, "/apiToken") {
+		t.Fatal("set_secret_paths must report the stored API token")
+	}
+
+	_, err = svc.UpdateEmailProfile(t.Context(), connect.NewRequest(&systemv1.UpdateEmailProfileRequest{
+		Profile: &systemv1.ProfileInput{
+			Id:       profile.GetId(),
+			Name:     "Cloudflare updated",
+			Provider: "cloudflare",
+			Config: profileWrite(t, map[string]any{
+				"fromAddress": "noreply@example.com",
+				"accountId":   "account-2",
+			}, nil),
+		},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored settings.Email
+	if err := json.Unmarshal(q.rows["email"], &stored); err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Profiles) != 1 || stored.Profiles[0].Config["apiToken"] != "token-1" {
+		t.Fatalf("stored profiles = %+v", stored.Profiles)
+	}
+
+	_, err = svc.CreateEmailProfile(t.Context(), connect.NewRequest(&systemv1.CreateEmailProfileRequest{
+		Profile: &systemv1.ProfileInput{
+			Name:     "invalid",
+			Provider: "cloudflare",
+			Config: profileWrite(t, map[string]any{
+				"fromAddress": "noreply@example.com",
+				"accountId":   "account-1",
+				"apiToken":    "must-not-be-in-values",
+			}, nil),
+		},
+	}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("secret in values: code = %v, want invalid_argument", connect.CodeOf(err))
+	}
 }
 
 func TestStorageProfileCRUDAndBinding(t *testing.T) {
@@ -80,7 +171,7 @@ func TestStorageProfileCRUDAndBinding(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "public assets",
 			Provider: "s3",
 			Config: profileConfig(t, map[string]any{
@@ -100,11 +191,11 @@ func TestStorageProfileCRUDAndBinding(t *testing.T) {
 		t.Fatal("create must assign an id")
 	}
 	cfg := configMap(profile)
-	if cfg["secretAccessKey"] != "" {
+	if _, ok := cfg["secretAccessKey"]; ok {
 		t.Fatal("secret must never be echoed back")
 	}
-	if cfg["secretAccessKey_set"] != true {
-		t.Fatal("secret_set must report a stored secret")
+	if !secretSet(profile, "/secretAccessKey") {
+		t.Fatal("set_secret_paths must report a stored secret")
 	}
 
 	if _, err := svc.BindStoragePurpose(ctx, connect.NewRequest(&systemv1.BindStoragePurposeRequest{
@@ -156,7 +247,7 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "private",
 			Provider: "s3",
 			Config: profileConfig(t, map[string]any{
@@ -173,7 +264,7 @@ func TestUpdateStorageProfileKeepsSecretWhenEmpty(t *testing.T) {
 	id := created.Msg.GetProfile().GetId()
 
 	if _, err := svc.UpdateStorageProfile(ctx, connect.NewRequest(&systemv1.UpdateStorageProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Id:       id,
 			Name:     "private (renamed)",
 			Provider: "s3",
@@ -209,7 +300,7 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateStorageProfile(ctx, connect.NewRequest(&systemv1.CreateStorageProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "private",
 			Provider: "s3",
 			Config: profileConfig(t, map[string]any{
@@ -225,7 +316,7 @@ func TestTestStorageConnectionMergesStoredSecret(t *testing.T) {
 	}
 
 	resp, err := svc.TestStorageConnection(ctx, connect.NewRequest(&systemv1.TestStorageConnectionRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Id:       created.Msg.GetProfile().GetId(),
 			Provider: "s3",
 			Config: profileConfig(t, map[string]any{
@@ -307,7 +398,9 @@ func (c *recordingChatter) CompleteWith(_ context.Context, p kitsettings.Generic
 func newLlmSystemService(q repository.Querier) (*SystemService, *recordingChatter) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	chatter := &recordingChatter{}
-	return NewSystemService(settings.NewStore(q), nil, nil, nil, nil, chatter, logger), chatter
+	return NewSystemService(
+		settings.NewStore(q), nil, nil, mail.NewRegistry(nil), nil, nil, chatter, logger,
+	), chatter
 }
 
 func TestLlmProfileCRUDAndBinding(t *testing.T) {
@@ -316,7 +409,7 @@ func TestLlmProfileCRUDAndBinding(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
 			Config:   profileConfig(t, map[string]any{"apiKey": "SECRET", "model": "gpt-4o-mini"}),
@@ -330,11 +423,11 @@ func TestLlmProfileCRUDAndBinding(t *testing.T) {
 		t.Fatal("create must assign an id")
 	}
 	cfg := configMap(profile)
-	if cfg["apiKey"] != "" {
+	if _, ok := cfg["apiKey"]; ok {
 		t.Fatal("secret must never be echoed back")
 	}
-	if cfg["apiKey_set"] != true {
-		t.Fatal("secret_set must report a stored secret")
+	if !secretSet(profile, "/apiKey") {
+		t.Fatal("set_secret_paths must report a stored secret")
 	}
 
 	if _, err := svc.BindLlmPurpose(ctx, connect.NewRequest(&systemv1.BindLlmPurposeRequest{
@@ -386,7 +479,7 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
 			Config:   profileConfig(t, map[string]any{"apiKey": "ORIGINAL", "model": "gpt-4o-mini"}),
@@ -398,7 +491,7 @@ func TestUpdateLlmProfileKeepsSecretWhenEmpty(t *testing.T) {
 	id := created.Msg.GetProfile().GetId()
 
 	if _, err := svc.UpdateLlmProfile(ctx, connect.NewRequest(&systemv1.UpdateLlmProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Id:       id,
 			Name:     "fast (renamed)",
 			Provider: "openai",
@@ -430,7 +523,7 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateLlmProfile(ctx, connect.NewRequest(&systemv1.CreateLlmProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "fast",
 			Provider: "openai",
 			Config:   profileConfig(t, map[string]any{"apiKey": "STORED-SECRET", "model": "gpt-4o-mini"}),
@@ -441,7 +534,7 @@ func TestTestLlmMergesStoredSecret(t *testing.T) {
 	}
 
 	resp, err := svc.TestLlm(ctx, connect.NewRequest(&systemv1.TestLlmRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Id:       created.Msg.GetProfile().GetId(),
 			Provider: "openai",
 			Config:   profileConfig(t, map[string]any{"model": "gpt-4o-mini"}),
@@ -473,7 +566,9 @@ func newOauthSystemService() (*SystemService, *memIdentityQuerier) {
 		memSettingsQuerier: newMemSettingsQuerier(),
 		identityCounts:     map[string]int64{},
 	}
-	return NewSystemService(settings.NewStore(q), q, nil, nil, nil, nil, logger), q
+	return NewSystemService(
+		settings.NewStore(q), q, nil, mail.NewRegistry(nil), nil, nil, nil, logger,
+	), q
 }
 
 func TestOauthLoginBinding(t *testing.T) {
@@ -481,7 +576,7 @@ func TestOauthLoginBinding(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "Google",
 			Provider: "oidc",
 			Config: profileConfig(t, map[string]any{
@@ -549,7 +644,7 @@ func TestOauthProfileCRUD(t *testing.T) {
 	ctx := t.Context()
 
 	created, err := svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "Google",
 			Provider: "oidc",
 			Config: profileConfig(t, map[string]any{
@@ -568,15 +663,15 @@ func TestOauthProfileCRUD(t *testing.T) {
 		t.Fatal("create must assign an id")
 	}
 	cfg := configMap(profile)
-	if cfg["clientSecret"] != "" {
+	if _, ok := cfg["clientSecret"]; ok {
 		t.Fatal("secret must never be echoed back")
 	}
-	if cfg["clientSecret_set"] != true {
-		t.Fatal("secret_set must report a stored secret")
+	if !secretSet(profile, "/clientSecret") {
+		t.Fatal("set_secret_paths must report a stored secret")
 	}
 
 	_, err = svc.CreateOauthProfile(ctx, connect.NewRequest(&systemv1.CreateOauthProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Name:     "Google again",
 			Provider: "oidc",
 			Config:   profileConfig(t, map[string]any{"key": "google"}),
@@ -587,7 +682,7 @@ func TestOauthProfileCRUD(t *testing.T) {
 	}
 
 	updated, err := svc.UpdateOauthProfile(ctx, connect.NewRequest(&systemv1.UpdateOauthProfileRequest{
-		Profile: &systemv1.Profile{
+		Profile: &systemv1.ProfileInput{
 			Id:       profile.GetId(),
 			Name:     "Google (renamed)",
 			Provider: "oidc",

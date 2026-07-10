@@ -8,9 +8,11 @@ require (
 	github.com/altcha-org/altcha-lib-go v1.0.0
 	github.com/anthropics/anthropic-sdk-go v1.56.0
 	github.com/coreos/go-oidc/v3 v3.19.0
+	github.com/invopop/jsonschema v0.14.0
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/nyaruka/phonenumbers v1.8.0
 	github.com/openai/openai-go/v3 v3.41.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/smartwalle/alipay/v3 v3.2.29
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.127
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.3.93
@@ -33,7 +35,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect

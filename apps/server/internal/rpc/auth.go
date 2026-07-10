@@ -393,11 +393,11 @@ func (s *AuthService) GetAuthConfig(
 		out.CaptchaProvider = provider
 		out.CaptchaSiteKey = siteKey
 	}
-	emailCfg, err := s.settings.Email(ctx)
+	emailEnabled, err := s.mailer.Usable(ctx, mail.PurposeAuth)
 	if err != nil {
 		return nil, s.internal(ctx, "load email settings", err)
 	}
-	out.EmailEnabled = mail.Usable(emailCfg, mail.PurposeAuth)
+	out.EmailEnabled = emailEnabled
 	smsCfg, err := s.settings.Sms(ctx)
 	if err != nil {
 		return nil, s.internal(ctx, "load sms settings", err)

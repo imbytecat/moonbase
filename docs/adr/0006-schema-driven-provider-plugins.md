@@ -1,6 +1,6 @@
 # schema 驱动的 provider 插件化：config 形状归 driver、base 一套通用引擎守密钥
 
-> **状态**：accepted，前端渲染决策已被 ADR-0010 超越。**超越 ADR-0002 决策 2/3 中关于 per-provider config 的部分**（config 形状不再进中央 proto，改由 driver 的运行时 schema 拥有）；**保留 ADR-0002 决策 1/4/6 内核**（掩码仍是不可糊弄的单点不变量、provider 派发仍编译期可 grep、integration 仍是完整布线范例）。**在 provider 粒度拉动 ADR-0005 的「schema 驱动运行时表单」触发器**。go-plugin / 运行时加载仍缓做。**已部分修订**：布局见 ADR-0007（integrations 收敛为单一模块，替代本文「布局与模块路径」的每-integration 独立 module）；schema 表单与前端 i18n 的张力由 ADR-0008 以「放弃 i18n、全站中文」了结（driver 的 `label`/`help` 直接写中文）。ADR-0010 以 rjsf + `ProviderForm`（JSON Schema + UI Schema）替代本文的前端薄渲染器；仍保留 driver 拥有 config schema、`Mask` / `Merge` / `Validate` / `Usable`、掩码单点不变量与编译期 registry。
+> **状态**：accepted，前端渲染决策已被 ADR-0010 超越，provider contract 的 producer、typed config 与 lifecycle wire 已被 ADR-0014 修订。**超越 ADR-0002 决策 2/3 中关于 per-provider config 的部分**（config 形状不再进中央 proto，改由 driver 拥有）；**保留 ADR-0002 决策 1/4/6 内核**（掩码仍是不可糊弄的单点不变量、provider 派发仍编译期可 grep、integration 仍是完整布线范例）。**在 provider 粒度拉动 ADR-0005 的「schema 驱动运行时表单」触发器**。go-plugin / 运行时加载仍缓做。**已部分修订**：布局见 ADR-0007；schema 表单与前端 i18n 的张力由 ADR-0008 了结；ADR-0010 采用 rjsf；ADR-0014 进一步以 provider 私有 Go struct 生成标准 JSON Schema，取代运行时 Go `config.Schema` producer，并把 secret 更新收敛为“缺席保留、非空替换”。driver 拥有配置契约、base 单点执行 secret/create-only policy 与编译期 registry 的原则继续保留。
 
 ## 背景
 

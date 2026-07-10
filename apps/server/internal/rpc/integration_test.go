@@ -20,6 +20,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
 	reportv1 "github.com/imbytecat/moonbase/server/internal/gen/report/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/report/v1/reportv1connect"
+	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	userv1 "github.com/imbytecat/moonbase/server/internal/gen/user/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/user/v1/userv1connect"
 	"github.com/imbytecat/moonbase/server/internal/repository"
@@ -102,13 +103,13 @@ func loginAsAdmin(t *testing.T, baseURL string, client *http.Client) {
 	}
 }
 
-func mustStruct(t *testing.T, config map[string]any) *structpb.Struct {
+func mustConfigWrite(t *testing.T, config map[string]any) *systemv1.ConfigWrite {
 	t.Helper()
 	out, err := structpb.NewStruct(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return out
+	return &systemv1.ConfigWrite{Values: out}
 }
 
 func TestAuthFlowAndPermissions(t *testing.T) {

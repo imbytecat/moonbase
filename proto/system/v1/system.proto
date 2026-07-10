@@ -55,11 +55,32 @@ message EmailSettings {
   repeated EmailBinding bindings = 2;
 }
 
-// Profile is the generic, schema-driven connection profile (ADR-0006): the
-// per-provider config crosses as an opaque Struct whose shape is described by
-// the driver's schema (see DescribeSmsProviders). base masks / merges /
-// validates it generically from that schema, so the wire type carries NO
-// per-provider fields. Reused by every integration.
+message ConfigWrite {
+  // Complete replacement for ordinary mutable fields. Secrets are forbidden.
+  google.protobuf.Struct values = 1;
+  // JSON Pointer -> non-empty replacement. A missing path keeps the stored
+  // secret; clearing a secret is intentionally unsupported.
+  map<string, string> secrets = 2;
+}
+
+message ConfigView {
+  // Read-safe ordinary fields. Secret values never appear here.
+  google.protobuf.Struct values = 1;
+  // JSON Pointers for secrets that currently have a stored value.
+  repeated string set_secret_paths = 2;
+}
+
+// ProfileInput is accepted by create/update/test writes. Provider config stays
+// generic on the wire while each provider owns its typed contract.
+message ProfileInput {
+  string id = 1 [(buf.validate.field).string.max_len = 36];
+  string name = 2 [(buf.validate.field).string.max_len = 64];
+  string provider = 3 [(buf.validate.field).string.max_len = 64];
+  ConfigWrite config = 4 [(buf.validate.field).required = true];
+}
+
+// Profile is the read-safe generic connection profile reused by every
+// integration. Provider-specific fields never enter the central proto.
 message Profile {
   // Server-assigned id; empty on create.
   string id = 1 [(buf.validate.field).string.max_len = 36];
@@ -67,9 +88,10 @@ message Profile {
   string name = 2 [(buf.validate.field).string.max_len = 64];
   // Driver key; must be one the integration's DescribeProviders advertises.
   string provider = 3 [(buf.validate.field).string.max_len = 64];
-  // Opaque connection config; keys and shape defined by the driver's schema.
-  // Secrets are masked here by base, never by the driver.
-  google.protobuf.Struct config = 4;
+  ConfigView config = 4;
+  // False means the stored config no longer matches the compiled provider
+  // contract. Unknown providers also return false with an empty config.
+  bool config_valid = 5;
 }
 
 // ProviderForm is a driver's config form for the frontend: an rjsf JSON Schema
@@ -206,17 +228,16 @@ message GetSystemSettingsResponse {
 }
 
 message CreateStorageProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateStorageProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdateStorageProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateStorageProfileResponse {
@@ -253,7 +274,7 @@ message BindStoragePurposeResponse {
 // the stored profile with the same id), or profile_id to test a stored
 // profile as-is.
 message TestStorageConnectionRequest {
-  optional Profile profile = 1;
+  optional ProfileInput profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -267,7 +288,7 @@ message TestStorageConnectionResponse {
 // with the same id), or profile_id to test a stored profile as-is.
 message SendTestEmailRequest {
   string to = 1 [(buf.validate.field).string.email = true];
-  optional Profile profile = 2;
+  optional ProfileInput profile = 2;
   string profile_id = 3 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -284,7 +305,7 @@ message SendTestSmsRequest {
     min_len: 5
     max_len: 20
   }];
-  optional Profile profile = 2;
+  optional ProfileInput profile = 2;
   string profile_id = 3 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -298,7 +319,7 @@ message SendTestSmsResponse {
 // test unsaved form values (an empty secret falls back to the stored profile
 // with the same id), or profile_id to test a stored profile as-is.
 message TestLlmRequest {
-  optional Profile profile = 1;
+  optional ProfileInput profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
 }
 
@@ -308,17 +329,16 @@ message TestLlmResponse {
 }
 
 message CreateLlmProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateLlmProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdateLlmProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateLlmProfileResponse {
@@ -351,17 +371,16 @@ message BindLlmPurposeResponse {
 }
 
 message CreateEmailProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateEmailProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdateEmailProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateEmailProfileResponse {
@@ -394,17 +413,16 @@ message BindEmailPurposeResponse {
 }
 
 message CreateSmsProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateSmsProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdateSmsProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateSmsProfileResponse {
@@ -430,17 +448,16 @@ message BindSmsPurposeResponse {
 }
 
 message CreateCaptchaProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateCaptchaProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdateCaptchaProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateCaptchaProfileResponse {
@@ -473,7 +490,7 @@ message BindCaptchaPurposeResponse {
 }
 
 message CreateOauthProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreateOauthProfileResponse {
@@ -481,9 +498,9 @@ message CreateOauthProfileResponse {
 }
 
 // Updates the profile matching profile.id. key is immutable (identity records
-// reference it); an empty secret keeps the stored value.
+// reference it); missing secrets keep stored values.
 message UpdateOauthProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdateOauthProfileResponse {
@@ -516,17 +533,16 @@ message BindOauthPurposeResponse {
 }
 
 message CreatePaymentProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message CreatePaymentProfileResponse {
   Profile profile = 1;
 }
 
-// Updates the profile matching profile.id. An empty secret keeps the stored
-// value.
+// Updates the profile matching profile.id. Missing secrets keep stored values.
 message UpdatePaymentProfileRequest {
-  Profile profile = 1 [(buf.validate.field).required = true];
+  ProfileInput profile = 1 [(buf.validate.field).required = true];
 }
 
 message UpdatePaymentProfileResponse {

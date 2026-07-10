@@ -13,7 +13,7 @@ describe('ProfileManager', () => {
   it('直接展示服务端 purpose 与 provider descriptor', () => {
     const html = renderToStaticMarkup(
       <ProfileManager
-        profiles={[{ id: 'p1', name: '主短信', provider: 'aliyun' }]}
+        profiles={[{ id: 'p1', name: '主短信', provider: 'aliyun', configValid: false }]}
         bindings={[{ purpose: 'verification', profileIds: ['p1'] }]}
         purposes={[
           create(PurposeDescriptorSchema, {
@@ -51,5 +51,6 @@ describe('ProfileManager', () => {
     expect(html).toContain('短信验证码')
     expect(html).toContain('阿里云短信')
     expect(html).toContain('通过云短信服务发送验证码与通知')
+    expect(html).toContain('配置无效')
   })
 })

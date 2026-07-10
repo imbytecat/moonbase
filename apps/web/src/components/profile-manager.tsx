@@ -11,6 +11,7 @@ interface ProfileLike {
   id: string
   name: string
   provider: string
+  configValid?: boolean
 }
 
 interface BindingRow {
@@ -100,6 +101,7 @@ export function ProfileManager<T extends ProfileLike>({
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="whitespace-nowrap font-medium">{p.name}</span>
                         <ProviderTag name={provider?.presentation?.name || p.provider} />
+                        {p.configValid === false ? <Tag color="error">{'配置无效'}</Tag> : null}
                         {bound.map((purpose) => (
                           <Tag key={purpose} color="blue" className="!me-0">
                             {purposeLabel(purpose)}

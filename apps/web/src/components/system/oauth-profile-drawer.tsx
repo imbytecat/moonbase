@@ -71,7 +71,7 @@ export function OauthProfileDrawer({
               <Typography.Paragraph type="secondary" className="!mb-0">
                 {'回调地址（在身份服务的应用设置中登记）：'}
                 <Typography.Text code copyable>
-                  {`${window.location.origin}/api/oauth/${String(current.config.key || '…')}/callback`}
+                  {`${window.location.origin}/api/oauth/${String(current.config.values.key || '…')}/callback`}
                 </Typography.Text>
               </Typography.Paragraph>
             )}

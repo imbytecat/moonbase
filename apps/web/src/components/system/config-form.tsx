@@ -2,15 +2,19 @@ import type { JsonObject } from '@bufbuild/protobuf'
 import type { Profile, ProviderForm } from '@moonbase/api-client'
 import Form from '@rjsf/antd'
 import type { RegistryWidgetsType, RJSFSchema, UiSchema, WidgetProps } from '@rjsf/utils'
-import validator from '@rjsf/validator-ajv8'
 import { Button, Input, Select } from 'antd'
 import { type ReactNode, useMemo, useState } from 'react'
+
+import { jsonSchemaValidator } from '#lib/json-schema-validator'
 
 export interface ConfigProfileInput {
   id: string
   name: string
   provider: string
-  config: JsonObject
+  config: {
+    values: JsonObject
+    secrets: Record<string, string>
+  }
 }
 
 export interface NameField {
@@ -19,8 +23,8 @@ export interface NameField {
   help?: string
 }
 
-// A masked secret arrives blank with a `<key>_set` companion; on edit we show
-// "留空保持不变" and the server keeps the stored value when it stays empty.
+// Secret values are write-only. setSecretPaths only reports whether a stored
+// value exists; an empty edit keeps it and a non-empty edit replaces it.
 function SecretWidget({ id, value, onChange, disabled, placeholder, options }: WidgetProps) {
   const kept = options?.secretSet === true
   return (
@@ -84,10 +88,13 @@ function OptionSelectWidget({
 
 const widgets: RegistryWidgetsType = { secret: SecretWidget, optionSelect: OptionSelectWidget }
 
+function pointerForKey(key: string): string {
+  return `/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`
+}
+
 function initialFormData(profile: Profile | undefined): JsonObject {
   const out: JsonObject = { name: profile?.name ?? '' }
-  for (const [key, val] of Object.entries(profile?.config ?? {})) {
-    if (key.endsWith('_set')) continue
+  for (const [key, val] of Object.entries(profile?.config?.values ?? {})) {
     out[key] = val
   }
   return out
@@ -105,14 +112,15 @@ function prepareUiSchema(
     'ui:placeholder': nameField.placeholder ?? '便于识别的名称',
   }
   if (nameField.help) nameUi['ui:help'] = nameField.help
-  const uiSchema: UiSchema = { 'ui:order': ['name', ...order], name: nameUi }
+  const uiSchema: UiSchema = { name: nameUi }
+  if (order.length > 0) uiSchema['ui:order'] = ['name', ...order]
   for (const [key, raw] of Object.entries(base)) {
     if (key === 'ui:order') continue
     const entry = { ...(raw as Record<string, unknown>) }
     const opts = { ...((entry['ui:options'] as Record<string, unknown> | undefined) ?? {}) }
     if (opts.secret) {
       secretKeys.add(key)
-      opts.secretSet = profile?.config?.[`${key}_set`] === true
+      opts.secretSet = profile?.config?.setSecretPaths.includes(pointerForKey(key)) === true
     }
     if (opts.immutable && isEdit) entry['ui:disabled'] = true
     entry['ui:options'] = opts
@@ -191,12 +199,21 @@ export function ConfigForm({
   const [formData, setFormData] = useState<JsonObject>(() => initialFormData(profile))
 
   const toInput = (data: JsonObject): ConfigProfileInput => {
-    const { name, ...config } = data
+    const { name, ...rawConfig } = data
+    const values: JsonObject = {}
+    const secrets: Record<string, string> = {}
+    for (const [key, value] of Object.entries(rawConfig)) {
+      if (!secretKeys.has(key)) {
+        values[key] = value
+        continue
+      }
+      if (typeof value === 'string' && value !== '') secrets[pointerForKey(key)] = value
+    }
     return {
       id: profile?.id ?? '',
       name: typeof name === 'string' ? name : '',
       provider,
-      config: config as JsonObject,
+      config: { values, secrets },
     }
   }
 
@@ -205,7 +222,7 @@ export function ConfigForm({
       schema={schema}
       uiSchema={uiSchema}
       formData={formData}
-      validator={validator}
+      validator={jsonSchemaValidator}
       widgets={widgets}
       showErrorList={false}
       onChange={(event) => {
@@ -245,7 +262,7 @@ export function SchemaForm({
       schema={(form.schema ?? {}) as RJSFSchema}
       uiSchema={(form.uiSchema ?? {}) as UiSchema}
       formData={formData}
-      validator={validator}
+      validator={jsonSchemaValidator}
       widgets={widgets}
       showErrorList={false}
       onChange={(event) => setFormData((event.formData ?? {}) as JsonObject)}

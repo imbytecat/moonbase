@@ -45,10 +45,15 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 ## 给现有 integration 新增一个 provider
 
-1. 在该 integration 子包里新增 provider config schema（通常是 `schema.go`）：用 `integrations/core/config` 描述字段、密钥、不可变字段、必填、枚举/数组选项和 UI 文案；普通运行时表单用中立的 `integrations/core/form`。**不要改 `proto/system/v1/system.proto` 来加 provider 专属消息**；wire 上只有通用 `system.v1.Profile.config`。
-2. 在 integration 子包的有序驱动注册表加一条完整 entry，注册 provider key + presentation + config + Ops。驱动从 `kitsettings.GenericProfile.Config` 解码自己的配置结构；只有接缝方法（Send/Verify/Complete/...）共享，字段形状归 provider 自己所有。
-3. 密钥保留、掩码和不可变字段由 `integrationOps` 按 schema 统一处理：读侧在 `Profile.config` 中返回掩码占位，更新时空密钥保留已存值，不可变字段（如 OAuth `key`）保持旧值。
-4. Web：通用 `ProfileFormDrawer` 把 `Describe*Providers` 返回的 `ProviderForm`（JSON Schema + UI Schema）交给 rjsf 渲染。只有新增字段类型或特殊交互时才扩展 `config-form.tsx`；普通 provider 只需要 Go schema + 必要的用户文案。
+**Email 是 ADR-0014 struct-first 方案的已实现样板；其他 integration 仍在旧 `config.Schema` 引擎上，等待逐个迁移。不要把旧模式复制回 Email，也不要假装其他 integration 已完成迁移。**
+
+给 Email 新增 provider：
+
+1. 在 `packages/integrations/email/<provider>/` 定义私有 Go config struct（`json` + `jsonschema` tags）、`config.Contract[T]` policy、presentation 与 typed send 实现，导出一个返回 opaque `email.Registration` 的 `New(...)`。Provider 包不得 import settings、声明 purpose 或读取 `map[string]any`。
+2. 在应用侧 `apps/server/internal/mail/registry.go` 的显式有序组合中加一行构造；provider key/presentation/schema/policy/Ops 不得在组合根重复。Registry 在 server 启动时构造并注入，不使用全局 registry、`init()` 或 blank import。
+3. 普通字段完全由标准 Draft 2020-12 JSON Schema + rjsf 渲染；core 只根据 lifecycle policy 生成 secret/create-only 的最小 UI Schema。不要为 provider 新增前端分支或 UI sidecar。
+
+其他 integration 在迁移前仍按现有 `config.Schema` + registry entry 模式新增 provider；迁移它们时以 Email 的包边界和 `Contract[T]` 为样板，而不是继续扩展旧引擎。所有 integration 的 wire 已统一为 `ProfileInput.config = ConfigWrite`、读侧 `Profile.config = ConfigView`；**不要改 `system.proto` 加 provider 专属消息**。
 
 若改为新增一个用途（PURPOSE）= base 的 `internal/<integration>` facade 中一个常量 + `integration.Catalog` 目录条目；通用 Web 直接消费 descriptor，不再维护 `PURPOSE_LABELS`。
 
@@ -59,12 +64,12 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - `settings.v1` = 业务开关（`settings.*` 权限）：注册策略、注册标识符、手机区域、站点（SITE）标识。`GetSiteInfo` 是**公开**的（登录页在未登录时渲染它）。新的产品开关 → 放这里。
 - `system.v1` = 带密钥的基础设施通道（`system.*` 权限）：storage/captcha/email/sms/llm/oauth/payment。新通道 → 放这里。**没有**通用的 UpdateSystemSettings——只有 GetSystemSettings + 每通道的档案 CRUD/Bind/Test。
 - web 把两者都呈现在 `/settings/*` 下（按权限过滤的分组）；这个拆分存在于 proto/权限里，而非导航里。
-- **密钥在 wire 上只写**：读取 `Profile.config` 时按 schema 掩码；更新时的空值保留已存密钥；驱动只看到合并后的真实配置。
+- **密钥在 wire 上只写**：写侧 `ConfigWrite.values` 是普通字段，`secrets` 是 JSON Pointer → 非空替换值；path 缺席即保留，不支持 clear。读侧 `ConfigView.values` 完全不含 secret，`set_secret_paths` 只报告已设置状态。驱动只看到合并后的真实配置。
 - **Settings 存储是 JSONB，无迁移**（`internal/settings`）：结构体形状变更会静默地把旧行零读——重置 dev 卷或重新录入配置（真实部署也一样）。缺失的行读作零配置，所以无需 seeding。
-- **统一的通道模型**：`settings.Integration[kitsettings.GenericProfile]`（Profiles + Bindings `map[string][]string`）；`integrationOps`（`internal/rpc/system_integration.go`）是每个通道 Create/Update/Delete/Bind/Describe 背后唯一的生命周期。每通道文件只接线 catalog、schema、driver registry 和测试动作。
+- **统一的通道模型**：`settings.Integration[kitsettings.GenericProfile]`（Profiles + Bindings `map[string][]string`）。未迁移 integration 的 CRUD 仍复用 `integrationOps`；Email 样板由 `config.Contract[T]` 执行 config lifecycle，并在 `system_email.go` 显式接线通用 profile CRUD/Bind/Test。
 - **绑定即激活** —— 任何地方都**没有**每档案的 `enabled` 标志（它会造出一个"已绑定但被禁用"、语义未定义的状态，如被静默禁用的 CAPTCHA）。要暂停就解绑。
 - **用途目录是代码**：每个 base facade 导出一个 `integration.Catalog`（`storage.Purposes`、`mail.Purposes`……）。业务代码按用途寻址 integration，绝不用档案 id：`mail.Sender.Send(ctx, purpose, …)`。未绑定的用途 → `ErrNotConfigured`（CAPTCHA 例外 = 直通，让全新安装仍可登录）；删除已绑定的档案 = FailedPrecondition。多值用途（oauth 的 `login`、所有 payment）携带 `profile_ids` 并扇出；其余为单值。
-- **驱动 = 一个接缝（seam）背后的每 provider 配置形状**：provider schema 描述自己的 `Profile.config` 字段；只有接缝（Send/Verify/Complete/……）共享。绝不要把 provider 参数摊平成通道级共享字段。
+- **驱动 = 一个接缝（seam）背后的每 provider 配置形状**：Email provider 的私有 struct 生成标准 JSON Schema，Registry 在边界严格解码后才调用 typed driver；其他 integration 尚待迁移。只有各 integration 自己的接缝（Send/Verify/Complete/……）共享，绝不要建立跨 integration 的万能 Driver 或把 provider 参数摊平成通道级共享字段。
 - OAuth 档案的 `config.key` = `user_identities.provider` 里的 slug 以及流程 URL `/api/oauth/{key}/...`；创建后**不可变**；删除一个仍有身份行的 = FailedPrecondition。
 - Web：每个通道复用 `ProfileManager` + `ProfileFormDrawer`；每个表单都走 `FormDrawer`（脏数据守卫关闭）——绝不要在表单外直接挂一个裸的 antd Drawer。新通道 = 在 `src/components/system/` 加新面板 + 一条 `src/lib/settings-nav.tsx` 条目。
 - 用户可见文本（proto 注释、UI 文案、错误字符串）里不要出现工具/库名——描述协议（"SMTP"、"S3-compatible"），而非实现。错误展示一条通用的已翻译消息，绝不用裸的 `err.message`。

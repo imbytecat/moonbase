@@ -90,8 +90,8 @@ func (s *AuthService) RequestPasswordReset(
 	// this point are logged, never surfaced.
 	resp := connect.NewResponse(&authv1.RequestPasswordResetResponse{})
 
-	emailCfg, err := s.settings.Email(ctx)
-	if err != nil || !mail.Usable(emailCfg, mail.PurposeAuth) {
+	emailUsable, err := s.mailer.Usable(ctx, mail.PurposeAuth)
+	if err != nil || !emailUsable {
 		return resp, nil
 	}
 	user, err := s.repo.GetUserByEmail(ctx, req.Msg.GetEmail())
