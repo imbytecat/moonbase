@@ -66,7 +66,8 @@ func TestNewFileSinkWritesJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"msg":"hello"`) || !strings.Contains(string(data), `"key":"value"`) {
+	if !strings.Contains(string(data), `"msg":"hello"`) ||
+		!strings.Contains(string(data), `"key":"value"`) {
 		t.Errorf("file sink missing structured entry, got: %s", data)
 	}
 }

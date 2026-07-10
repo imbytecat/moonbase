@@ -40,14 +40,26 @@ func (s *systemPayment) CreatePaymentProfile(
 	if err != nil {
 		return nil, s.internal(ctx, "load payment settings", err)
 	}
-	canonical, err := s.paymentRegistry.CreateConfig(input.GetProvider(), configValues(input.GetConfig()), input.GetConfig().GetSecrets())
+	canonical, err := s.paymentRegistry.CreateConfig(
+		input.GetProvider(),
+		configValues(input.GetConfig()),
+		input.GetConfig().GetSecrets(),
+	)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	if err := s.paymentRegistry.ValidateProducts(input.GetProvider(), paymentProducts(canonical)); err != nil {
+	if err := s.paymentRegistry.ValidateProducts(
+		input.GetProvider(),
+		paymentProducts(canonical),
+	); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	profile := kitsettings.GenericProfile{Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical}
+	profile := kitsettings.GenericProfile{
+		Id:       uuid.NewString(),
+		Name:     input.GetName(),
+		Provider: input.GetProvider(),
+		Config:   canonical,
+	}
 	settings.Profiles = append(settings.Profiles, profile)
 	if err := s.settings.SetPayment(ctx, settings); err != nil {
 		return nil, s.internal(ctx, "save payment settings", err)
@@ -71,21 +83,39 @@ func (s *systemPayment) UpdatePaymentProfile(
 			continue
 		}
 		if stored.Provider != input.GetProvider() {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("payment provider cannot be changed"))
+			return nil, connect.NewError(
+				connect.CodeInvalidArgument,
+				errors.New("payment provider cannot be changed"),
+			)
 		}
-		canonical, err := s.paymentRegistry.UpdateConfig(stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+		canonical, err := s.paymentRegistry.UpdateConfig(
+			stored.Provider,
+			configValues(input.GetConfig()),
+			input.GetConfig().GetSecrets(),
+			stored.Config,
+		)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		if err := s.paymentRegistry.ValidateProducts(stored.Provider, paymentProducts(canonical)); err != nil {
+		if err := s.paymentRegistry.ValidateProducts(
+			stored.Provider,
+			paymentProducts(canonical),
+		); err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		profile := kitsettings.GenericProfile{Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical}
+		profile := kitsettings.GenericProfile{
+			Id:       stored.Id,
+			Name:     input.GetName(),
+			Provider: stored.Provider,
+			Config:   canonical,
+		}
 		settings.Profiles[i] = profile
 		if err := s.settings.SetPayment(ctx, settings); err != nil {
 			return nil, s.internal(ctx, "save payment settings", err)
 		}
-		return connect.NewResponse(&systemv1.UpdatePaymentProfileResponse{Profile: s.paymentProfileToProto(profile)}), nil
+		return connect.NewResponse(
+			&systemv1.UpdatePaymentProfileResponse{Profile: s.paymentProfileToProto(profile)},
+		), nil
 	}
 	return nil, s.paymentOps().errNotFound()
 }
@@ -115,7 +145,8 @@ func (s *systemPayment) BindPaymentPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindPaymentPurposeRequest],
 ) (*connect.Response[systemv1.BindPaymentPurposeResponse], error) {
-	cfg, err := s.paymentOps().bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
+	cfg, err := s.paymentOps().
+		bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +183,10 @@ func (s *systemPayment) DescribePaymentProviders(
 	_ *connect.Request[systemv1.DescribePaymentProvidersRequest],
 ) (*connect.Response[systemv1.DescribePaymentProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribePaymentProvidersResponse{
-		Purposes: describePurposes(pay.Purposes), Providers: describePaymentProviders(s.paymentRegistry),
+		Purposes: describePurposes(
+			pay.Purposes,
+		),
+		Providers: describePaymentProviders(s.paymentRegistry),
 	}), nil
 }
 
@@ -161,10 +195,16 @@ func describePaymentProviders(registry paymentint.Registry) []*systemv1.Provider
 	providers := make([]*systemv1.ProviderDescriptor, len(descriptors))
 	for i, descriptor := range descriptors {
 		provider := &systemv1.ProviderDescriptor{
-			Key: descriptor.Key, Presentation: presentationToProto(descriptor.Presentation),
-			Config: &systemv1.ProviderForm{Schema: toStruct(descriptor.ConfigSchema), UiSchema: toStruct(descriptor.UISchema)},
+			Key:          descriptor.Key,
+			Presentation: presentationToProto(descriptor.Presentation),
+			Config: &systemv1.ProviderForm{
+				Schema:   toStruct(descriptor.ConfigSchema),
+				UiSchema: toStruct(descriptor.UISchema),
+			},
 		}
-		payment := &systemv1.PaymentProviderDescriptor{Capabilities: descriptor.Payment.Capabilities}
+		payment := &systemv1.PaymentProviderDescriptor{
+			Capabilities: descriptor.Payment.Capabilities,
+		}
 		for _, method := range descriptor.Payment.Methods {
 			payment.Methods = append(payment.Methods, &systemv1.PaymentMethodDescriptor{
 				Key: method.Key, Presentation: presentationToProto(method.Presentation),
@@ -187,8 +227,13 @@ func describePaymentProviders(registry paymentint.Registry) []*systemv1.Provider
 func (s *systemPayment) paymentProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.paymentRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{
-		Id: p.Id, Name: p.Name, Provider: p.Provider,
-		Config:      &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths},
+		Id:       p.Id,
+		Name:     p.Name,
+		Provider: p.Provider,
+		Config: &systemv1.ConfigView{
+			Values:         toStruct(view.Values),
+			SetSecretPaths: view.SetSecretPaths,
+		},
 		ConfigValid: valid,
 	}
 }

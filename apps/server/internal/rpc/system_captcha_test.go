@@ -12,7 +12,22 @@ import (
 func TestCaptchaProfileUsesTypedContractAndWriteOnlySecret(t *testing.T) {
 	q := newMemSettingsQuerier()
 	svc, _ := newSystemService(q)
-	created, err := svc.CreateCaptchaProfile(t.Context(), connect.NewRequest(&systemv1.CreateCaptchaProfileRequest{Profile: &systemv1.ProfileInput{Name: "Turnstile", Provider: "turnstile", Config: profileWrite(t, map[string]any{"siteKey": "site"}, map[string]string{"/secretKey": "secret"})}}))
+	created, err := svc.CreateCaptchaProfile(
+		t.Context(),
+		connect.NewRequest(
+			&systemv1.CreateCaptchaProfileRequest{
+				Profile: &systemv1.ProfileInput{
+					Name:     "Turnstile",
+					Provider: "turnstile",
+					Config: profileWrite(
+						t,
+						map[string]any{"siteKey": "site"},
+						map[string]string{"/secretKey": "secret"},
+					),
+				},
+			},
+		),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +38,19 @@ func TestCaptchaProfileUsesTypedContractAndWriteOnlySecret(t *testing.T) {
 	if _, ok := configMap(p)["secretKey"]; ok {
 		t.Fatal("secret leaked")
 	}
-	_, err = svc.UpdateCaptchaProfile(t.Context(), connect.NewRequest(&systemv1.UpdateCaptchaProfileRequest{Profile: &systemv1.ProfileInput{Id: p.GetId(), Name: "更新", Provider: "turnstile", Config: profileWrite(t, map[string]any{"siteKey": "site2"}, nil)}}))
+	_, err = svc.UpdateCaptchaProfile(
+		t.Context(),
+		connect.NewRequest(
+			&systemv1.UpdateCaptchaProfileRequest{
+				Profile: &systemv1.ProfileInput{
+					Id:       p.GetId(),
+					Name:     "更新",
+					Provider: "turnstile",
+					Config:   profileWrite(t, map[string]any{"siteKey": "site2"}, nil),
+				},
+			},
+		),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

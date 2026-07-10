@@ -19,7 +19,14 @@ func (s *PaymentService) PaymentNotify(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.core.gateway.ParseNotify(ctx, profile, r)
 	if err != nil {
-		s.core.logger.WarnContext(ctx, "payment notification rejected", "profile", profileID, "error", err)
+		s.core.logger.WarnContext(
+			ctx,
+			"payment notification rejected",
+			"profile",
+			profileID,
+			"error",
+			err,
+		)
 		http.Error(w, "invalid notification", http.StatusBadRequest)
 		return
 	}

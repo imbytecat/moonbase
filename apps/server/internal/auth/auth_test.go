@@ -143,11 +143,26 @@ func TestAuthorize(t *testing.T) {
 		wantCode  connect.Code
 	}{
 		{"public without session", "/test.v1.TestService/Public", nil, 0},
-		{"auth-only without session", "/test.v1.TestService/AuthOnly", nil, connect.CodeUnauthenticated},
+		{
+			"auth-only without session",
+			"/test.v1.TestService/AuthOnly",
+			nil,
+			connect.CodeUnauthenticated,
+		},
 		{"auth-only with session", "/test.v1.TestService/AuthOnly", reader, 0},
-		{"permission denied", "/test.v1.TestService/NeedsPerm", reader, connect.CodePermissionDenied},
+		{
+			"permission denied",
+			"/test.v1.TestService/NeedsPerm",
+			reader,
+			connect.CodePermissionDenied,
+		},
 		{"permission granted", "/test.v1.TestService/NeedsPerm", writer, 0},
-		{"unlisted procedure denied", "/test.v1.TestService/Unknown", writer, connect.CodePermissionDenied},
+		{
+			"unlisted procedure denied",
+			"/test.v1.TestService/Unknown",
+			writer,
+			connect.CodePermissionDenied,
+		},
 	}
 
 	for _, tc := range cases {

@@ -106,7 +106,12 @@ func NewContract[T any](policy Policy) (Contract[T], error) {
 		return Contract[T]{}, fmt.Errorf("compile config schema: %w", err)
 	}
 
-	return Contract[T]{schema: schema, uiSchema: uiSchema, validator: validator, policy: policy}, nil
+	return Contract[T]{
+		schema:    schema,
+		uiSchema:  uiSchema,
+		validator: validator,
+		policy:    policy,
+	}, nil
 }
 
 // JSONSchema returns a detached copy of the generated standard schema.
@@ -145,7 +150,10 @@ func (c Contract[T]) Create(input map[string]any) (map[string]any, error) {
 
 // CreateWrite validates the wire split between ordinary values and secret
 // replacements before materializing a complete canonical config.
-func (c Contract[T]) CreateWrite(values map[string]any, secrets map[string]string) (map[string]any, error) {
+func (c Contract[T]) CreateWrite(
+	values map[string]any,
+	secrets map[string]string,
+) (map[string]any, error) {
 	if err := c.rejectSecretsInValues(values); err != nil {
 		return nil, err
 	}
@@ -431,7 +439,12 @@ func applyPolicy(schema map[string]any, policy Policy) (map[string]any, error) {
 	}{{kind: "secret", paths: policy.Secrets}, {kind: "create-only", paths: policy.CreateOnly}} {
 		for _, path := range item.paths {
 			if previous, ok := seen[path]; ok {
-				return nil, fmt.Errorf("policy path %q is declared as both %s and %s", path, previous, item.kind)
+				return nil, fmt.Errorf(
+					"policy path %q is declared as both %s and %s",
+					path,
+					previous,
+					item.kind,
+				)
 			}
 			field, tokens, err := schemaField(schema, path)
 			if err != nil {
@@ -443,7 +456,10 @@ func applyPolicy(schema map[string]any, policy Policy) (map[string]any, error) {
 				return nil, fmt.Errorf("policy path %q must point to a leaf field", path)
 			}
 			seen[path] = item.kind
-			paths = append(paths, policyPath{kind: item.kind, path: path, tokens: tokens, field: field})
+			paths = append(
+				paths,
+				policyPath{kind: item.kind, path: path, tokens: tokens, field: field},
+			)
 		}
 	}
 	for i, left := range paths {

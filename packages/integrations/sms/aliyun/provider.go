@@ -14,15 +14,18 @@ import (
 )
 
 type providerConfig struct {
-	AccessKeyID     string `json:"accessKeyId" jsonschema:"required,title=访问密钥 ID,minLength=1,maxLength=128"`
+	AccessKeyID     string `json:"accessKeyId"     jsonschema:"required,title=访问密钥 ID,minLength=1,maxLength=128"`
 	AccessKeySecret string `json:"accessKeySecret" jsonschema:"required,title=访问密钥 Secret,minLength=1,maxLength=128"`
-	SignName        string `json:"signName" jsonschema:"required,title=短信签名,minLength=1,maxLength=64"`
-	TemplateCode    string `json:"templateCode" jsonschema:"required,title=模板编号,description=模板需包含一个 {code} 变量,minLength=1,maxLength=64"`
+	SignName        string `json:"signName"        jsonschema:"required,title=短信签名,minLength=1,maxLength=64"`
+	TemplateCode    string `json:"templateCode"    jsonschema:"required,title=模板编号,description=模板需包含一个 {code} 变量,minLength=1,maxLength=64"`
 }
 
 func New() smsint.Registration {
 	return smsint.Register("aliyun", integration.Presentation{
-		Name: "阿里云短信", Description: "通过云短信服务发送验证码与通知", Color: "#ff6a00", IconRef: "antd:AliyunOutlined",
+		Name:        "阿里云短信",
+		Description: "通过云短信服务发送验证码与通知",
+		Color:       "#ff6a00",
+		IconRef:     "antd:AliyunOutlined",
 	}, config.MustContract[providerConfig](config.Policy{Secrets: []string{"/accessKeySecret"}}), send)
 }
 
@@ -32,11 +35,24 @@ func send(_ context.Context, cfg providerConfig, message smsint.Message) error {
 		return err
 	}
 	endpoint := "dysmsapi.aliyuncs.com"
-	client, err := dysmsapi.NewClient(&openapiutil.Config{AccessKeyId: &cfg.AccessKeyID, AccessKeySecret: &cfg.AccessKeySecret, Endpoint: &endpoint})
+	client, err := dysmsapi.NewClient(
+		&openapiutil.Config{
+			AccessKeyId:     &cfg.AccessKeyID,
+			AccessKeySecret: &cfg.AccessKeySecret,
+			Endpoint:        &endpoint,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("create sms client: %w", err)
 	}
-	resp, err := client.SendSms(&dysmsapi.SendSmsRequest{PhoneNumbers: &target, SignName: &cfg.SignName, TemplateCode: &templateCode, TemplateParam: &templateParam})
+	resp, err := client.SendSms(
+		&dysmsapi.SendSmsRequest{
+			PhoneNumbers:  &target,
+			SignName:      &cfg.SignName,
+			TemplateCode:  &templateCode,
+			TemplateParam: &templateParam,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("send sms: %w", err)
 	}

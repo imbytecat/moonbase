@@ -67,7 +67,13 @@ func newStackWithPool(t *testing.T) (baseURL string, client *http.Client, pool *
 		t.Fatal(err)
 	}
 
-	if err := auth.Seed(ctx, repository.New(pool), logger, testAdminUsername, testAdminPassword); err != nil {
+	if err := auth.Seed(
+		ctx,
+		repository.New(pool),
+		logger,
+		testAdminUsername,
+		testAdminPassword,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,7 +128,10 @@ func TestAuthFlowAndPermissions(t *testing.T) {
 	_, err := reportClient.GetDashboardReport(t.Context(),
 		connect.NewRequest(&reportv1.GetDashboardReportRequest{Days: 30}))
 	if connect.CodeOf(err) != connect.CodeUnauthenticated {
-		t.Fatalf("unauthenticated GetDashboardReport: code = %v, want unauthenticated", connect.CodeOf(err))
+		t.Fatalf(
+			"unauthenticated GetDashboardReport: code = %v, want unauthenticated",
+			connect.CodeOf(err),
+		)
 	}
 	if _, err := authClient.GetAuthConfig(t.Context(),
 		connect.NewRequest(&authv1.GetAuthConfigRequest{})); err != nil {
@@ -242,8 +251,16 @@ func TestBearerTokenFlow(t *testing.T) {
 		}
 	})
 	plainHTTP := &http.Client{}
-	bearerAuth := authv1connect.NewAuthServiceClient(plainHTTP, baseURL, connect.WithInterceptors(bearer))
-	bearerReports := reportv1connect.NewReportServiceClient(plainHTTP, baseURL, connect.WithInterceptors(bearer))
+	bearerAuth := authv1connect.NewAuthServiceClient(
+		plainHTTP,
+		baseURL,
+		connect.WithInterceptors(bearer),
+	)
+	bearerReports := reportv1connect.NewReportServiceClient(
+		plainHTTP,
+		baseURL,
+		connect.WithInterceptors(bearer),
+	)
 
 	me, err := bearerAuth.GetMe(t.Context(), connect.NewRequest(&authv1.GetMeRequest{}))
 	if err != nil {

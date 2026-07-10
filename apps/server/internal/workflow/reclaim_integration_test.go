@@ -79,7 +79,11 @@ func TestReclaimUnattachedSweepsOldOrphansOnly(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_, _ = pool.Exec(bg, `DELETE FROM file_attachments WHERE file_id = $1`, attachedID)
-		_, _ = pool.Exec(bg, `DELETE FROM files WHERE id = ANY($1)`, []uuid.UUID{orphanID, attachedID})
+		_, _ = pool.Exec(
+			bg,
+			`DELETE FROM files WHERE id = ANY($1)`,
+			[]uuid.UUID{orphanID, attachedID},
+		)
 	})
 
 	orphanPath := filepath.Join(dir, "sweep", "orphan.png")
@@ -92,7 +96,8 @@ func TestReclaimUnattachedSweepsOldOrphansOnly(t *testing.T) {
 
 	fileExists := func(id uuid.UUID) bool {
 		var exists bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM files WHERE id = $1)`, id).Scan(&exists); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM files WHERE id = $1)`, id).
+			Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		return exists
@@ -140,7 +145,10 @@ func TestReclaimUnattachedSweepsOldOrphansOnly(t *testing.T) {
 
 type noopReclaimStore struct{}
 
-func (noopReclaimStore) ListUnattachedFiles(context.Context, time.Time) ([]repository.ListUnattachedFilesRow, error) {
+func (noopReclaimStore) ListUnattachedFiles(
+	context.Context,
+	time.Time,
+) ([]repository.ListUnattachedFilesRow, error) {
 	return nil, nil
 }
 func (noopReclaimStore) DeleteFile(context.Context, uuid.UUID) error { return nil }
@@ -159,7 +167,14 @@ func TestNewLaunchesWithScheduledReclaim(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	engine, err := New(context.Background(), dsn, "moonbase", noopReclaimStore{}, noopObjectDeleter{}, logger)
+	engine, err := New(
+		context.Background(),
+		dsn,
+		"moonbase",
+		noopReclaimStore{},
+		noopObjectDeleter{},
+		logger,
+	)
 	if err != nil {
 		t.Fatalf("engine with the scheduled reclaim workflow must launch: %v", err)
 	}

@@ -63,9 +63,13 @@ func TestAvatarBackfillMigration(t *testing.T) {
 	}
 	const legacyKey = "avatars/legacy-user/pic.png"
 	var userID uuid.UUID
-	if err := sqlDB.QueryRowContext(ctx,
+	if err := sqlDB.QueryRowContext(
+		ctx,
 		`INSERT INTO users (email, name, password_hash, avatar_key) VALUES ($1,$2,$3,$4) RETURNING id`,
-		"legacy@example.com", "Legacy", "hash", legacyKey,
+		"legacy@example.com",
+		"Legacy",
+		"hash",
+		legacyKey,
 	).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +86,8 @@ func TestAvatarBackfillMigration(t *testing.T) {
 		purpose     string
 		uploadedBy  uuid.UUID
 	)
-	if err := sqlDB.QueryRowContext(ctx,
+	if err := sqlDB.QueryRowContext(
+		ctx,
 		`SELECT id, object_key, content_type, purpose, uploaded_by FROM files WHERE object_key = $1`,
 		legacyKey,
 	).Scan(&fileID, &objectKey, &contentType, &purpose, &uploadedBy); err != nil {
@@ -99,9 +104,11 @@ func TestAvatarBackfillMigration(t *testing.T) {
 	}
 
 	var attachments int
-	if err := sqlDB.QueryRowContext(ctx,
+	if err := sqlDB.QueryRowContext(
+		ctx,
 		`SELECT count(*) FROM file_attachments WHERE file_id = $1 AND owner_type = 'user' AND owner_id = $2`,
-		fileID, userID.String(),
+		fileID,
+		userID.String(),
 	).Scan(&attachments); err != nil {
 		t.Fatal(err)
 	}

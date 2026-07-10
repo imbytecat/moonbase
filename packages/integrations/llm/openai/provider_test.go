@@ -20,7 +20,11 @@ func TestCompleteUsesCustomBaseURLAndSystemPrompt(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"你好"}}]}`))
 	}))
 	defer srv.Close()
-	got, err := complete(t.Context(), providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"}, llmint.Prompt{System: "系统", User: "用户"})
+	got, err := complete(
+		t.Context(),
+		providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"},
+		llmint.Prompt{System: "系统", User: "用户"},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +42,11 @@ func TestCompleteRejectsEmptyResponse(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[]}`))
 	}))
 	defer srv.Close()
-	_, err := complete(t.Context(), providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"}, llmint.Prompt{User: "hi"})
+	_, err := complete(
+		t.Context(),
+		providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"},
+		llmint.Prompt{User: "hi"},
+	)
 	if err == nil {
 		t.Fatal("empty response must fail")
 	}

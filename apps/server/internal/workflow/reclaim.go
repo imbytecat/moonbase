@@ -26,7 +26,10 @@ const (
 // ReclaimStore is the ledger side of the sweep: find unattached files and drop
 // their rows. repository.Querier satisfies it.
 type ReclaimStore interface {
-	ListUnattachedFiles(ctx context.Context, createdBefore time.Time) ([]repository.ListUnattachedFilesRow, error)
+	ListUnattachedFiles(
+		ctx context.Context,
+		createdBefore time.Time,
+	) ([]repository.ListUnattachedFilesRow, error)
 	DeleteFile(ctx context.Context, id uuid.UUID) error
 }
 
@@ -40,11 +43,22 @@ type ObjectDeleter interface {
 // One durable step runs the whole reclaim; because every effect is idempotent,
 // a crash-resumed run simply re-lists and re-deletes, converging the
 // "object gone, row still there" middle state.
-func registerReclaim(dctx dbos.DBOSContext, store ReclaimStore, objects ObjectDeleter, logger *slog.Logger) {
+func registerReclaim(
+	dctx dbos.DBOSContext,
+	store ReclaimStore,
+	objects ObjectDeleter,
+	logger *slog.Logger,
+) {
 	dbos.RegisterWorkflow(dctx,
 		func(wctx dbos.DBOSContext, scheduledTime time.Time) (int, error) {
 			return dbos.RunAsStep(wctx, func(ctx context.Context) (int, error) {
-				return reclaimUnattached(ctx, store, objects, scheduledTime.Add(-reclaimGracePeriod), logger)
+				return reclaimUnattached(
+					ctx,
+					store,
+					objects,
+					scheduledTime.Add(-reclaimGracePeriod),
+					logger,
+				)
 			}, dbos.WithStepName("reclaim-unattached"))
 		},
 		dbos.WithWorkflowName(reclaimWorkflowName),
@@ -58,7 +72,13 @@ func registerReclaim(dctx dbos.DBOSContext, store ReclaimStore, objects ObjectDe
 // sweep re-deletes (idempotent) and finishes — the reverse would strand an
 // object with no account. Per-file failures are logged and skipped so one bad
 // file never blocks the rest of the sweep.
-func reclaimUnattached(ctx context.Context, store ReclaimStore, objects ObjectDeleter, cutoff time.Time, logger *slog.Logger) (int, error) {
+func reclaimUnattached(
+	ctx context.Context,
+	store ReclaimStore,
+	objects ObjectDeleter,
+	cutoff time.Time,
+	logger *slog.Logger,
+) (int, error) {
 	files, err := store.ListUnattachedFiles(ctx, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("list unattached files: %w", err)

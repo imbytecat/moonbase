@@ -52,10 +52,13 @@ func TestChangeAvatarTransfersAttachment(t *testing.T) {
 
 	presign := func() string {
 		t.Helper()
-		resp, err := storageClient.PresignAvatarUpload(ctx, connect.NewRequest(&storagev1.PresignAvatarUploadRequest{
-			ContentType:   "image/png",
-			ContentLength: 1024,
-		}))
+		resp, err := storageClient.PresignAvatarUpload(
+			ctx,
+			connect.NewRequest(&storagev1.PresignAvatarUploadRequest{
+				ContentType:   "image/png",
+				ContentLength: 1024,
+			}),
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -64,8 +67,11 @@ func TestChangeAvatarTransfersAttachment(t *testing.T) {
 	attachmentCount := func(fileID string) int {
 		t.Helper()
 		var n int
-		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM file_attachments WHERE file_id = $1`, fileID).Scan(&n); err != nil {
+		if err := pool.QueryRow(
+			ctx,
+			`SELECT count(*) FROM file_attachments WHERE file_id = $1`,
+			fileID,
+		).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -76,7 +82,11 @@ func TestChangeAvatarTransfersAttachment(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_, _ = pool.Exec(bg, `UPDATE users SET avatar_file_id = NULL WHERE id = $1`, adminID)
-		_, _ = pool.Exec(bg, `DELETE FROM file_attachments WHERE file_id = ANY($1)`, []string{fileA, fileB})
+		_, _ = pool.Exec(
+			bg,
+			`DELETE FROM file_attachments WHERE file_id = ANY($1)`,
+			[]string{fileA, fileB},
+		)
 		_, _ = pool.Exec(bg, `DELETE FROM files WHERE id = ANY($1)`, []string{fileA, fileB})
 	})
 

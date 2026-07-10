@@ -23,14 +23,25 @@ type fakeOauthFlow struct {
 	err          error
 }
 
-func (f *fakeOauthFlow) AuthorizeURL(context.Context, string, string, string) (string, oauth.FlowSecrets, error) {
+func (f *fakeOauthFlow) AuthorizeURL(
+	context.Context,
+	string,
+	string,
+	string,
+) (string, oauth.FlowSecrets, error) {
 	if f.err != nil {
 		return "", oauth.FlowSecrets{}, f.err
 	}
 	return f.authorizeURL, oauth.FlowSecrets{}, nil
 }
 
-func (f *fakeOauthFlow) Exchange(context.Context, string, string, string, oauth.FlowSecrets) (oauth.ExternalIdentity, error) {
+func (f *fakeOauthFlow) Exchange(
+	context.Context,
+	string,
+	string,
+	string,
+	oauth.FlowSecrets,
+) (oauth.ExternalIdentity, error) {
 	return f.external, f.err
 }
 
@@ -38,11 +49,17 @@ func (f *fakeOauthFlow) ProviderOptions(context.Context) ([]oauth.ProviderOption
 	return nil, f.err
 }
 
-func (f *fakeAuthQuerier) ConsumeOauthSignupTicket(ctx context.Context, secretHash []byte) (repository.OauthSignupTicket, error) {
+func (f *fakeAuthQuerier) ConsumeOauthSignupTicket(
+	ctx context.Context,
+	secretHash []byte,
+) (repository.OauthSignupTicket, error) {
 	return f.consumeTicket(ctx, secretHash)
 }
 
-func (f *fakeAuthQuerier) DeleteUserIdentity(ctx context.Context, arg repository.DeleteUserIdentityParams) (int64, error) {
+func (f *fakeAuthQuerier) DeleteUserIdentity(
+	ctx context.Context,
+	arg repository.DeleteUserIdentityParams,
+) (int64, error) {
 	return f.deleteIdentity(ctx, arg)
 }
 
@@ -56,12 +73,15 @@ func TestCompleteOauthSignupInvalidTicket(t *testing.T) {
 		},
 	})
 
-	_, err := svc.CompleteOauthSignup(t.Context(), connect.NewRequest(&authv1.CompleteOauthSignupRequest{
-		Ticket:   "definitely-not-a-real-ticket",
-		Name:     "Neo",
-		Username: "neo",
-		Password: "password-123",
-	}))
+	_, err := svc.CompleteOauthSignup(
+		t.Context(),
+		connect.NewRequest(&authv1.CompleteOauthSignupRequest{
+			Ticket:   "definitely-not-a-real-ticket",
+			Name:     "Neo",
+			Username: "neo",
+			Password: "password-123",
+		}),
+	)
 
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("code = %v, want invalid_argument", connect.CodeOf(err))
@@ -75,12 +95,15 @@ func TestCompleteOauthSignupRegistrationDisabled(t *testing.T) {
 		},
 	})
 
-	_, err := svc.CompleteOauthSignup(t.Context(), connect.NewRequest(&authv1.CompleteOauthSignupRequest{
-		Ticket:   "whatever-ticket-value",
-		Name:     "Neo",
-		Username: "neo",
-		Password: "password-123",
-	}))
+	_, err := svc.CompleteOauthSignup(
+		t.Context(),
+		connect.NewRequest(&authv1.CompleteOauthSignupRequest{
+			Ticket:   "whatever-ticket-value",
+			Name:     "Neo",
+			Username: "neo",
+			Password: "password-123",
+		}),
+	)
 
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("code = %v, want permission_denied", connect.CodeOf(err))
@@ -101,10 +124,13 @@ func TestUnbindOauthIdentityGuards(t *testing.T) {
 				return repository.User{ID: userID, PasswordHash: hash}, nil
 			},
 		})
-		_, err := svc.UnbindOauthIdentity(ctx, connect.NewRequest(&authv1.UnbindOauthIdentityRequest{
-			ProviderKey:     "wechat",
-			CurrentPassword: "wrong-password-1",
-		}))
+		_, err := svc.UnbindOauthIdentity(
+			ctx,
+			connect.NewRequest(&authv1.UnbindOauthIdentityRequest{
+				ProviderKey:     "wechat",
+				CurrentPassword: "wrong-password-1",
+			}),
+		)
 		if connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Fatalf("code = %v, want invalid_argument", connect.CodeOf(err))
 		}
@@ -121,10 +147,13 @@ func TestUnbindOauthIdentityGuards(t *testing.T) {
 				return 0, nil
 			},
 		})
-		_, err := svc.UnbindOauthIdentity(ctx, connect.NewRequest(&authv1.UnbindOauthIdentityRequest{
-			ProviderKey:     "wechat",
-			CurrentPassword: "the-real-password",
-		}))
+		_, err := svc.UnbindOauthIdentity(
+			ctx,
+			connect.NewRequest(&authv1.UnbindOauthIdentityRequest{
+				ProviderKey:     "wechat",
+				CurrentPassword: "the-real-password",
+			}),
+		)
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Fatalf("code = %v, want not_found", connect.CodeOf(err))
 		}
@@ -185,7 +214,10 @@ func TestOauthAuthorizeSetsStateAndRedirects(t *testing.T) {
 	}
 }
 
-func settingJSON(t *testing.T, values map[string]string) func(context.Context, string) (repository.Setting, error) {
+func settingJSON(
+	t *testing.T,
+	values map[string]string,
+) func(context.Context, string) (repository.Setting, error) {
 	t.Helper()
 	return func(_ context.Context, key string) (repository.Setting, error) {
 		raw, ok := values[key]

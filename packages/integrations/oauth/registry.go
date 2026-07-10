@@ -35,14 +35,26 @@ type registration struct {
 
 type Registration struct{ entry registration }
 
-func Register[T any](key string, presentation integration.Presentation, contract config.Contract[T], operations Operations[T]) Registration {
+func Register[T any](
+	key string,
+	presentation integration.Presentation,
+	contract config.Contract[T],
+	operations Operations[T],
+) Registration {
 	definitionErr := contract.ValidateDefinition()
 	if operations.AuthorizeURL == nil || operations.Exchange == nil {
 		definitionErr = errors.New("provider operation is missing")
 	}
 	return Registration{entry: registration{
-		descriptor: Descriptor{Key: key, Presentation: presentation, JSONSchema: contract.JSONSchema(), UISchema: contract.UISchema()},
-		create:     contract.CreateWrite, update: contract.UpdateWrite, view: contract.View,
+		descriptor: Descriptor{
+			Key:          key,
+			Presentation: presentation,
+			JSONSchema:   contract.JSONSchema(),
+			UISchema:     contract.UISchema(),
+		},
+		create: contract.CreateWrite,
+		update: contract.UpdateWrite,
+		view:   contract.View,
 		authorize: func(ctx context.Context, values map[string]any, redirectURI, state string) (string, FlowSecrets, error) {
 			typed, err := contract.Decode(values)
 			if err != nil {
@@ -69,13 +81,17 @@ type Registry struct {
 var oauthIconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registration, 0, len(registrations)), byKey: make(map[string]int, len(registrations))}
+	r := Registry{
+		entries: make([]registration, 0, len(registrations)),
+		byKey:   make(map[string]int, len(registrations)),
+	}
 	for _, item := range registrations {
 		e := item.entry
 		if e.descriptor.Key == "" || e.descriptor.Presentation.Name == "" || e.err != nil {
 			return Registry{}, errors.New("oauth provider registration is invalid")
 		}
-		if icon := e.descriptor.Presentation.IconRef; icon != "" && !oauthIconRefPattern.MatchString(icon) {
+		if icon := e.descriptor.Presentation.IconRef; icon != "" &&
+			!oauthIconRefPattern.MatchString(icon) {
 			return Registry{}, fmt.Errorf("provider %q has invalid icon_ref", e.descriptor.Key)
 		}
 		if _, exists := r.byKey[e.descriptor.Key]; exists {
@@ -103,28 +119,51 @@ func (r Registry) entry(provider string) (registration, bool) {
 	return r.entries[i], true
 }
 
-func (r Registry) AuthorizeURL(ctx context.Context, provider string, values map[string]any, redirectURI, state string) (string, FlowSecrets, error) {
+func (r Registry) AuthorizeURL(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	redirectURI, state string,
+) (string, FlowSecrets, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return "", FlowSecrets{}, ErrNotConfigured
 	}
 	return e.authorize(ctx, values, redirectURI, state)
 }
-func (r Registry) Exchange(ctx context.Context, provider string, values map[string]any, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
+
+func (r Registry) Exchange(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	code, redirectURI string,
+	secrets FlowSecrets,
+) (ExternalIdentity, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return ExternalIdentity{}, ErrNotConfigured
 	}
 	return e.exchange(ctx, values, code, redirectURI, secrets)
 }
-func (r Registry) CreateConfig(provider string, values map[string]any, secrets map[string]string) (map[string]any, error) {
+
+func (r Registry) CreateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("unknown oauth provider %q", provider)
 	}
 	return e.create(values, secrets)
 }
-func (r Registry) UpdateConfig(provider string, values map[string]any, secrets map[string]string, stored map[string]any) (map[string]any, error) {
+
+func (r Registry) UpdateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+	stored map[string]any,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("unknown oauth provider %q", provider)

@@ -24,7 +24,11 @@ const (
 
 var wechatHTTP = &http.Client{Timeout: 10 * time.Second}
 
-func wechatAuthorizeURL(_ context.Context, config providerConfig, redirectURI, state string) (string, oauthint.FlowSecrets, error) {
+func wechatAuthorizeURL(
+	_ context.Context,
+	config providerConfig,
+	redirectURI, state string,
+) (string, oauthint.FlowSecrets, error) {
 	url := wechatAuthorizeEndpoint + "?" + encodeQuery(
 		"appid", config.AppID,
 		"redirect_uri", redirectURI,
@@ -51,7 +55,12 @@ type wechatUserInfoResponse struct {
 	ErrMsg     string `json:"errmsg"`
 }
 
-func wechatExchange(ctx context.Context, config providerConfig, code, _ string, _ oauthint.FlowSecrets) (oauthint.ExternalIdentity, error) {
+func wechatExchange(
+	ctx context.Context,
+	config providerConfig,
+	code, _ string,
+	_ oauthint.FlowSecrets,
+) (oauthint.ExternalIdentity, error) {
 	tokenURL := wechatTokenEndpoint + "?" + encodeQuery(
 		"appid", config.AppID,
 		"secret", config.AppSecret,
@@ -63,7 +72,11 @@ func wechatExchange(ctx context.Context, config providerConfig, code, _ string, 
 		return oauthint.ExternalIdentity{}, fmt.Errorf("wechat token exchange: %w", err)
 	}
 	if token.ErrCode != 0 {
-		return oauthint.ExternalIdentity{}, fmt.Errorf("wechat token exchange: %s (%d)", token.ErrMsg, token.ErrCode)
+		return oauthint.ExternalIdentity{}, fmt.Errorf(
+			"wechat token exchange: %s (%d)",
+			token.ErrMsg,
+			token.ErrCode,
+		)
 	}
 
 	infoURL := wechatUserInfoEndpoint + "?" + encodeQuery(
@@ -75,7 +88,11 @@ func wechatExchange(ctx context.Context, config providerConfig, code, _ string, 
 		return oauthint.ExternalIdentity{}, fmt.Errorf("wechat userinfo: %w", err)
 	}
 	if info.ErrCode != 0 {
-		return oauthint.ExternalIdentity{}, fmt.Errorf("wechat userinfo: %s (%d)", info.ErrMsg, info.ErrCode)
+		return oauthint.ExternalIdentity{}, fmt.Errorf(
+			"wechat userinfo: %s (%d)",
+			info.ErrMsg,
+			info.ErrCode,
+		)
 	}
 
 	subject := token.UnionID

@@ -29,12 +29,18 @@ func (s *AuthService) CompleteOauthSignup(
 		return nil, s.internal(ctx, "load auth settings", err)
 	}
 	if !authCfg.RegistrationEnabled {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("registration is disabled"))
+		return nil, connect.NewError(
+			connect.CodePermissionDenied,
+			errors.New("registration is disabled"),
+		)
 	}
 
 	ticket, err := s.repo.ConsumeOauthSignupTicket(ctx, auth.HashSessionToken(req.Msg.GetTicket()))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid or expired ticket"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid or expired ticket"),
+		)
 	}
 	if err != nil {
 		return nil, s.internal(ctx, "consume signup ticket", err)
@@ -56,13 +62,23 @@ func (s *AuthService) CompleteOauthSignup(
 			return nil, err
 		}
 		values.phone = e164
-		if _, err := s.verifier.ConsumeCode(ctx, verify.PurposePhoneRegister, e164, req.Msg.GetPhoneCode()); err != nil {
+		if _, err := s.verifier.ConsumeCode(
+			ctx,
+			verify.PurposePhoneRegister,
+			e164,
+			req.Msg.GetPhoneCode(),
+		); err != nil {
 			return nil, s.verifyConsumeError(ctx, "consume phone register code", err)
 		}
 	}
 	if values.email != "" {
 		normalized := strings.ToLower(values.email)
-		if _, err := s.verifier.ConsumeCode(ctx, verify.PurposeEmailRegister, normalized, req.Msg.GetEmailCode()); err != nil {
+		if _, err := s.verifier.ConsumeCode(
+			ctx,
+			verify.PurposeEmailRegister,
+			normalized,
+			req.Msg.GetEmailCode(),
+		); err != nil {
 			return nil, s.verifyConsumeError(ctx, "consume email register code", err)
 		}
 		values.emailVerified = true
@@ -82,7 +98,10 @@ func (s *AuthService) CompleteOauthSignup(
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("this account is already registered"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("this account is already registered"),
+			)
 		}
 		return nil, s.internal(ctx, "create user", err)
 	}

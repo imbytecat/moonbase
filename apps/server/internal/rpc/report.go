@@ -25,7 +25,11 @@ type ReportService struct {
 // NewReportService wires the report aggregates. engine may be nil (tests
 // without a workflow executor) — the workflow breakdown is then empty rather
 // than an error, since the rest of the report is still meaningful.
-func NewReportService(repo repository.Querier, engine *workflow.Engine, logger *slog.Logger) *ReportService {
+func NewReportService(
+	repo repository.Querier,
+	engine *workflow.Engine,
+	logger *slog.Logger,
+) *ReportService {
 	return &ReportService{repo: repo, engine: engine, logger: logger}
 }
 

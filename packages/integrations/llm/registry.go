@@ -36,18 +36,35 @@ type registration struct {
 }
 type Registration struct{ entry registration }
 
-func Register[T any](key string, p integration.Presentation, c config.Contract[T], complete func(context.Context, T, Prompt) (string, error)) Registration {
+func Register[T any](
+	key string,
+	p integration.Presentation,
+	c config.Contract[T],
+	complete func(context.Context, T, Prompt) (string, error),
+) Registration {
 	definitionErr := c.ValidateDefinition()
 	if complete == nil {
 		definitionErr = errors.New("provider operation is missing")
 	}
-	return Registration{entry: registration{descriptor: Descriptor{Key: key, Presentation: p, JSONSchema: c.JSONSchema(), UISchema: c.UISchema()}, contract: contractOps{create: c.CreateWrite, update: c.UpdateWrite, view: c.View}, complete: func(ctx context.Context, v map[string]any, p Prompt) (string, error) {
-		typed, err := c.Decode(v)
-		if err != nil {
-			return "", fmt.Errorf("decode llm config: %w", err)
-		}
-		return complete(ctx, typed, p)
-	}, definitionErr: definitionErr}}
+	return Registration{
+		entry: registration{
+			descriptor: Descriptor{
+				Key:          key,
+				Presentation: p,
+				JSONSchema:   c.JSONSchema(),
+				UISchema:     c.UISchema(),
+			},
+			contract: contractOps{create: c.CreateWrite, update: c.UpdateWrite, view: c.View},
+			complete: func(ctx context.Context, v map[string]any, p Prompt) (string, error) {
+				typed, err := c.Decode(v)
+				if err != nil {
+					return "", fmt.Errorf("decode llm config: %w", err)
+				}
+				return complete(ctx, typed, p)
+			},
+			definitionErr: definitionErr,
+		},
+	}
 }
 
 type Registry struct {
@@ -58,7 +75,10 @@ type Registry struct {
 var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(items ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registration, 0, len(items)), byKey: make(map[string]int, len(items))}
+	r := Registry{
+		entries: make([]registration, 0, len(items)),
+		byKey:   make(map[string]int, len(items)),
+	}
 	for _, item := range items {
 		e := item.entry
 		if e.descriptor.Key == "" {
@@ -111,14 +131,25 @@ func (r Registry) Descriptors() []Descriptor {
 	}
 	return out
 }
-func (r Registry) CreateConfig(p string, v map[string]any, s map[string]string) (map[string]any, error) {
+
+func (r Registry) CreateConfig(
+	p string,
+	v map[string]any,
+	s map[string]string,
+) (map[string]any, error) {
 	e, ok := r.entry(p)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", p)
 	}
 	return e.contract.create(v, s)
 }
-func (r Registry) UpdateConfig(p string, v map[string]any, s map[string]string, old map[string]any) (map[string]any, error) {
+
+func (r Registry) UpdateConfig(
+	p string,
+	v map[string]any,
+	s map[string]string,
+	old map[string]any,
+) (map[string]any, error) {
 	e, ok := r.entry(p)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", p)
@@ -136,7 +167,13 @@ func (r Registry) ConfigUsable(provider string, values map[string]any) bool {
 	_, ok := r.ViewConfig(provider, values)
 	return ok
 }
-func (r Registry) Complete(ctx context.Context, provider string, values map[string]any, system, user string) (string, error) {
+
+func (r Registry) Complete(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	system, user string,
+) (string, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return "", ErrNotConfigured

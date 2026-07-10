@@ -223,7 +223,11 @@ func (s *Store) SetPayment(ctx context.Context, v Payment) error {
 	return s.set(ctx, keyPayment, v)
 }
 
-func getIntegration[P kitsettings.Profile[P]](ctx context.Context, s *Store, key string) (Integration[P], error) {
+func getIntegration[P kitsettings.Profile[P]](
+	ctx context.Context,
+	s *Store,
+	key string,
+) (Integration[P], error) {
 	var v Integration[P]
 	if err := s.get(ctx, key, &v); err != nil {
 		return v, err
@@ -253,7 +257,10 @@ func (s *Store) set(ctx context.Context, key string, v any) error {
 	if err != nil {
 		return fmt.Errorf("encode setting %s: %w", key, err)
 	}
-	if err := s.repo.UpsertSetting(ctx, repository.UpsertSettingParams{Key: key, Value: raw}); err != nil {
+	if err := s.repo.UpsertSetting(
+		ctx,
+		repository.UpsertSettingParams{Key: key, Value: raw},
+	); err != nil {
 		return fmt.Errorf("save setting %s: %w", key, err)
 	}
 	return nil

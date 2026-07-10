@@ -47,11 +47,14 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 
 	presignLogo := func() string {
 		t.Helper()
-		resp, err := storageClient.PresignSiteAssetUpload(ctx, connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
-			Kind:          "logo",
-			ContentType:   "image/png",
-			ContentLength: 1024,
-		}))
+		resp, err := storageClient.PresignSiteAssetUpload(
+			ctx,
+			connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
+				Kind:          "logo",
+				ContentType:   "image/png",
+				ContentLength: 1024,
+			}),
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,17 +63,23 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 	attachmentCount := func(fileID string) int {
 		t.Helper()
 		var n int
-		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM file_attachments WHERE file_id = $1`, fileID).Scan(&n); err != nil {
+		if err := pool.QueryRow(
+			ctx,
+			`SELECT count(*) FROM file_attachments WHERE file_id = $1`,
+			fileID,
+		).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
 	}
 	saveLogo := func(fileID string) {
 		t.Helper()
-		if _, err := settingsClient.UpdateSettings(ctx, connect.NewRequest(&settingsv1.UpdateSettingsRequest{
-			Site: &settingsv1.SiteSettings{Name: "Acme", LogoFileId: fileID},
-		})); err != nil {
+		if _, err := settingsClient.UpdateSettings(
+			ctx,
+			connect.NewRequest(&settingsv1.UpdateSettingsRequest{
+				Site: &settingsv1.SiteSettings{Name: "Acme", LogoFileId: fileID},
+			}),
+		); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -80,7 +89,11 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_, _ = pool.Exec(bg, `DELETE FROM settings WHERE key = 'site'`)
-		_, _ = pool.Exec(bg, `DELETE FROM file_attachments WHERE file_id = ANY($1)`, []string{fileA, fileB})
+		_, _ = pool.Exec(
+			bg,
+			`DELETE FROM file_attachments WHERE file_id = ANY($1)`,
+			[]string{fileA, fileB},
+		)
 		_, _ = pool.Exec(bg, `DELETE FROM files WHERE id = ANY($1)`, []string{fileA, fileB})
 	})
 
@@ -88,7 +101,10 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 	if got := attachmentCount(fileA); got != 1 {
 		t.Fatalf("after first save, logo file A attachments = %d, want 1", got)
 	}
-	first, err := settingsClient.GetSiteInfo(ctx, connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
+	first, err := settingsClient.GetSiteInfo(
+		ctx,
+		connect.NewRequest(&settingsv1.GetSiteInfoRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +119,10 @@ func TestReplaceSiteLogoTransfersAttachment(t *testing.T) {
 	if got := attachmentCount(fileA); got != 0 {
 		t.Fatalf("after replacement, old logo file A attachments = %d, want 0 (unattached)", got)
 	}
-	second, err := settingsClient.GetSiteInfo(ctx, connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
+	second, err := settingsClient.GetSiteInfo(
+		ctx,
+		connect.NewRequest(&settingsv1.GetSiteInfoRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +144,8 @@ func TestBackfillSiteAssetsIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.New(pool).UpsertSetting(ctx, repository.UpsertSettingParams{Key: "site", Value: legacy}); err != nil {
+	if err := repository.New(pool).
+		UpsertSetting(ctx, repository.UpsertSettingParams{Key: "site", Value: legacy}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -141,7 +161,8 @@ func TestBackfillSiteAssetsIsIdempotent(t *testing.T) {
 
 	countFiles := func() int {
 		var n int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM files WHERE object_key = $1`, logoKey).Scan(&n); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM files WHERE object_key = $1`, logoKey).
+			Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -154,8 +175,11 @@ func TestBackfillSiteAssetsIsIdempotent(t *testing.T) {
 		fileID  uuid.UUID
 		purpose string
 	)
-	if err := pool.QueryRow(ctx,
-		`SELECT id, purpose FROM files WHERE object_key = $1`, logoKey).Scan(&fileID, &purpose); err != nil {
+	if err := pool.QueryRow(
+		ctx,
+		`SELECT id, purpose FROM files WHERE object_key = $1`,
+		logoKey,
+	).Scan(&fileID, &purpose); err != nil {
 		t.Fatal(err)
 	}
 	if purpose != "site-assets" {
@@ -163,9 +187,11 @@ func TestBackfillSiteAssetsIsIdempotent(t *testing.T) {
 	}
 
 	var attachments int
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		`SELECT count(*) FROM file_attachments WHERE file_id = $1 AND owner_type = 'site' AND owner_id = 'logo'`,
-		fileID).Scan(&attachments); err != nil {
+		fileID,
+	).Scan(&attachments); err != nil {
 		t.Fatal(err)
 	}
 	if attachments != 1 {
@@ -177,7 +203,8 @@ func TestBackfillSiteAssetsIsIdempotent(t *testing.T) {
 		LogoFileID string `json:"logoFileId"`
 	}
 	var raw []byte
-	if err := pool.QueryRow(ctx, `SELECT value FROM settings WHERE key = 'site'`).Scan(&raw); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT value FROM settings WHERE key = 'site'`).
+		Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(raw, &stored); err != nil {

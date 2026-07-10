@@ -59,7 +59,10 @@ func (f *fakeFlowQuerier) GetUserMfa(context.Context, uuid.UUID) (repository.Use
 	return repository.UserMfa{}, pgx.ErrNoRows
 }
 
-func (f *fakeFlowQuerier) CreateVerificationToken(_ context.Context, arg repository.CreateVerificationTokenParams) (repository.VerificationToken, error) {
+func (f *fakeFlowQuerier) CreateVerificationToken(
+	_ context.Context,
+	arg repository.CreateVerificationTokenParams,
+) (repository.VerificationToken, error) {
 	row := repository.VerificationToken{
 		ID:         uuid.New(),
 		Purpose:    arg.Purpose,
@@ -72,7 +75,10 @@ func (f *fakeFlowQuerier) CreateVerificationToken(_ context.Context, arg reposit
 	return row, nil
 }
 
-func (f *fakeFlowQuerier) GetActiveVerificationToken(_ context.Context, arg repository.GetActiveVerificationTokenParams) (repository.VerificationToken, error) {
+func (f *fakeFlowQuerier) GetActiveVerificationToken(
+	_ context.Context,
+	arg repository.GetActiveVerificationTokenParams,
+) (repository.VerificationToken, error) {
 	for i := len(f.tokens) - 1; i >= 0; i-- {
 		t := f.tokens[i]
 		if t.Purpose == arg.Purpose && t.Target == arg.Target && !t.ConsumedAt.Valid {
@@ -82,7 +88,10 @@ func (f *fakeFlowQuerier) GetActiveVerificationToken(_ context.Context, arg repo
 	return repository.VerificationToken{}, pgx.ErrNoRows
 }
 
-func (f *fakeFlowQuerier) IncrementVerificationAttempts(_ context.Context, id uuid.UUID) (int32, error) {
+func (f *fakeFlowQuerier) IncrementVerificationAttempts(
+	_ context.Context,
+	id uuid.UUID,
+) (int32, error) {
 	for i := range f.tokens {
 		if f.tokens[i].ID == id {
 			f.tokens[i].Attempts++
@@ -102,7 +111,10 @@ func (f *fakeFlowQuerier) ConsumeVerificationToken(_ context.Context, id uuid.UU
 	return pgx.ErrNoRows
 }
 
-func (f *fakeFlowQuerier) CountRecentVerificationTokens(_ context.Context, _ repository.CountRecentVerificationTokensParams) (int64, error) {
+func (f *fakeFlowQuerier) CountRecentVerificationTokens(
+	_ context.Context,
+	_ repository.CountRecentVerificationTokensParams,
+) (int64, error) {
 	return f.recentCount, nil
 }
 
@@ -119,11 +131,21 @@ func (c *capturingSms) SendCode(_ context.Context, _, e164, code string) error {
 	return nil
 }
 
-func (c *capturingSms) SendCodeWith(ctx context.Context, _ string, _ map[string]any, e164, code string) error {
+func (c *capturingSms) SendCodeWith(
+	ctx context.Context,
+	_ string,
+	_ map[string]any,
+	e164, code string,
+) error {
 	return c.SendCode(ctx, sms.PurposeVerification, e164, code)
 }
 
-func (c *capturingSms) SendTemplateWith(ctx context.Context, _ string, _ map[string]any, _, e164, content string) error {
+func (c *capturingSms) SendTemplateWith(
+	ctx context.Context,
+	_ string,
+	_ map[string]any,
+	_, e164, content string,
+) error {
 	return c.SendCode(ctx, sms.PurposeVerification, e164, content)
 }
 
@@ -190,9 +212,12 @@ func TestBindPhoneRejectsWrongAndForeignCodes(t *testing.T) {
 	aliceCtx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: alice})
 	malloryCtx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: mallory})
 
-	if _, err := svc.SendPhoneBindCode(aliceCtx, connect.NewRequest(&authv1.SendPhoneBindCodeRequest{
-		PhoneNumber: "+8613800138000",
-	})); err != nil {
+	if _, err := svc.SendPhoneBindCode(
+		aliceCtx,
+		connect.NewRequest(&authv1.SendPhoneBindCodeRequest{
+			PhoneNumber: "+8613800138000",
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 	code := smser.code
@@ -219,9 +244,12 @@ func TestBindPhoneRejectsWrongAndForeignCodes(t *testing.T) {
 	// Mallory consumed Alice's token with that attempt, so re-issue for the
 	// happy path (fresh code, same phone, right user).
 	q.recentCount = 0
-	if _, err := svc.SendPhoneBindCode(aliceCtx, connect.NewRequest(&authv1.SendPhoneBindCodeRequest{
-		PhoneNumber: "+8613800138000",
-	})); err != nil {
+	if _, err := svc.SendPhoneBindCode(
+		aliceCtx,
+		connect.NewRequest(&authv1.SendPhoneBindCodeRequest{
+			PhoneNumber: "+8613800138000",
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.BindPhone(aliceCtx, connect.NewRequest(&authv1.BindPhoneRequest{
@@ -238,14 +266,21 @@ func TestBindPhoneRejectsWrongAndForeignCodes(t *testing.T) {
 func TestSmsLoginFlow(t *testing.T) {
 	q := newFlowQuerier()
 	userID := uuid.New()
-	q.usersByPhone["+8613800138000"] = repository.User{ID: userID, IsActive: true, Email: "u@example.com"}
+	q.usersByPhone["+8613800138000"] = repository.User{
+		ID:       userID,
+		IsActive: true,
+		Email:    "u@example.com",
+	}
 	smser := &capturingSms{}
 	svc := newFlowService(q, smser)
 
 	// Unbound phone: silent ok, nothing sent (anti-enumeration).
-	if _, err := svc.SendSmsLoginCode(t.Context(), connect.NewRequest(&authv1.SendSmsLoginCodeRequest{
-		PhoneNumber: "+8613900139000",
-	})); err != nil {
+	if _, err := svc.SendSmsLoginCode(
+		t.Context(),
+		connect.NewRequest(&authv1.SendSmsLoginCodeRequest{
+			PhoneNumber: "+8613900139000",
+		}),
+	); err != nil {
 		t.Fatalf("unbound phone must answer ok: %v", err)
 	}
 	if smser.target != "" {
@@ -253,9 +288,12 @@ func TestSmsLoginFlow(t *testing.T) {
 	}
 
 	// Bound phone: code sent; wrong code rejected; right code logs in.
-	if _, err := svc.SendSmsLoginCode(t.Context(), connect.NewRequest(&authv1.SendSmsLoginCodeRequest{
-		PhoneNumber: "+8613800138000",
-	})); err != nil {
+	if _, err := svc.SendSmsLoginCode(
+		t.Context(),
+		connect.NewRequest(&authv1.SendSmsLoginCodeRequest{
+			PhoneNumber: "+8613800138000",
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 	code := smser.code

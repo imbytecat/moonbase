@@ -14,21 +14,39 @@ import (
 )
 
 type providerConfig struct {
-	SiteKey   string `json:"siteKey" jsonschema:"required,title=站点密钥,minLength=1,maxLength=128"`
+	SiteKey   string `json:"siteKey"   jsonschema:"required,title=站点密钥,minLength=1,maxLength=128"`
 	SecretKey string `json:"secretKey" jsonschema:"required,title=服务端密钥,minLength=1,maxLength=128"`
 }
 
 func New(client *http.Client) captchaint.Registration {
-	return captchaint.Register("turnstile", integration.Presentation{Name: "Cloudflare 人机验证", Description: "通过托管挑战识别自动化访问", Color: "#f6821f", IconRef: "antd:SafetyCertificateOutlined"}, config.MustContract[providerConfig](config.Policy{Secrets: []string{"/secretKey"}}), captchaint.Operations[providerConfig]{SiteKey: func(c providerConfig) string { return c.SiteKey }, Verify: func(ctx context.Context, c providerConfig, token, ip string) error {
-		return verify(client, ctx, c, token, ip)
-	}})
+	return captchaint.Register(
+		"turnstile",
+		integration.Presentation{
+			Name:        "Cloudflare 人机验证",
+			Description: "通过托管挑战识别自动化访问",
+			Color:       "#f6821f",
+			IconRef:     "antd:SafetyCertificateOutlined",
+		},
+		config.MustContract[providerConfig](config.Policy{Secrets: []string{"/secretKey"}}),
+		captchaint.Operations[providerConfig]{
+			SiteKey: func(c providerConfig) string { return c.SiteKey },
+			Verify: func(ctx context.Context, c providerConfig, token, ip string) error {
+				return verify(client, ctx, c, token, ip)
+			},
+		},
+	)
 }
 func verify(client *http.Client, ctx context.Context, c providerConfig, token, ip string) error {
 	form := url.Values{"secret": {c.SecretKey}, "response": {token}}
 	if ip != "" {
 		form.Set("remoteip", ip)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://challenges.cloudflare.com/turnstile/v0/siteverify", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"https://challenges.cloudflare.com/turnstile/v0/siteverify",
+		strings.NewReader(form.Encode()),
+	)
 	if err != nil {
 		return err
 	}

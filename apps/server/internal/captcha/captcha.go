@@ -13,7 +13,14 @@ import (
 
 const PurposeAuth = "auth"
 
-var Purposes = integration.Catalog{{Key: PurposeAuth, Name: "认证人机验证", Description: "保护登录、注册与公开验证码请求", Cardinality: integration.Single}}
+var Purposes = integration.Catalog{
+	{
+		Key:         PurposeAuth,
+		Name:        "认证人机验证",
+		Description: "保护登录、注册与公开验证码请求",
+		Cardinality: integration.Single,
+	},
+}
 
 type Config = kitsettings.Integration[kitsettings.GenericProfile]
 type Store interface {

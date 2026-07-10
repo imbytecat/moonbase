@@ -47,11 +47,14 @@ func TestPermanentFileURLServesSiteLogoAnonymously(t *testing.T) {
 	settingsClient := settingsv1connect.NewSettingsServiceClient(client, baseURL)
 	storageClient := storagev1connect.NewStorageServiceClient(client, baseURL)
 
-	presigned, err := storageClient.PresignSiteAssetUpload(ctx, connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
-		Kind:          "logo",
-		ContentType:   "image/png",
-		ContentLength: 4,
-	}))
+	presigned, err := storageClient.PresignSiteAssetUpload(
+		ctx,
+		connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
+			Kind:          "logo",
+			ContentType:   "image/png",
+			ContentLength: 4,
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,13 +80,19 @@ func TestPermanentFileURLServesSiteLogoAnonymously(t *testing.T) {
 		t.Fatalf("PUT upload status = %d, want 200", putRes.StatusCode)
 	}
 
-	if _, err := settingsClient.UpdateSettings(ctx, connect.NewRequest(&settingsv1.UpdateSettingsRequest{
-		Site: &settingsv1.SiteSettings{Name: "Acme", LogoFileId: fileID},
-	})); err != nil {
+	if _, err := settingsClient.UpdateSettings(
+		ctx,
+		connect.NewRequest(&settingsv1.UpdateSettingsRequest{
+			Site: &settingsv1.SiteSettings{Name: "Acme", LogoFileId: fileID},
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 
-	info, err := settingsClient.GetSiteInfo(ctx, connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
+	info, err := settingsClient.GetSiteInfo(
+		ctx,
+		connect.NewRequest(&settingsv1.GetSiteInfoRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

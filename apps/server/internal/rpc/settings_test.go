@@ -25,7 +25,10 @@ type fakeSettingsQuerier struct {
 	setSite func(ctx context.Context, arg repository.SetSiteWithAssetsParams) error
 }
 
-func (f *fakeSettingsQuerier) GetSetting(_ context.Context, key string) (repository.Setting, error) {
+func (f *fakeSettingsQuerier) GetSetting(
+	_ context.Context,
+	key string,
+) (repository.Setting, error) {
 	raw, ok := f.values[key]
 	if !ok {
 		return repository.Setting{}, pgx.ErrNoRows
@@ -33,7 +36,10 @@ func (f *fakeSettingsQuerier) GetSetting(_ context.Context, key string) (reposit
 	return repository.Setting{Key: key, Value: raw}, nil
 }
 
-func (f *fakeSettingsQuerier) UpsertSetting(_ context.Context, arg repository.UpsertSettingParams) error {
+func (f *fakeSettingsQuerier) UpsertSetting(
+	_ context.Context,
+	arg repository.UpsertSettingParams,
+) error {
 	f.values[arg.Key] = arg.Value
 	return nil
 }
@@ -42,7 +48,10 @@ func (f *fakeSettingsQuerier) GetFile(ctx context.Context, id uuid.UUID) (reposi
 	return f.getFile(ctx, id)
 }
 
-func (f *fakeSettingsQuerier) SetSiteWithAssets(ctx context.Context, arg repository.SetSiteWithAssetsParams) error {
+func (f *fakeSettingsQuerier) SetSiteWithAssets(
+	ctx context.Context,
+	arg repository.SetSiteWithAssetsParams,
+) error {
 	if f.setSite != nil {
 		return f.setSite(ctx, arg)
 	}
@@ -67,7 +76,10 @@ func TestUpdateSettingsPhoneSignupRequiresSmsChannel(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Fatalf("code = %v, want failed_precondition (no SMS channel configured)", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want failed_precondition (no SMS channel configured)",
+			connect.CodeOf(err),
+		)
 	}
 }
 
@@ -82,19 +94,25 @@ func TestUpdateSettingsEmailSignupRequiresEmailChannel(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Fatalf("code = %v, want failed_precondition (no email channel configured)", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want failed_precondition (no email channel configured)",
+			connect.CodeOf(err),
+		)
 	}
 }
 
 func TestUpdateSettingsUsernameSignupNeedsNoChannel(t *testing.T) {
 	svc := newSettingsService(&fakeSettingsQuerier{values: map[string]json.RawMessage{}})
 
-	resp, err := svc.UpdateSettings(t.Context(), connect.NewRequest(&settingsv1.UpdateSettingsRequest{
-		Auth: &settingsv1.AuthSettings{
-			RegistrationEnabled: true,
-			SignupIdentifiers:   []string{"username"},
-		},
-	}))
+	resp, err := svc.UpdateSettings(
+		t.Context(),
+		connect.NewRequest(&settingsv1.UpdateSettingsRequest{
+			Auth: &settingsv1.AuthSettings{
+				RegistrationEnabled: true,
+				SignupIdentifiers:   []string{"username"},
+			},
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,16 +142,30 @@ func TestGetSiteInfoResolvesAssetURLsFromFileIDs(t *testing.T) {
 		getFile: func(_ context.Context, id uuid.UUID) (repository.File, error) {
 			switch id {
 			case logoID:
-				return repository.File{ID: id, ObjectKey: "site/logo-a.png", Purpose: "site-assets"}, nil
+				return repository.File{
+					ID:        id,
+					ObjectKey: "site/logo-a.png",
+					Purpose:   "site-assets",
+				}, nil
 			case faviconID:
-				return repository.File{ID: id, ObjectKey: "site/favicon-b.ico", Purpose: "site-assets"}, nil
+				return repository.File{
+					ID:        id,
+					ObjectKey: "site/favicon-b.ico",
+					Purpose:   "site-assets",
+				}, nil
 			}
 			return repository.File{}, pgx.ErrNoRows
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := settings.NewStore(q)
-	svc := NewSettingsService(store, q, mail.NewClient(store.Email, mail.NewRegistry(nil)), sms.NewRegistry(), logger)
+	svc := NewSettingsService(
+		store,
+		q,
+		mail.NewClient(store.Email, mail.NewRegistry(nil)),
+		sms.NewRegistry(),
+		logger,
+	)
 
 	resp, err := svc.GetSiteInfo(t.Context(), connect.NewRequest(&settingsv1.GetSiteInfoRequest{}))
 	if err != nil {
@@ -171,7 +203,10 @@ func TestUpdateSettingsRejectsNonSiteAssetFile(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("code = %v, want invalid_argument for a file that isn't a site asset", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want invalid_argument for a file that isn't a site asset",
+			connect.CodeOf(err),
+		)
 	}
 	if saved {
 		t.Fatal("must not save site settings pointing at a non-asset file")
@@ -181,9 +216,12 @@ func TestUpdateSettingsRejectsNonSiteAssetFile(t *testing.T) {
 func TestUpdateSettingsEmptyIdentifiersDefaultsToUsername(t *testing.T) {
 	svc := newSettingsService(&fakeSettingsQuerier{values: map[string]json.RawMessage{}})
 
-	resp, err := svc.UpdateSettings(t.Context(), connect.NewRequest(&settingsv1.UpdateSettingsRequest{
-		Auth: &settingsv1.AuthSettings{RegistrationEnabled: true},
-	}))
+	resp, err := svc.UpdateSettings(
+		t.Context(),
+		connect.NewRequest(&settingsv1.UpdateSettingsRequest{
+			Auth: &settingsv1.AuthSettings{RegistrationEnabled: true},
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

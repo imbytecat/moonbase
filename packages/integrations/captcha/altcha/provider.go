@@ -33,35 +33,56 @@ func New(load func(context.Context) ([]byte, error)) captchaint.Registration {
 		}
 		return hex.EncodeToString(raw), nil
 	}
-	return captchaint.Register("altcha", integration.Presentation{Name: "内置工作量验证", Description: "由本站签发并校验无外部依赖的计算挑战", Color: "#52c41a", IconRef: "antd:ThunderboltOutlined"}, config.MustContract[providerConfig](config.Policy{}), captchaint.Operations[providerConfig]{SiteKey: func(providerConfig) string { return "" }, Challenge: func(ctx context.Context, c providerConfig) (any, error) {
-		k, err := key(ctx)
-		if err != nil {
-			return nil, err
-		}
-		max := c.Difficulty
-		if max <= 0 {
-			max = defaultMaxNumber
-		}
-		expires := time.Now().Add(challengeTTL)
-		ch, err := lib.CreateChallenge(lib.ChallengeOptions{Algorithm: lib.SHA256, HMACKey: k, MaxNumber: max, Expires: &expires})
-		if err != nil {
-			return nil, fmt.Errorf("create altcha challenge: %w", err)
-		}
-		return ch, nil
-	}, Verify: func(ctx context.Context, _ providerConfig, token, _ string) error {
-		k, err := key(ctx)
-		if err != nil {
-			return err
-		}
-		ok, err := lib.VerifySolutionSafe(token, k, true)
-		if err != nil {
-			return fmt.Errorf("altcha verify: %w", err)
-		}
-		if !ok || !replay.consume(token, time.Now().Add(challengeTTL)) {
-			return fmt.Errorf("captcha verification failed")
-		}
-		return nil
-	}})
+	return captchaint.Register(
+		"altcha",
+		integration.Presentation{
+			Name:        "内置工作量验证",
+			Description: "由本站签发并校验无外部依赖的计算挑战",
+			Color:       "#52c41a",
+			IconRef:     "antd:ThunderboltOutlined",
+		},
+		config.MustContract[providerConfig](config.Policy{}),
+		captchaint.Operations[providerConfig]{
+			SiteKey: func(providerConfig) string { return "" },
+			Challenge: func(ctx context.Context, c providerConfig) (any, error) {
+				k, err := key(ctx)
+				if err != nil {
+					return nil, err
+				}
+				max := c.Difficulty
+				if max <= 0 {
+					max = defaultMaxNumber
+				}
+				expires := time.Now().Add(challengeTTL)
+				ch, err := lib.CreateChallenge(
+					lib.ChallengeOptions{
+						Algorithm: lib.SHA256,
+						HMACKey:   k,
+						MaxNumber: max,
+						Expires:   &expires,
+					},
+				)
+				if err != nil {
+					return nil, fmt.Errorf("create altcha challenge: %w", err)
+				}
+				return ch, nil
+			},
+			Verify: func(ctx context.Context, _ providerConfig, token, _ string) error {
+				k, err := key(ctx)
+				if err != nil {
+					return err
+				}
+				ok, err := lib.VerifySolutionSafe(token, k, true)
+				if err != nil {
+					return fmt.Errorf("altcha verify: %w", err)
+				}
+				if !ok || !replay.consume(token, time.Now().Add(challengeTTL)) {
+					return fmt.Errorf("captcha verification failed")
+				}
+				return nil
+			},
+		},
+	)
 }
 func (r *replayCache) consume(id string, expires time.Time) bool {
 	r.mu.Lock()

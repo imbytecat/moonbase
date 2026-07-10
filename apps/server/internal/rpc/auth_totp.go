@@ -132,15 +132,24 @@ func (s *AuthService) LoginWithTotp(
 	ctx context.Context,
 	req *connect.Request[authv1.LoginWithTotpRequest],
 ) (*connect.Response[authv1.LoginWithTotpResponse], error) {
-	ticket, err := s.repo.ConsumeOauthSignupTicket(ctx, auth.HashSessionToken(req.Msg.GetMfaTicket()))
+	ticket, err := s.repo.ConsumeOauthSignupTicket(
+		ctx,
+		auth.HashSessionToken(req.Msg.GetMfaTicket()),
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("sign-in attempt expired, start over"))
+		return nil, connect.NewError(
+			connect.CodeUnauthenticated,
+			errors.New("sign-in attempt expired, start over"),
+		)
 	}
 	if err != nil {
 		return nil, s.internal(ctx, "consume mfa ticket", err)
 	}
 	if ticket.Provider != mfaTicketProvider {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("sign-in attempt expired, start over"))
+		return nil, connect.NewError(
+			connect.CodeUnauthenticated,
+			errors.New("sign-in attempt expired, start over"),
+		)
 	}
 	userID, err := uuid.Parse(ticket.ProviderID)
 	if err != nil {
@@ -149,7 +158,10 @@ func (s *AuthService) LoginWithTotp(
 
 	mfa, err := s.repo.GetUserMfa(ctx, userID)
 	if err != nil || !mfa.ActivatedAt.Valid {
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("sign-in attempt expired, start over"))
+		return nil, connect.NewError(
+			connect.CodeUnauthenticated,
+			errors.New("sign-in attempt expired, start over"),
+		)
 	}
 
 	code := strings.TrimSpace(req.Msg.GetCode())

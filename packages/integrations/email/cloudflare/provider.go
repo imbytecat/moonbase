@@ -16,10 +16,10 @@ import (
 )
 
 type providerConfig struct {
-	FromAddress string `json:"fromAddress" jsonschema:"required,title=发件地址,minLength=1,maxLength=254"`
+	FromAddress string `json:"fromAddress"        jsonschema:"required,title=发件地址,minLength=1,maxLength=254"`
 	FromName    string `json:"fromName,omitempty" jsonschema:"title=发件人名称,maxLength=100"`
-	AccountID   string `json:"accountId" jsonschema:"required,title=账户 ID,minLength=1,maxLength=64"`
-	APIToken    string `json:"apiToken" jsonschema:"required,title=API 令牌,minLength=1,maxLength=256"`
+	AccountID   string `json:"accountId"          jsonschema:"required,title=账户 ID,minLength=1,maxLength=64"`
+	APIToken    string `json:"apiToken"           jsonschema:"required,title=API 令牌,minLength=1,maxLength=256"`
 }
 
 type driver struct{ http *http.Client }
@@ -58,7 +58,12 @@ func (d driver) send(ctx context.Context, cfg providerConfig, message email.Mess
 
 	endpoint := fmt.Sprintf(
 		"https://api.cloudflare.com/client/v4/accounts/%s/email/sending/send", cfg.AccountID)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		endpoint,
+		bytes.NewReader(payload),
+	)
 	if err != nil {
 		return err
 	}
@@ -86,7 +91,11 @@ func (d driver) send(ctx context.Context, cfg providerConfig, message email.Mess
 		return nil
 	}
 	if len(result.Errors) > 0 {
-		return fmt.Errorf("cloudflare send: %s (code %d)", result.Errors[0].Message, result.Errors[0].Code)
+		return fmt.Errorf(
+			"cloudflare send: %s (code %d)",
+			result.Errors[0].Message,
+			result.Errors[0].Code,
+		)
 	}
 	return fmt.Errorf("cloudflare send: http %d", response.StatusCode)
 }

@@ -35,7 +35,11 @@ type StorageService struct {
 	logger  *slog.Logger
 }
 
-func NewStorageService(repo repository.Querier, objects storage.ObjectStore, logger *slog.Logger) *StorageService {
+func NewStorageService(
+	repo repository.Querier,
+	objects storage.ObjectStore,
+	logger *slog.Logger,
+) *StorageService {
 	return &StorageService{repo: repo, objects: objects, logger: logger}
 }
 

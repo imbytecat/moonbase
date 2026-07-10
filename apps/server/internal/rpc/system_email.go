@@ -47,7 +47,10 @@ func (s *systemEmail) CreateEmailProfile(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	profile := kitsettings.GenericProfile{
-		Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical,
+		Id:       uuid.NewString(),
+		Name:     input.GetName(),
+		Provider: input.GetProvider(),
+		Config:   canonical,
 	}
 	settings.Profiles = append(settings.Profiles, profile)
 	if err := s.settings.SetEmail(ctx, settings); err != nil {
@@ -76,7 +79,11 @@ func (s *systemEmail) UpdateEmailProfile(
 				errors.New("email provider cannot be changed"))
 		}
 		canonical, err := s.emailRegistry.UpdateConfig(
-			stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+			stored.Provider,
+			configValues(input.GetConfig()),
+			input.GetConfig().GetSecrets(),
+			stored.Config,
+		)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
@@ -129,8 +136,12 @@ func (s *systemEmail) SendTestEmail(
 		"Test email", "This is a test email from your admin panel. Delivery is working.")
 	if err != nil {
 		return connect.NewResponse(&systemv1.SendTestEmailResponse{
-			Ok:      false,
-			Message: testFailureMessage(err, mail.ErrNotConfigured, "email is not configured: fill in the delivery settings and from address"),
+			Ok: false,
+			Message: testFailureMessage(
+				err,
+				mail.ErrNotConfigured,
+				"email is not configured: fill in the delivery settings and from address",
+			),
 		}), nil
 	}
 	return connect.NewResponse(&systemv1.SendTestEmailResponse{Ok: true}), nil
@@ -152,9 +163,16 @@ func (s *systemEmail) resolveEmailTestProfile(
 					errors.New("email provider cannot be changed"))
 			}
 			canonical, err := s.emailRegistry.UpdateConfig(
-				stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+				stored.Provider,
+				configValues(input.GetConfig()),
+				input.GetConfig().GetSecrets(),
+				stored.Config,
+			)
 			if err != nil {
-				return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
+				return kitsettings.GenericProfile{}, connect.NewError(
+					connect.CodeInvalidArgument,
+					err,
+				)
 			}
 			return kitsettings.GenericProfile{
 				Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical,
@@ -166,7 +184,10 @@ func (s *systemEmail) resolveEmailTestProfile(
 			return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		return kitsettings.GenericProfile{
-			Id: input.GetId(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical,
+			Id:       input.GetId(),
+			Name:     input.GetName(),
+			Provider: input.GetProvider(),
+			Config:   canonical,
 		}, nil
 	}
 	if id != "" {
@@ -215,7 +236,10 @@ func (s *systemEmail) DescribeEmailProviders(
 	_ *connect.Request[systemv1.DescribeEmailProvidersRequest],
 ) (*connect.Response[systemv1.DescribeEmailProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeEmailProvidersResponse{
-		Purposes: describePurposes(mail.Purposes), Providers: describeEmailProviders(s.emailRegistry),
+		Purposes: describePurposes(
+			mail.Purposes,
+		),
+		Providers: describeEmailProviders(s.emailRegistry),
 	}), nil
 }
 

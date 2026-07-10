@@ -21,7 +21,9 @@ type settlementRepo struct {
 	retryCount int
 }
 
-func (r *settlementRepo) ClaimSettlementEvent(context.Context) (repository.PaymentSettlementEvent, error) {
+func (r *settlementRepo) ClaimSettlementEvent(
+	context.Context,
+) (repository.PaymentSettlementEvent, error) {
 	if r.delivered {
 		return repository.PaymentSettlementEvent{}, pgx.ErrNoRows
 	}
@@ -34,7 +36,10 @@ func (r *settlementRepo) MarkSettlementEventDelivered(context.Context, uuid.UUID
 	return nil
 }
 
-func (r *settlementRepo) RetrySettlementEvent(_ context.Context, arg repository.RetrySettlementEventParams) error {
+func (r *settlementRepo) RetrySettlementEvent(
+	_ context.Context,
+	arg repository.RetrySettlementEventParams,
+) error {
 	r.retryCount++
 	r.event.LastError = arg.LastError
 	return nil

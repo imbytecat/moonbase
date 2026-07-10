@@ -54,7 +54,10 @@ func (s *RoleService) ListPermissions(
 ) (*connect.Response[rolev1.ListPermissionsResponse], error) {
 	out := make([]*rolev1.PermissionInfo, len(auth.Catalog))
 	for i, p := range auth.Catalog {
-		out[i] = &rolev1.PermissionInfo{Permission: permissionEnum(p.Key), Description: p.Description}
+		out[i] = &rolev1.PermissionInfo{
+			Permission:  permissionEnum(p.Key),
+			Description: p.Description,
+		}
 	}
 	return connect.NewResponse(&rolev1.ListPermissionsResponse{Permissions: out}), nil
 }
@@ -74,7 +77,10 @@ func (s *RoleService) CreateRole(
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("role name already exists"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("role name already exists"),
+			)
 		}
 		return nil, s.internal(ctx, "create role", err)
 	}
@@ -126,7 +132,10 @@ func (s *RoleService) UpdateRole(
 	role, err := s.repo.UpdateRole(ctx, params)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("role name already exists"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("role name already exists"),
+			)
 		}
 		return nil, s.internal(ctx, "update role", err)
 	}
@@ -172,7 +181,10 @@ func (s *RoleService) DeleteRole(
 		return nil, s.internal(ctx, "get role", err)
 	}
 	if role.IsSystem {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("system roles cannot be deleted"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("system roles cannot be deleted"),
+		)
 	}
 	count, err := s.repo.CountUsersWithRole(ctx, id)
 	if err != nil {
@@ -215,7 +227,10 @@ func toProtoRole(r repository.Role, perms []string) *rolev1.Role {
 func validatePermissions(perms []string) error {
 	for _, p := range perms {
 		if !auth.IsKnownPermission(p) {
-			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown permission %q", p))
+			return connect.NewError(
+				connect.CodeInvalidArgument,
+				fmt.Errorf("unknown permission %q", p),
+			)
 		}
 	}
 	return nil

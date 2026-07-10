@@ -24,7 +24,11 @@ type UserService struct {
 	logger   *slog.Logger
 }
 
-func NewUserService(repo repository.Querier, notifier notification.Publisher, logger *slog.Logger) *UserService {
+func NewUserService(
+	repo repository.Querier,
+	notifier notification.Publisher,
+	logger *slog.Logger,
+) *UserService {
 	return &UserService{repo: repo, notifier: notifier, logger: logger}
 }
 
@@ -54,7 +58,10 @@ func (s *UserService) CreateUser(
 	req *connect.Request[userv1.CreateUserRequest],
 ) (*connect.Response[userv1.CreateUserResponse], error) {
 	if req.Msg.GetUsername() == "" && req.Msg.GetEmail() == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("username or email is required"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("username or email is required"),
+		)
 	}
 	hash, err := auth.HashPassword(req.Msg.GetPassword())
 	if err != nil {
@@ -68,7 +75,10 @@ func (s *UserService) CreateUser(
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("username or email is already registered"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("username or email is already registered"),
+			)
 		}
 		return nil, s.internal(ctx, "create user", err)
 	}
@@ -112,7 +122,10 @@ func (s *UserService) UpdateUser(
 	}
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("email is already registered"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("email is already registered"),
+			)
 		}
 		return nil, s.internal(ctx, "update user", err)
 	}
@@ -166,7 +179,10 @@ func (s *UserService) DeleteUser(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid id"))
 	}
 	if caller := auth.IdentityFromContext(ctx); caller != nil && caller.UserID == id {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cannot delete your own account"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("cannot delete your own account"),
+		)
 	}
 	if err := s.repo.DeleteUser(ctx, id); err != nil {
 		return nil, s.internal(ctx, "delete user", err)

@@ -26,7 +26,10 @@ func (f *fakeRoleQuerier) GetRole(ctx context.Context, id uuid.UUID) (repository
 	return f.getRole(ctx, id)
 }
 
-func (f *fakeRoleQuerier) UpdateRole(ctx context.Context, arg repository.UpdateRoleParams) (repository.Role, error) {
+func (f *fakeRoleQuerier) UpdateRole(
+	ctx context.Context,
+	arg repository.UpdateRoleParams,
+) (repository.Role, error) {
 	return f.updateRole(ctx, arg)
 }
 
@@ -34,7 +37,10 @@ func (f *fakeRoleQuerier) DeleteRolePermissions(ctx context.Context, roleID uuid
 	return f.deleteRolePermissions(ctx, roleID)
 }
 
-func (f *fakeRoleQuerier) AddRolePermissions(ctx context.Context, arg repository.AddRolePermissionsParams) error {
+func (f *fakeRoleQuerier) AddRolePermissions(
+	ctx context.Context,
+	arg repository.AddRolePermissionsParams,
+) error {
 	return f.addRolePermissions(ctx, arg)
 }
 
@@ -51,7 +57,12 @@ func TestUpdateRoleAdminWildcardImmutable(t *testing.T) {
 			if arg.Name.Valid {
 				t.Fatal("system role name must not be updatable")
 			}
-			return repository.Role{ID: adminID, Name: "admin", IsSystem: true, Description: arg.Description.String}, nil
+			return repository.Role{
+				ID:          adminID,
+				Name:        "admin",
+				IsSystem:    true,
+				Description: arg.Description.String,
+			}, nil
 		},
 		deleteRolePermissions: func(context.Context, uuid.UUID) error {
 			t.Fatal("admin permissions must not be cleared")

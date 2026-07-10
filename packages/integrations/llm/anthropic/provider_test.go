@@ -17,10 +17,18 @@ func TestCompleteUsesMessagesAPIAndSystemPrompt(t *testing.T) {
 		path = r.URL.Path
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"你好"}],"model":"model","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+		_, _ = w.Write(
+			[]byte(
+				`{"id":"m","type":"message","role":"assistant","content":[{"type":"text","text":"你好"}],"model":"model","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`,
+			),
+		)
 	}))
 	defer srv.Close()
-	got, err := complete(t.Context(), providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"}, llmint.Prompt{System: "系统", User: "用户"})
+	got, err := complete(
+		t.Context(),
+		providerConfig{BaseURL: srv.URL, APIKey: "key", Model: "model"},
+		llmint.Prompt{System: "系统", User: "用户"},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

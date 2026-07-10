@@ -33,7 +33,10 @@ func (f *fileQuerier) GetFile(_ context.Context, id uuid.UUID) (repository.File,
 	return file, nil
 }
 
-func newFileHandlerFixture(t *testing.T, files map[uuid.UUID]repository.File) (*settings.Store, *httptest.Server, string) {
+func newFileHandlerFixture(
+	t *testing.T,
+	files map[uuid.UUID]repository.File,
+) (*settings.Store, *httptest.Server, string) {
 	t.Helper()
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
@@ -54,14 +57,23 @@ func newFileHandlerFixture(t *testing.T, files map[uuid.UUID]repository.File) (*
 func TestFileHandlerServesPublicLocalFile(t *testing.T) {
 	fileID := uuid.New()
 	files := map[uuid.UUID]repository.File{
-		fileID: {ID: fileID, ObjectKey: "u1/pic.png", ContentType: "image/png", Purpose: PurposeAvatars},
+		fileID: {
+			ID:          fileID,
+			ObjectKey:   "u1/pic.png",
+			ContentType: "image/png",
+			Purpose:     PurposeAvatars,
+		},
 	}
 	_, srv, dir := newFileHandlerFixture(t, files)
 
 	if err := os.MkdirAll(filepath.Join(dir, "u1"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "u1", "pic.png"), []byte("payload"), 0o640); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(dir, "u1", "pic.png"),
+		[]byte("payload"),
+		0o640,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,7 +120,12 @@ func TestFileHandlerPrivatePurposeRequiresAuthThenRedirectsToSignedURL(t *testin
 	const privatePurpose = "private-test"
 	fileID := uuid.New()
 	files := map[uuid.UUID]repository.File{
-		fileID: {ID: fileID, ObjectKey: "m1/doc.pdf", ContentType: "application/pdf", Purpose: privatePurpose},
+		fileID: {
+			ID:          fileID,
+			ObjectKey:   "m1/doc.pdf",
+			ContentType: "application/pdf",
+			Purpose:     privatePurpose,
+		},
 	}
 
 	store, client := newLocalFixture(t)
@@ -157,7 +174,12 @@ func TestFileHandlerPrivatePurposeRequiresAuthThenRedirectsToSignedURL(t *testin
 func TestFileHandlerRedirectsPublicS3ToStableURL(t *testing.T) {
 	fileID := uuid.New()
 	files := &fileQuerier{files: map[uuid.UUID]repository.File{
-		fileID: {ID: fileID, ObjectKey: "u1/pic.png", ContentType: "image/png", Purpose: PurposeAvatars},
+		fileID: {
+			ID:          fileID,
+			ObjectKey:   "u1/pic.png",
+			ContentType: "image/png",
+			Purpose:     PurposeAvatars,
+		},
 	}}
 
 	store := settings.NewStore(&memQuerier{rows: map[string][]byte{}})

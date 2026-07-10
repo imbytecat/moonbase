@@ -46,7 +46,10 @@ func (s *Store) signKey(ctx context.Context, key string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode sign key %s: %w", key, err)
 	}
-	row, err := s.repo.GetOrCreateSetting(ctx, repository.GetOrCreateSettingParams{Key: key, Value: raw})
+	row, err := s.repo.GetOrCreateSetting(
+		ctx,
+		repository.GetOrCreateSettingParams{Key: key, Value: raw},
+	)
 	if err != nil {
 		return nil, err
 	}

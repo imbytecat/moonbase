@@ -34,12 +34,19 @@ func (s *AuthService) OauthAuthorize(w http.ResponseWriter, r *http.Request) {
 		s.oauthFail(w, r, "internal error")
 		return
 	}
-	authorizeURL, secrets, err := s.oauth.AuthorizeURL(r.Context(), provider, s.oauthRedirectURI(provider), state)
+	authorizeURL, secrets, err := s.oauth.AuthorizeURL(
+		r.Context(),
+		provider,
+		s.oauthRedirectURI(provider),
+		state,
+	)
 	if err != nil {
 		s.oauthFail(w, r, "this login method is not available")
 		return
 	}
-	cookieValue, err := encodeOauthState(oauthState{State: state, Nonce: secrets.Nonce, Verifier: secrets.Verifier})
+	cookieValue, err := encodeOauthState(
+		oauthState{State: state, Nonce: secrets.Nonce, Verifier: secrets.Verifier},
+	)
 	if err != nil {
 		s.oauthFail(w, r, "internal error")
 		return
@@ -72,10 +79,16 @@ func (s *AuthService) OauthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	external, err := s.oauth.Exchange(ctx, provider, code, s.oauthRedirectURI(provider), oauth.FlowSecrets{
-		Nonce:    flow.Nonce,
-		Verifier: flow.Verifier,
-	})
+	external, err := s.oauth.Exchange(
+		ctx,
+		provider,
+		code,
+		s.oauthRedirectURI(provider),
+		oauth.FlowSecrets{
+			Nonce:    flow.Nonce,
+			Verifier: flow.Verifier,
+		},
+	)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "oauth exchange failed", "provider", provider, "error", err)
 		s.oauthFail(w, r, "sign-in failed, please try again")
@@ -121,7 +134,12 @@ func (s *AuthService) oauthSignIn(w http.ResponseWriter, r *http.Request, userID
 
 // oauthBind links the external identity to the already-signed-in account and
 // returns to the profile page.
-func (s *AuthService) oauthBind(w http.ResponseWriter, r *http.Request, userID uuid.UUID, external oauth.ExternalIdentity) {
+func (s *AuthService) oauthBind(
+	w http.ResponseWriter,
+	r *http.Request,
+	userID uuid.UUID,
+	external oauth.ExternalIdentity,
+) {
 	ctx := r.Context()
 	if _, err := s.repo.CreateIdentity(ctx, repository.CreateIdentityParams{
 		UserID:     userID,
@@ -138,12 +156,21 @@ func (s *AuthService) oauthBind(w http.ResponseWriter, r *http.Request, userID u
 		s.oauthFail(w, r, "binding failed, please try again")
 		return
 	}
-	http.Redirect(w, r, "/profile?oauthBound="+url.QueryEscape(external.ProviderKey), http.StatusFound)
+	http.Redirect(
+		w,
+		r,
+		"/profile?oauthBound="+url.QueryEscape(external.ProviderKey),
+		http.StatusFound,
+	)
 }
 
 // oauthHandOff stores a one-time signup ticket (only its hash) and sends the
 // browser to the completion form; the RPC CompleteOauthSignup consumes it.
-func (s *AuthService) oauthHandOff(w http.ResponseWriter, r *http.Request, external oauth.ExternalIdentity) {
+func (s *AuthService) oauthHandOff(
+	w http.ResponseWriter,
+	r *http.Request,
+	external oauth.ExternalIdentity,
+) {
 	ctx := r.Context()
 	ticket, err := randomToken()
 	if err != nil {

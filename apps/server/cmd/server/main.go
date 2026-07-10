@@ -74,7 +74,13 @@ func run() error {
 		return err
 	}
 
-	if err := auth.Seed(ctx, repository.New(pool), logger, cfg.Auth.AdminUsername, cfg.Auth.AdminPassword); err != nil {
+	if err := auth.Seed(
+		ctx,
+		repository.New(pool),
+		logger,
+		cfg.Auth.AdminUsername,
+		cfg.Auth.AdminPassword,
+	); err != nil {
 		return err
 	}
 
@@ -94,7 +100,14 @@ func run() error {
 	reclaimRepo := repository.New(pool)
 	storageRegistry := storage.NewRegistry()
 	reclaimObjects := storage.NewClient(settings.NewStore(reclaimRepo), storageRegistry)
-	engine, err := workflow.New(ctx, cfg.Database.URL, "moonbase", reclaimRepo, reclaimObjects, logger)
+	engine, err := workflow.New(
+		ctx,
+		cfg.Database.URL,
+		"moonbase",
+		reclaimRepo,
+		reclaimObjects,
+		logger,
+	)
 	if err != nil {
 		return err
 	}

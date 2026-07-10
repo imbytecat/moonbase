@@ -42,7 +42,12 @@ type PlanResult struct {
 	Input     form.Schema
 }
 
-func PlanConfigured(descriptor ProviderDescriptor, provider string, configured []string, request PlanRequest) (PlanResult, error) {
+func PlanConfigured(
+	descriptor ProviderDescriptor,
+	provider string,
+	configured []string,
+	request PlanRequest,
+) (PlanResult, error) {
 	if !slices.ContainsFunc(descriptor.Methods, func(method PaymentMethodDescriptor) bool {
 		return method.Key == request.PaymentMethod
 	}) {
@@ -51,7 +56,11 @@ func PlanConfigured(descriptor ProviderDescriptor, provider string, configured [
 
 	offered := configuredProducts(configured, descriptor.Products)
 	for _, productID := range productPriority(provider, request.Client.UserAgent) {
-		if product := productByID(offered, productID); product != nil && product.Method == request.PaymentMethod {
+		if product := productByID(
+			offered,
+			productID,
+		); product != nil &&
+			product.Method == request.PaymentMethod {
 			return PlanResult{ProductID: product.ID, Input: product.Input}, nil
 		}
 	}
@@ -68,7 +77,8 @@ func configuredProducts(signed []string, catalog []ProductDescriptor) []ProductD
 }
 
 func productPriority(provider, userAgent string) []string {
-	mobile := strings.Contains(userAgent, "Mobile") || strings.Contains(userAgent, "Android") || strings.Contains(userAgent, "iPhone")
+	mobile := strings.Contains(userAgent, "Mobile") || strings.Contains(userAgent, "Android") ||
+		strings.Contains(userAgent, "iPhone")
 	switch provider {
 	case "alipay":
 		if mobile {

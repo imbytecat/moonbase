@@ -42,7 +42,11 @@ func TestLoadDefaults(t *testing.T) {
 		{"server.host", cfg.Server.Host, "0.0.0.0"},
 		{"server.port", cfg.Server.Port, 8080},
 		{"server.public_url", cfg.Server.PublicURL, "http://localhost:5173"},
-		{"database.url", cfg.Database.URL, "postgres://postgres:postgres@localhost:5432/app?sslmode=disable"},
+		{
+			"database.url",
+			cfg.Database.URL,
+			"postgres://postgres:postgres@localhost:5432/app?sslmode=disable",
+		},
 		{"auth.session_ttl_hours", cfg.Auth.SessionTTLHours, 168},
 		{"auth.session_max_lifetime_hours", cfg.Auth.SessionMaxLifetimeHours, 720},
 		{"auth.secure_cookie", cfg.Auth.SecureCookie, false},
@@ -70,7 +74,10 @@ func TestLoadDefaults(t *testing.T) {
 		}
 	}
 	if len(cfg.CORS.AllowedOrigins) != 1 || cfg.CORS.AllowedOrigins[0] != "http://localhost:5173" {
-		t.Errorf("cors.allowed_origins = %v, want [http://localhost:5173] (default)", cfg.CORS.AllowedOrigins)
+		t.Errorf(
+			"cors.allowed_origins = %v, want [http://localhost:5173] (default)",
+			cfg.CORS.AllowedOrigins,
+		)
 	}
 }
 
@@ -145,7 +152,10 @@ func TestLoadEnvOverrides(t *testing.T) {
 		}
 	}
 	if len(cfg.CORS.AllowedOrigins) != 2 || cfg.CORS.AllowedOrigins[0] != "https://a.example" {
-		t.Errorf("cors.allowed_origins = %v, want two origins (missing default tag on the field?)", cfg.CORS.AllowedOrigins)
+		t.Errorf(
+			"cors.allowed_origins = %v, want two origins (missing default tag on the field?)",
+			cfg.CORS.AllowedOrigins,
+		)
 	}
 }
 
@@ -155,9 +165,9 @@ type sampleNested struct {
 }
 
 type sample struct {
-	Name    string       `mapstructure:"name" default:"anon"`
+	Name    string       `mapstructure:"name"    default:"anon"`
 	Enabled bool         `mapstructure:"enabled" default:"true"`
-	Tags    []string     `mapstructure:"tags" default:"a,b"`
+	Tags    []string     `mapstructure:"tags"    default:"a,b"`
 	Nested  sampleNested `mapstructure:"nested"`
 }
 

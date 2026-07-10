@@ -12,5 +12,9 @@ import (
 
 func NewRegistry(store Store) captchaint.Registry {
 	client := &http.Client{Timeout: 10 * time.Second}
-	return captchaint.MustRegistry(turnstile.New(client), geetest.New(client), altcha.New(store.CaptchaAltchaKey))
+	return captchaint.MustRegistry(
+		turnstile.New(client),
+		geetest.New(client),
+		altcha.New(store.CaptchaAltchaKey),
+	)
 }

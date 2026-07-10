@@ -42,7 +42,12 @@ type registration struct {
 }
 type Registration struct{ entry registration }
 
-func Register[T any](key string, presentation integration.Presentation, contract config.Contract[T], ops Operations[T]) Registration {
+func Register[T any](
+	key string,
+	presentation integration.Presentation,
+	contract config.Contract[T],
+	ops Operations[T],
+) Registration {
 	definitionErr := contract.ValidateDefinition()
 	if ops.SiteKey == nil || ops.Verify == nil {
 		definitionErr = errors.New("provider operation is missing")
@@ -55,7 +60,20 @@ func Register[T any](key string, presentation integration.Presentation, contract
 		}
 		return typed, nil
 	}
-	e := registration{descriptor: Descriptor{Key: key, Presentation: presentation, JSONSchema: contract.JSONSchema(), UISchema: contract.UISchema()}, contract: contractOps{create: contract.CreateWrite, update: contract.UpdateWrite, view: contract.View}, definitionErr: definitionErr}
+	e := registration{
+		descriptor: Descriptor{
+			Key:          key,
+			Presentation: presentation,
+			JSONSchema:   contract.JSONSchema(),
+			UISchema:     contract.UISchema(),
+		},
+		contract: contractOps{
+			create: contract.CreateWrite,
+			update: contract.UpdateWrite,
+			view:   contract.View,
+		},
+		definitionErr: definitionErr,
+	}
 	e.ops.siteKey = func(values map[string]any) (string, error) {
 		typed, err := decode(values)
 		if err != nil {
@@ -90,7 +108,10 @@ type Registry struct {
 var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registration, 0, len(registrations)), byKey: make(map[string]int, len(registrations))}
+	r := Registry{
+		entries: make([]registration, 0, len(registrations)),
+		byKey:   make(map[string]int, len(registrations)),
+	}
 	for _, item := range registrations {
 		e := item.entry
 		if e.descriptor.Key == "" {
@@ -143,14 +164,25 @@ func (r Registry) Descriptors() []Descriptor {
 	}
 	return out
 }
-func (r Registry) CreateConfig(p string, v map[string]any, s map[string]string) (map[string]any, error) {
+
+func (r Registry) CreateConfig(
+	p string,
+	v map[string]any,
+	s map[string]string,
+) (map[string]any, error) {
 	e, ok := r.entry(p)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", p)
 	}
 	return e.contract.create(v, s)
 }
-func (r Registry) UpdateConfig(p string, v map[string]any, s map[string]string, old map[string]any) (map[string]any, error) {
+
+func (r Registry) UpdateConfig(
+	p string,
+	v map[string]any,
+	s map[string]string,
+	old map[string]any,
+) (map[string]any, error) {
 	e, ok := r.entry(p)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", p)
@@ -176,14 +208,25 @@ func (r Registry) Widget(provider string, values map[string]any) (string, bool) 
 	key, err := e.ops.siteKey(values)
 	return key, err == nil
 }
-func (r Registry) Verify(ctx context.Context, provider string, values map[string]any, token, ip string) error {
+
+func (r Registry) Verify(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	token, ip string,
+) error {
 	e, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured
 	}
 	return e.ops.verify(ctx, values, token, ip)
 }
-func (r Registry) Challenge(ctx context.Context, provider string, values map[string]any) (any, error) {
+
+func (r Registry) Challenge(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+) (any, error) {
 	e, ok := r.entry(provider)
 	if !ok || e.ops.challenge == nil {
 		return nil, ErrNotConfigured

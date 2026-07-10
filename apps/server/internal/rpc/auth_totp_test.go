@@ -30,7 +30,10 @@ func newFakeMfaQuerier() *fakeMfaQuerier {
 	}
 }
 
-func (f *fakeMfaQuerier) GetUserMfa(_ context.Context, userID uuid.UUID) (repository.UserMfa, error) {
+func (f *fakeMfaQuerier) GetUserMfa(
+	_ context.Context,
+	userID uuid.UUID,
+) (repository.UserMfa, error) {
 	row, ok := f.mfa[userID]
 	if !ok {
 		return repository.UserMfa{}, pgx.ErrNoRows
@@ -38,7 +41,10 @@ func (f *fakeMfaQuerier) GetUserMfa(_ context.Context, userID uuid.UUID) (reposi
 	return row, nil
 }
 
-func (f *fakeMfaQuerier) UpsertPendingUserMfa(_ context.Context, arg repository.UpsertPendingUserMfaParams) (int64, error) {
+func (f *fakeMfaQuerier) UpsertPendingUserMfa(
+	_ context.Context,
+	arg repository.UpsertPendingUserMfaParams,
+) (int64, error) {
 	if row, ok := f.mfa[arg.UserID]; ok && row.ActivatedAt.Valid {
 		return 0, nil
 	}
@@ -68,7 +74,10 @@ func (f *fakeMfaQuerier) DeleteUserMfa(_ context.Context, userID uuid.UUID) (int
 	return 1, nil
 }
 
-func (f *fakeMfaQuerier) ConsumeMfaRecoveryCode(_ context.Context, arg repository.ConsumeMfaRecoveryCodeParams) (int64, error) {
+func (f *fakeMfaQuerier) ConsumeMfaRecoveryCode(
+	_ context.Context,
+	arg repository.ConsumeMfaRecoveryCodeParams,
+) (int64, error) {
 	row, ok := f.mfa[arg.UserID]
 	if !ok {
 		return 0, nil
@@ -83,7 +92,10 @@ func (f *fakeMfaQuerier) ConsumeMfaRecoveryCode(_ context.Context, arg repositor
 	return 0, nil
 }
 
-func (f *fakeMfaQuerier) CreateOauthSignupTicket(_ context.Context, arg repository.CreateOauthSignupTicketParams) (repository.OauthSignupTicket, error) {
+func (f *fakeMfaQuerier) CreateOauthSignupTicket(
+	_ context.Context,
+	arg repository.CreateOauthSignupTicketParams,
+) (repository.OauthSignupTicket, error) {
 	row := repository.OauthSignupTicket{
 		ID:         uuid.New(),
 		Provider:   arg.Provider,
@@ -95,7 +107,10 @@ func (f *fakeMfaQuerier) CreateOauthSignupTicket(_ context.Context, arg reposito
 	return row, nil
 }
 
-func (f *fakeMfaQuerier) ConsumeOauthSignupTicket(_ context.Context, secretHash []byte) (repository.OauthSignupTicket, error) {
+func (f *fakeMfaQuerier) ConsumeOauthSignupTicket(
+	_ context.Context,
+	secretHash []byte,
+) (repository.OauthSignupTicket, error) {
 	row, ok := f.tickets[string(secretHash)]
 	if !ok {
 		return repository.OauthSignupTicket{}, pgx.ErrNoRows
@@ -112,7 +127,12 @@ func TestTotpTwoStepLoginFlow(t *testing.T) {
 	}
 	q := newFakeMfaQuerier()
 	q.getUserByUsername = func(context.Context, string) (repository.User, error) {
-		return repository.User{ID: userID, Username: "alice", PasswordHash: hash, IsActive: true}, nil
+		return repository.User{
+			ID:           userID,
+			Username:     "alice",
+			PasswordHash: hash,
+			IsActive:     true,
+		}, nil
 	}
 	q.getUser = func(context.Context, uuid.UUID) (repository.User, error) {
 		return repository.User{ID: userID, PasswordHash: hash, IsActive: true}, nil
@@ -124,7 +144,11 @@ func TestTotpTwoStepLoginFlow(t *testing.T) {
 		return repository.Session{ID: uuid.New(), UserID: arg.UserID}, nil
 	}
 	q.getSessionIdentity = func(context.Context, []byte) (repository.GetSessionIdentityRow, error) {
-		return repository.GetSessionIdentityRow{SessionID: uuid.New(), UserID: userID, Username: "alice"}, nil
+		return repository.GetSessionIdentityRow{
+			SessionID: uuid.New(),
+			UserID:    userID,
+			Username:  "alice",
+		}, nil
 	}
 	svc := newAuthService(q)
 	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID, Username: "alice"})
@@ -136,7 +160,11 @@ func TestTotpTwoStepLoginFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(setup.Msg.GetRecoveryCodes()) != recoveryCodeCount {
-		t.Fatalf("recovery codes = %d, want %d", len(setup.Msg.GetRecoveryCodes()), recoveryCodeCount)
+		t.Fatalf(
+			"recovery codes = %d, want %d",
+			len(setup.Msg.GetRecoveryCodes()),
+			recoveryCodeCount,
+		)
 	}
 
 	// Login is single-step until the factor is CONFIRMED.
@@ -155,7 +183,10 @@ func TestTotpTwoStepLoginFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.ActivateTotp(ctx, connect.NewRequest(&authv1.ActivateTotpRequest{Code: code})); err != nil {
+	if _, err := svc.ActivateTotp(
+		ctx,
+		connect.NewRequest(&authv1.ActivateTotpRequest{Code: code}),
+	); err != nil {
 		t.Fatal(err)
 	}
 

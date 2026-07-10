@@ -32,29 +32,62 @@ func (checkoutGateway) RenderHostedFlow(provider, product, payload string) ([]by
 	return pay.NewRegistry().RenderHostedFlow(provider, product, payload)
 }
 
-func (g checkoutGateway) ProfilesFor(context.Context, string) ([]kitsettings.GenericProfile, error) {
+func (g checkoutGateway) ProfilesFor(
+	context.Context,
+	string,
+) ([]kitsettings.GenericProfile, error) {
 	return []kitsettings.GenericProfile{g.profile}, nil
 }
 func (g checkoutGateway) ProfileByID(context.Context, string) (kitsettings.GenericProfile, error) {
 	return g.profile, nil
 }
-func (g checkoutGateway) Plan(context.Context, kitsettings.GenericProfile, pay.PlanRequest) (pay.PlanResult, error) {
+
+func (g checkoutGateway) Plan(
+	context.Context,
+	kitsettings.GenericProfile,
+	pay.PlanRequest,
+) (pay.PlanResult, error) {
 	descriptor, _ := g.Describe("wechat")
 	return pay.PlanResult{ProductID: "native", Input: descriptor.Products[0].Input}, nil
 }
-func (checkoutGateway) Create(context.Context, kitsettings.GenericProfile, pay.CreateRequest) (pay.Action, error) {
+
+func (checkoutGateway) Create(
+	context.Context,
+	kitsettings.GenericProfile,
+	pay.CreateRequest,
+) (pay.Action, error) {
 	return pay.Action{QR: &pay.QRAction{Data: "weixin://test"}}, nil
 }
-func (checkoutGateway) Query(context.Context, kitsettings.GenericProfile, string) (pay.QueryResult, error) {
+
+func (checkoutGateway) Query(
+	context.Context,
+	kitsettings.GenericProfile,
+	string,
+) (pay.QueryResult, error) {
 	return pay.QueryResult{Exists: true, State: pay.StatePending}, nil
 }
-func (checkoutGateway) Refund(context.Context, kitsettings.GenericProfile, pay.RefundRequest) (pay.RefundResult, error) {
+
+func (checkoutGateway) Refund(
+	context.Context,
+	kitsettings.GenericProfile,
+	pay.RefundRequest,
+) (pay.RefundResult, error) {
 	return pay.RefundResult{}, nil
 }
-func (checkoutGateway) QueryRefund(context.Context, kitsettings.GenericProfile, string) (bool, error) {
+
+func (checkoutGateway) QueryRefund(
+	context.Context,
+	kitsettings.GenericProfile,
+	string,
+) (bool, error) {
 	return false, nil
 }
-func (checkoutGateway) ParseNotify(context.Context, kitsettings.GenericProfile, *http.Request) (pay.NotifyResult, error) {
+
+func (checkoutGateway) ParseNotify(
+	context.Context,
+	kitsettings.GenericProfile,
+	*http.Request,
+) (pay.NotifyResult, error) {
 	return pay.NotifyResult{}, nil
 }
 
@@ -81,9 +114,12 @@ func TestConcurrentCheckoutConfirmationCreatesOneOrder(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	read, err := svc.GetCheckoutSession(t.Context(), connect.NewRequest(&paymentv1.GetCheckoutSessionRequest{
-		Session: issued.Token,
-	}))
+	read, err := svc.GetCheckoutSession(
+		t.Context(),
+		connect.NewRequest(&paymentv1.GetCheckoutSessionRequest{
+			Session: issued.Token,
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,9 +135,12 @@ func TestConcurrentCheckoutConfirmationCreatesOneOrder(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp, err := svc.ConfirmCheckout(context.Background(), connect.NewRequest(&paymentv1.ConfirmCheckoutRequest{
-				Session: issued.Token, PaymentMethod: "wechat",
-			}))
+			resp, err := svc.ConfirmCheckout(
+				context.Background(),
+				connect.NewRequest(&paymentv1.ConfirmCheckoutRequest{
+					Session: issued.Token, PaymentMethod: "wechat",
+				}),
+			)
 			if err != nil {
 				errs <- err
 				return

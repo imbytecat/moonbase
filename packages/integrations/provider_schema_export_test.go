@@ -43,8 +43,9 @@ func TestExportAllProviderSchemasForWeb(t *testing.T) {
 		"oauth":   oauth.MustRegistry(oidc.New(), oauthwechat.New()).Descriptors(),
 		"sms":     sms.MustRegistry(aliyun.New(), tencent.New()).Descriptors(),
 		"storage": storage.MustRegistry(s3.New(), local.New()).Descriptors(),
-		"captcha": captcha.MustRegistry(turnstile.New(http.DefaultClient), geetest.New(http.DefaultClient), altcha.New(keyLoader)).Descriptors(),
-		"llm":     llm.MustRegistry(openai.New(), anthropic.New()).Descriptors(),
+		"captcha": captcha.MustRegistry(turnstile.New(http.DefaultClient), geetest.New(http.DefaultClient), altcha.New(keyLoader)).
+			Descriptors(),
+		"llm": llm.MustRegistry(openai.New(), anthropic.New()).Descriptors(),
 	}
 	raw, err := json.Marshal(all)
 	if err != nil {

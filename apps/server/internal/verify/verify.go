@@ -62,7 +62,12 @@ func NewService(repo repository.Querier) *Service {
 
 // IssueCode creates a 6-digit code for SMS flows. userID may be uuid.Nil for
 // pre-login flows.
-func (s *Service) IssueCode(ctx context.Context, purpose Purpose, target string, userID uuid.UUID) (string, error) {
+func (s *Service) IssueCode(
+	ctx context.Context,
+	purpose Purpose,
+	target string,
+	userID uuid.UUID,
+) (string, error) {
 	if err := s.checkRate(ctx, purpose, target); err != nil {
 		return "", err
 	}
@@ -77,7 +82,12 @@ func (s *Service) IssueCode(ctx context.Context, purpose Purpose, target string,
 }
 
 // IssueLinkToken creates a URL-safe token for email flows.
-func (s *Service) IssueLinkToken(ctx context.Context, purpose Purpose, target string, userID uuid.UUID) (string, error) {
+func (s *Service) IssueLinkToken(
+	ctx context.Context,
+	purpose Purpose,
+	target string,
+	userID uuid.UUID,
+) (string, error) {
 	if err := s.checkRate(ctx, purpose, target); err != nil {
 		return "", err
 	}
@@ -98,7 +108,11 @@ func (s *Service) IssueLinkToken(ctx context.Context, purpose Purpose, target st
 
 // ConsumeCode validates a code sent to target: newest active token wins,
 // wrong guesses count toward maxAttempts, success consumes the token.
-func (s *Service) ConsumeCode(ctx context.Context, purpose Purpose, target, code string) (repository.VerificationToken, error) {
+func (s *Service) ConsumeCode(
+	ctx context.Context,
+	purpose Purpose,
+	target, code string,
+) (repository.VerificationToken, error) {
 	row, err := s.repo.GetActiveVerificationToken(ctx, repository.GetActiveVerificationTokenParams{
 		Purpose: string(purpose),
 		Target:  target,
@@ -126,11 +140,18 @@ func (s *Service) ConsumeCode(ctx context.Context, purpose Purpose, target, code
 
 // ConsumeLinkToken validates a URL token (looked up by its hash — the token
 // itself is high-entropy, so no attempt counting is needed) and consumes it.
-func (s *Service) ConsumeLinkToken(ctx context.Context, purpose Purpose, token string) (repository.VerificationToken, error) {
-	row, err := s.repo.GetVerificationTokenBySecret(ctx, repository.GetVerificationTokenBySecretParams{
-		Purpose:    string(purpose),
-		SecretHash: hashSecret(token),
-	})
+func (s *Service) ConsumeLinkToken(
+	ctx context.Context,
+	purpose Purpose,
+	token string,
+) (repository.VerificationToken, error) {
+	row, err := s.repo.GetVerificationTokenBySecret(
+		ctx,
+		repository.GetVerificationTokenBySecretParams{
+			Purpose:    string(purpose),
+			SecretHash: hashSecret(token),
+		},
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repository.VerificationToken{}, ErrInvalid
 	}
@@ -144,22 +165,28 @@ func (s *Service) ConsumeLinkToken(ctx context.Context, purpose Purpose, token s
 }
 
 func (s *Service) checkRate(ctx context.Context, purpose Purpose, target string) error {
-	recent, err := s.repo.CountRecentVerificationTokens(ctx, repository.CountRecentVerificationTokensParams{
-		Purpose:   string(purpose),
-		Target:    target,
-		CreatedAt: time.Now().Add(-cooldown),
-	})
+	recent, err := s.repo.CountRecentVerificationTokens(
+		ctx,
+		repository.CountRecentVerificationTokensParams{
+			Purpose:   string(purpose),
+			Target:    target,
+			CreatedAt: time.Now().Add(-cooldown),
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("rate check: %w", err)
 	}
 	if recent > 0 {
 		return ErrRateLimited
 	}
-	hourly, err := s.repo.CountRecentVerificationTokens(ctx, repository.CountRecentVerificationTokensParams{
-		Purpose:   string(purpose),
-		Target:    target,
-		CreatedAt: time.Now().Add(-time.Hour),
-	})
+	hourly, err := s.repo.CountRecentVerificationTokens(
+		ctx,
+		repository.CountRecentVerificationTokensParams{
+			Purpose:   string(purpose),
+			Target:    target,
+			CreatedAt: time.Now().Add(-time.Hour),
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("rate check: %w", err)
 	}
@@ -169,7 +196,14 @@ func (s *Service) checkRate(ctx context.Context, purpose Purpose, target string)
 	return nil
 }
 
-func (s *Service) store(ctx context.Context, purpose Purpose, target string, userID uuid.UUID, secret string, ttl time.Duration) error {
+func (s *Service) store(
+	ctx context.Context,
+	purpose Purpose,
+	target string,
+	userID uuid.UUID,
+	secret string,
+	ttl time.Duration,
+) error {
 	_, err := s.repo.CreateVerificationToken(ctx, repository.CreateVerificationTokenParams{
 		Purpose:    string(purpose),
 		Target:     target,

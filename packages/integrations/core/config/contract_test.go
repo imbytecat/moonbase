@@ -48,7 +48,7 @@ func TestContractValidatesAndDecodesTypedConfig(t *testing.T) {
 type lifecycleTestConfig struct {
 	Endpoint string `json:"endpoint" jsonschema:"required,minLength=1"`
 	Password string `json:"password" jsonschema:"required,minLength=1"`
-	Key      string `json:"key" jsonschema:"required,minLength=1"`
+	Key      string `json:"key"      jsonschema:"required,minLength=1"`
 }
 
 func TestContractAppliesLifecycleAndProjectsSafeView(t *testing.T) {
@@ -190,8 +190,20 @@ func TestContractRejectsInvalidPolicyPaths(t *testing.T) {
 		name   string
 		policy Policy
 	}{
-		{name: "cross-kind duplicate", policy: Policy{Secrets: []string{"/credentials/token"}, CreateOnly: []string{"/credentials/token"}}},
-		{name: "parent-child conflict", policy: Policy{Secrets: []string{"/credentials/token"}, CreateOnly: []string{"/credentials"}}},
+		{
+			name: "cross-kind duplicate",
+			policy: Policy{
+				Secrets:    []string{"/credentials/token"},
+				CreateOnly: []string{"/credentials/token"},
+			},
+		},
+		{
+			name: "parent-child conflict",
+			policy: Policy{
+				Secrets:    []string{"/credentials/token"},
+				CreateOnly: []string{"/credentials"},
+			},
+		},
 		{name: "create-only object", policy: Policy{CreateOnly: []string{"/credentials"}}},
 		{name: "invalid pointer escape", policy: Policy{Secrets: []string{"/credentials/~2token"}}},
 	}

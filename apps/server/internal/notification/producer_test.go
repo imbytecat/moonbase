@@ -21,7 +21,10 @@ func (f *fakeRepo) ListUsersForPermission(_ context.Context, perm string) ([]uui
 	return f.byPerm[perm], nil
 }
 
-func (f *fakeRepo) InsertNotification(_ context.Context, arg repository.InsertNotificationParams) error {
+func (f *fakeRepo) InsertNotification(
+	_ context.Context,
+	arg repository.InsertNotificationParams,
+) error {
 	f.inserted = append(f.inserted, arg)
 	return nil
 }

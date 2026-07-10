@@ -13,3 +13,8 @@ formatters:
   enable:
     - gofmt
     - goimports
+    - golines # breaks over-long lines that gofmt leaves untouched
+  settings:
+    golines:
+      max-len: 100 # matches biome.json lineWidth for the JS side
+      tab-len: 4

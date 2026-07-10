@@ -37,26 +37,32 @@ func requireMailpit(t *testing.T) {
 func configureSmtp(t *testing.T, baseURL string, client *http.Client) {
 	t.Helper()
 	sys := systemv1connect.NewSystemServiceClient(client, baseURL)
-	created, err := sys.CreateEmailProfile(t.Context(), connect.NewRequest(&systemv1.CreateEmailProfileRequest{
-		Profile: &systemv1.ProfileInput{
-			Name:     "test smtp",
-			Provider: "smtp",
-			Config: mustConfigWrite(t, map[string]any{
-				"fromAddress": "noreply@example.com",
-				"fromName":    "test",
-				"host":        "localhost",
-				"port":        float64(1025),
-				"encryption":  "none",
-			}),
-		},
-	}))
+	created, err := sys.CreateEmailProfile(
+		t.Context(),
+		connect.NewRequest(&systemv1.CreateEmailProfileRequest{
+			Profile: &systemv1.ProfileInput{
+				Name:     "test smtp",
+				Provider: "smtp",
+				Config: mustConfigWrite(t, map[string]any{
+					"fromAddress": "noreply@example.com",
+					"fromName":    "test",
+					"host":        "localhost",
+					"port":        float64(1025),
+					"encryption":  "none",
+				}),
+			},
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sys.BindEmailPurpose(t.Context(), connect.NewRequest(&systemv1.BindEmailPurposeRequest{
-		Purpose:   "auth",
-		ProfileId: created.Msg.GetProfile().GetId(),
-	})); err != nil {
+	if _, err := sys.BindEmailPurpose(
+		t.Context(),
+		connect.NewRequest(&systemv1.BindEmailPurposeRequest{
+			Purpose:   "auth",
+			ProfileId: created.Msg.GetProfile().GetId(),
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -99,7 +105,11 @@ var tokenRe = regexp.MustCompile(`token=([A-Za-z0-9_-]+)`)
 // admin API (the seeded admin has no email by design) and returns a logged-in
 // client for it. Unique per test run so reruns against the same database
 // never collide.
-func newMailUser(t *testing.T, baseURL string, admin *http.Client) (email, password string, client *http.Client) {
+func newMailUser(
+	t *testing.T,
+	baseURL string,
+	admin *http.Client,
+) (email, password string, client *http.Client) {
 	t.Helper()
 	email = fmt.Sprintf("mailflow-%d@example.com", time.Now().UnixNano())
 	password = "mail-flow-pass-1"
@@ -143,8 +153,12 @@ func TestPasswordResetFlow(t *testing.T) {
 	authClient := authv1connect.NewAuthServiceClient(http.DefaultClient, baseURL)
 
 	// Unknown email answers ok — no enumeration.
-	if _, err := authClient.RequestPasswordReset(t.Context(),
-		connect.NewRequest(&authv1.RequestPasswordResetRequest{Email: "ghost@example.com"})); err != nil {
+	if _, err := authClient.RequestPasswordReset(
+		t.Context(),
+		connect.NewRequest(
+			&authv1.RequestPasswordResetRequest{Email: "ghost@example.com"},
+		),
+	); err != nil {
 		t.Fatalf("unknown email must still answer ok: %v", err)
 	}
 
@@ -168,10 +182,13 @@ func TestPasswordResetFlow(t *testing.T) {
 		t.Fatalf("bad token: code = %v, want invalid_argument", connect.CodeOf(err))
 	}
 
-	if _, err := authClient.ResetPassword(t.Context(), connect.NewRequest(&authv1.ResetPasswordRequest{
-		Token:       token,
-		NewPassword: "brand-new-password-1",
-	})); err != nil {
+	if _, err := authClient.ResetPassword(
+		t.Context(),
+		connect.NewRequest(&authv1.ResetPasswordRequest{
+			Token:       token,
+			NewPassword: "brand-new-password-1",
+		}),
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -200,7 +217,12 @@ func TestPasswordResetFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	userAuth := authv1connect.NewAuthServiceClient(userClient, baseURL)
-	if _, err := userAuth.GetMe(t.Context(), connect.NewRequest(&authv1.GetMeRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+	if _, err := userAuth.GetMe(
+		t.Context(),
+		connect.NewRequest(&authv1.GetMeRequest{}),
+	); connect.CodeOf(
+		err,
+	) != connect.CodeUnauthenticated {
 		t.Fatalf("pre-reset session must be revoked, got %v", err)
 	}
 }

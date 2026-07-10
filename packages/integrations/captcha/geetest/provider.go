@@ -17,14 +17,27 @@ import (
 )
 
 type providerConfig struct {
-	CaptchaID  string `json:"captchaId" jsonschema:"required,title=验证 ID,minLength=1,maxLength=128"`
+	CaptchaID  string `json:"captchaId"  jsonschema:"required,title=验证 ID,minLength=1,maxLength=128"`
 	CaptchaKey string `json:"captchaKey" jsonschema:"required,title=验证密钥,minLength=1,maxLength=128"`
 }
 
 func New(client *http.Client) captchaint.Registration {
-	return captchaint.Register("geetest", integration.Presentation{Name: "极验行为验证", Description: "通过行为挑战识别自动化访问", Color: "#3b82f6", IconRef: "antd:SafetyOutlined"}, config.MustContract[providerConfig](config.Policy{Secrets: []string{"/captchaKey"}}), captchaint.Operations[providerConfig]{SiteKey: func(c providerConfig) string { return c.CaptchaID }, Verify: func(ctx context.Context, c providerConfig, token, _ string) error {
-		return verify(client, ctx, c, token)
-	}})
+	return captchaint.Register(
+		"geetest",
+		integration.Presentation{
+			Name:        "极验行为验证",
+			Description: "通过行为挑战识别自动化访问",
+			Color:       "#3b82f6",
+			IconRef:     "antd:SafetyOutlined",
+		},
+		config.MustContract[providerConfig](config.Policy{Secrets: []string{"/captchaKey"}}),
+		captchaint.Operations[providerConfig]{
+			SiteKey: func(c providerConfig) string { return c.CaptchaID },
+			Verify: func(ctx context.Context, c providerConfig, token, _ string) error {
+				return verify(client, ctx, c, token)
+			},
+		},
+	)
 }
 func verify(client *http.Client, ctx context.Context, c providerConfig, token string) error {
 	var p struct {
@@ -36,8 +49,19 @@ func verify(client *http.Client, ctx context.Context, c providerConfig, token st
 	if err := json.Unmarshal([]byte(token), &p); err != nil {
 		return fmt.Errorf("geetest token decode: %w", err)
 	}
-	form := url.Values{"lot_number": {p.LotNumber}, "captcha_output": {p.CaptchaOutput}, "pass_token": {p.PassToken}, "gen_time": {p.GenTime}, "sign_token": {sign(c.CaptchaKey, p.LotNumber)}}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://gcaptcha4.geetest.com/validate?captcha_id="+url.QueryEscape(c.CaptchaID), strings.NewReader(form.Encode()))
+	form := url.Values{
+		"lot_number":     {p.LotNumber},
+		"captcha_output": {p.CaptchaOutput},
+		"pass_token":     {p.PassToken},
+		"gen_time":       {p.GenTime},
+		"sign_token":     {sign(c.CaptchaKey, p.LotNumber)},
+	}
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"https://gcaptcha4.geetest.com/validate?captcha_id="+url.QueryEscape(c.CaptchaID),
+		strings.NewReader(form.Encode()),
+	)
 	if err != nil {
 		return err
 	}

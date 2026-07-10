@@ -27,8 +27,21 @@ type FlowSecrets struct {
 // Executor is the reusable selected-profile seam. ProviderKey assignment is
 // application routing metadata and is deliberately not performed here.
 type Executor interface {
-	AuthorizeURL(context.Context, string, map[string]any, string, string) (string, FlowSecrets, error)
-	Exchange(context.Context, string, map[string]any, string, string, FlowSecrets) (ExternalIdentity, error)
+	AuthorizeURL(
+		context.Context,
+		string,
+		map[string]any,
+		string,
+		string,
+	) (string, FlowSecrets, error)
+	Exchange(
+		context.Context,
+		string,
+		map[string]any,
+		string,
+		string,
+		FlowSecrets,
+	) (ExternalIdentity, error)
 }
 
 var _ Executor = Registry{}

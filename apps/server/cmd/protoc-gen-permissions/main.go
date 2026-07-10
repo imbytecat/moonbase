@@ -139,7 +139,8 @@ func stringOption(opts protoreflect.ProtoMessage, num protowire.Number) (string,
 	var out string
 	var found bool
 	msg.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-		if fd.IsExtension() && fd.Number() == protoreflect.FieldNumber(num) && fd.Kind() == protoreflect.StringKind {
+		if fd.IsExtension() && fd.Number() == protoreflect.FieldNumber(num) &&
+			fd.Kind() == protoreflect.StringKind {
 			out = v.String()
 			found = true
 			return false

@@ -50,7 +50,13 @@ import (
 // NewRouter builds the full HTTP handler chain. engine may be nil (tests
 // without a workflow executor); the workflow RPCs then answer
 // FailedPrecondition.
-func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, logger *slog.Logger, storageRegistry storageint.Registry) http.Handler {
+func NewRouter(
+	cfg *config.Config,
+	pool *pgxpool.Pool,
+	engine *workflow.Engine,
+	logger *slog.Logger,
+	storageRegistry storageint.Registry,
+) http.Handler {
 	repo := repository.New(pool)
 	settingsStore := settings.NewStore(repo)
 	s3 := storage.NewClient(settingsStore, storageRegistry)
@@ -91,7 +97,22 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	userSvc := rpc.NewUserService(repo, notifier, logger)
 	roleSvc := rpc.NewRoleService(repo, logger)
 	settingsSvc := rpc.NewSettingsService(settingsStore, repo, mailer, smsRegistry, logger)
-	systemSvc := rpc.NewSystemService(settingsStore, repo, s3, storageRegistry, captchaRegistry, llmRegistry, emailRegistry, oauthRegistry, paymentRegistry, smsRegistry, mailer, smser, chatter, logger)
+	systemSvc := rpc.NewSystemService(
+		settingsStore,
+		repo,
+		s3,
+		storageRegistry,
+		captchaRegistry,
+		llmRegistry,
+		emailRegistry,
+		oauthRegistry,
+		paymentRegistry,
+		smsRegistry,
+		mailer,
+		smser,
+		chatter,
+		logger,
+	)
 	storageSvc := rpc.NewStorageService(repo, s3, logger)
 	workflowSvc := rpc.NewWorkflowService(engine, logger)
 	auditSvc := rpc.NewAuditService(repo, logger)
@@ -200,7 +221,10 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	})
 
 	// Outermost first: access log sees the final status (incl. recovered 500s).
-	return accessLog(logger, recoverer(logger, securityHeaders(cfg.Auth.SecureCookie, c.Handler(mux))))
+	return accessLog(
+		logger,
+		recoverer(logger, securityHeaders(cfg.Auth.SecureCookie, c.Handler(mux))),
+	)
 }
 
 // poolStatAdapter bridges *pgxpool.Pool to metrics.PoolStatter (which stays pgx-free).

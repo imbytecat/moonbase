@@ -31,7 +31,10 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/verify"
 )
 
-var errInvalidCredentials = connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+var errInvalidCredentials = connect.NewError(
+	connect.CodeUnauthenticated,
+	errors.New("invalid credentials"),
+)
 
 type AuthService struct {
 	repo         repository.Querier
@@ -142,7 +145,10 @@ func (s *AuthService) Login(
 // digits = phone (E.164-normalized), anything else = username. Usernames must
 // start with a letter, so the three shapes are disjoint and the routing is
 // deterministic — no account can shadow another via a different identifier kind.
-func (s *AuthService) userByIdentifier(ctx context.Context, identifier string) (repository.User, error) {
+func (s *AuthService) userByIdentifier(
+	ctx context.Context,
+	identifier string,
+) (repository.User, error) {
 	switch {
 	case strings.Contains(identifier, "@"):
 		return s.repo.GetUserByEmail(ctx, identifier)
@@ -172,7 +178,11 @@ func looksLikePhone(identifier string) bool {
 
 // createSession is the shared post-authentication step for every login method
 // (password, SMS): new token, session row, fully-resolved identity.
-func (s *AuthService) createSession(ctx context.Context, userID uuid.UUID, device sessionDevice) (string, *auth.Identity, error) {
+func (s *AuthService) createSession(
+	ctx context.Context,
+	userID uuid.UUID,
+	device sessionDevice,
+) (string, *auth.Identity, error) {
 	token, hash, err := auth.NewSessionToken()
 	if err != nil {
 		return "", nil, s.internal(ctx, "create session token", err)
@@ -262,7 +272,10 @@ func (s *AuthService) Register(
 		return nil, s.internal(ctx, "load auth settings", err)
 	}
 	if !authCfg.RegistrationEnabled {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("registration is disabled"))
+		return nil, connect.NewError(
+			connect.CodePermissionDenied,
+			errors.New("registration is disabled"),
+		)
 	}
 	if err := s.verifyCaptcha(ctx, req.Msg.GetCaptchaToken(), req.Peer().Addr); err != nil {
 		return nil, err
@@ -280,13 +293,23 @@ func (s *AuthService) Register(
 			return nil, err
 		}
 		values.phone = e164
-		if _, err := s.verifier.ConsumeCode(ctx, verify.PurposePhoneRegister, e164, req.Msg.GetPhoneCode()); err != nil {
+		if _, err := s.verifier.ConsumeCode(
+			ctx,
+			verify.PurposePhoneRegister,
+			e164,
+			req.Msg.GetPhoneCode(),
+		); err != nil {
 			return nil, s.verifyConsumeError(ctx, "consume phone register code", err)
 		}
 	}
 	if values.email != "" {
 		normalized := strings.ToLower(values.email)
-		if _, err := s.verifier.ConsumeCode(ctx, verify.PurposeEmailRegister, normalized, req.Msg.GetEmailCode()); err != nil {
+		if _, err := s.verifier.ConsumeCode(
+			ctx,
+			verify.PurposeEmailRegister,
+			normalized,
+			req.Msg.GetEmailCode(),
+		); err != nil {
 			return nil, s.verifyConsumeError(ctx, "consume email register code", err)
 		}
 		values.emailVerified = true
@@ -306,7 +329,10 @@ func (s *AuthService) Register(
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("this account is already registered"))
+			return nil, connect.NewError(
+				connect.CodeAlreadyExists,
+				errors.New("this account is already registered"),
+			)
 		}
 		return nil, s.internal(ctx, "create user", err)
 	}
@@ -373,7 +399,11 @@ func signupIdentifierValues(cfg settings.Auth, msg *authv1.RegisterRequest) (sig
 	if msg.GetEmail() != "" && msg.GetEmailCode() == "" {
 		return invalid("email verification code is required")
 	}
-	return signupValues{username: msg.GetUsername(), email: msg.GetEmail(), phone: msg.GetPhone()}, nil
+	return signupValues{
+		username: msg.GetUsername(),
+		email:    msg.GetEmail(),
+		phone:    msg.GetPhone(),
+	}, nil
 }
 
 func (s *AuthService) GetAuthConfig(
@@ -427,7 +457,10 @@ func (s *AuthService) GetAuthConfig(
 func (s *AuthService) verifyCaptcha(ctx context.Context, token, remoteAddr string) error {
 	ip, _, _ := net.SplitHostPort(remoteAddr)
 	if err := s.captcha.Verify(ctx, captcha.PurposeAuth, token, ip); err != nil {
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("captcha verification failed"))
+		return connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("captcha verification failed"),
+		)
 	}
 	return nil
 }
@@ -454,7 +487,9 @@ func (s *AuthService) UpdateProfile(
 		}
 		updated.AvatarFileID = req.Msg.GetAvatarFileId()
 	}
-	return connect.NewResponse(&authv1.UpdateProfileResponse{User: s.currentUser(ctx, &updated)}), nil
+	return connect.NewResponse(
+		&authv1.UpdateProfileResponse{User: s.currentUser(ctx, &updated)},
+	), nil
 }
 
 // setAvatar points the caller's avatar slot at fileID (empty clears it). It
@@ -465,7 +500,10 @@ func (s *AuthService) setAvatar(ctx context.Context, userID uuid.UUID, fileID st
 	if fileID != "" {
 		parsed, err := uuid.Parse(fileID)
 		if err != nil {
-			return connect.NewError(connect.CodeInvalidArgument, errors.New("invalid avatar file id"))
+			return connect.NewError(
+				connect.CodeInvalidArgument,
+				errors.New("invalid avatar file id"),
+			)
 		}
 		file, err := s.repo.GetFile(ctx, parsed)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -475,7 +513,10 @@ func (s *AuthService) setAvatar(ctx context.Context, userID uuid.UUID, fileID st
 			return s.internal(ctx, "get avatar file", err)
 		}
 		if file.UploadedBy != userID || file.Purpose != storage.PurposeAvatars {
-			return connect.NewError(connect.CodeInvalidArgument, errors.New("file is not an avatar you uploaded"))
+			return connect.NewError(
+				connect.CodeInvalidArgument,
+				errors.New("file is not an avatar you uploaded"),
+			)
 		}
 		param = pgtype.UUID{Bytes: parsed, Valid: true}
 	}
@@ -502,7 +543,10 @@ func (s *AuthService) ChangePassword(
 		return nil, s.internal(ctx, "verify password", err)
 	}
 	if !ok {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("current password is incorrect"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("current password is incorrect"),
+		)
 	}
 	hash, err := auth.HashPassword(req.Msg.GetNewPassword())
 	if err != nil {

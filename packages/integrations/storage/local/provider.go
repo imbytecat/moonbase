@@ -18,19 +18,55 @@ type providerConfig struct {
 }
 
 func New() storageint.Registration {
-	return storageint.Register("local", integration.Presentation{Name: "本地文件存储", Description: "把文件保存在服务器本地目录", Color: "#52c41a", IconRef: "antd:HddOutlined"}, config.MustContract[providerConfig](config.Policy{}), storageint.Operations[providerConfig]{PresignPut: presignPut, ResolveURL: resolveURL, Delete: deleteObject, Test: testConnection, ObjectPath: objectPath})
+	return storageint.Register(
+		"local",
+		integration.Presentation{
+			Name:        "本地文件存储",
+			Description: "把文件保存在服务器本地目录",
+			Color:       "#52c41a",
+			IconRef:     "antd:HddOutlined",
+		},
+		config.MustContract[providerConfig](config.Policy{}),
+		storageint.Operations[providerConfig]{
+			PresignPut: presignPut,
+			ResolveURL: resolveURL,
+			Delete:     deleteObject,
+			Test:       testConnection,
+			ObjectPath: objectPath,
+		},
+	)
 }
 
-func presignPut(rt storageint.Runtime, ctx context.Context, _ providerConfig, purpose, key, _ string, expires time.Duration) (string, error) {
+func presignPut(
+	rt storageint.Runtime,
+	ctx context.Context,
+	_ providerConfig,
+	purpose, key, _ string,
+	expires time.Duration,
+) (string, error) {
 	return rt.LocalSignedURL(ctx, "PUT", purpose, key, expires)
 }
-func resolveURL(rt storageint.Runtime, ctx context.Context, _ providerConfig, purpose, key string, expires time.Duration) (string, error) {
+
+func resolveURL(
+	rt storageint.Runtime,
+	ctx context.Context,
+	_ providerConfig,
+	purpose, key string,
+	expires time.Duration,
+) (string, error) {
 	if rt.VisibilityOf(purpose) == storageint.VisibilityPublic {
 		return "/api/files/" + purpose + "/" + key, nil
 	}
 	return rt.LocalSignedURL(ctx, "GET", purpose, key, expires)
 }
-func deleteObject(_ storageint.Runtime, _ context.Context, cfg providerConfig, _ string, key string) error {
+
+func deleteObject(
+	_ storageint.Runtime,
+	_ context.Context,
+	cfg providerConfig,
+	_ string,
+	key string,
+) error {
 	path, err := objectPath(cfg, key)
 	if err != nil {
 		return err

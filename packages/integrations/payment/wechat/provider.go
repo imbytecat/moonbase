@@ -43,13 +43,25 @@ func wechatClient(ctx context.Context, config providerConfig) (*core.Client, err
 	mchCertSerialNo := config.MchCertSerialNo
 	apiV3Key := config.APIV3Key
 	if config.AuthMethod == pay.AuthPlatformCert {
-		opts = append(opts, option.WithWechatPayAutoAuthCipher(mchID, mchCertSerialNo, mchPriv, apiV3Key))
+		opts = append(
+			opts,
+			option.WithWechatPayAutoAuthCipher(mchID, mchCertSerialNo, mchPriv, apiV3Key),
+		)
 	} else {
 		wxPub, err := utils.LoadPublicKey(config.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("load wechatpay public key: %w", err)
 		}
-		opts = append(opts, option.WithWechatPayPublicKeyAuthCipher(mchID, mchCertSerialNo, mchPriv, config.PublicKeyID, wxPub))
+		opts = append(
+			opts,
+			option.WithWechatPayPublicKeyAuthCipher(
+				mchID,
+				mchCertSerialNo,
+				mchPriv,
+				config.PublicKeyID,
+				wxPub,
+			),
+		)
 	}
 	client, err := core.NewClient(ctx, opts...)
 	if err != nil {
@@ -68,19 +80,36 @@ func wechatNotifyHandler(ctx context.Context, config providerConfig) (*notify.Ha
 			return nil, fmt.Errorf("load merchant private key: %w", err)
 		}
 		mgr := downloader.MgrInstance()
-		if err := mgr.RegisterDownloaderWithPrivateKey(ctx, mchPriv, mchCertSerialNo, mchID, apiV3Key); err != nil {
+		if err := mgr.RegisterDownloaderWithPrivateKey(
+			ctx,
+			mchPriv,
+			mchCertSerialNo,
+			mchID,
+			apiV3Key,
+		); err != nil {
 			return nil, fmt.Errorf("register certificate downloader: %w", err)
 		}
-		return notify.NewRSANotifyHandler(apiV3Key, verifiers.NewSHA256WithRSAVerifier(mgr.GetCertificateVisitor(mchID)))
+		return notify.NewRSANotifyHandler(
+			apiV3Key,
+			verifiers.NewSHA256WithRSAVerifier(mgr.GetCertificateVisitor(mchID)),
+		)
 	}
 	wxPub, err := utils.LoadPublicKey(config.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("load wechatpay public key: %w", err)
 	}
-	return notify.NewRSANotifyHandler(apiV3Key, verifiers.NewSHA256WithRSAPubkeyVerifier(config.PublicKeyID, *wxPub))
+	return notify.NewRSANotifyHandler(
+		apiV3Key,
+		verifiers.NewSHA256WithRSAPubkeyVerifier(config.PublicKeyID, *wxPub),
+	)
 }
 
-func wechatCreate(ctx context.Context, config providerConfig, req pay.CreateRequest, notifyURL string) (string, error) {
+func wechatCreate(
+	ctx context.Context,
+	config providerConfig,
+	req pay.CreateRequest,
+	notifyURL string,
+) (string, error) {
 	client, err := wechatClient(ctx, config)
 	if err != nil {
 		return "", err
@@ -168,7 +197,11 @@ func wechatCreate(ctx context.Context, config providerConfig, req pay.CreateRequ
 	}
 }
 
-func wechatQuery(ctx context.Context, config providerConfig, outTradeNo string) (pay.QueryResult, error) {
+func wechatQuery(
+	ctx context.Context,
+	config providerConfig,
+	outTradeNo string,
+) (pay.QueryResult, error) {
 	client, err := wechatClient(ctx, config)
 	if err != nil {
 		return pay.QueryResult{}, err
@@ -187,7 +220,11 @@ func wechatQuery(ctx context.Context, config providerConfig, outTradeNo string) 
 	return wechatTransactionResult(tx), nil
 }
 
-func wechatRefund(ctx context.Context, config providerConfig, req pay.RefundRequest) (pay.RefundResult, error) {
+func wechatRefund(
+	ctx context.Context,
+	config providerConfig,
+	req pay.RefundRequest,
+) (pay.RefundResult, error) {
 	client, err := wechatClient(ctx, config)
 	if err != nil {
 		return pay.RefundResult{}, err
@@ -226,7 +263,11 @@ func wechatQueryRefund(ctx context.Context, config providerConfig, refundNo stri
 	return rsp.Status != nil && *rsp.Status == refunddomestic.STATUS_SUCCESS, nil
 }
 
-func wechatParseNotify(ctx context.Context, config providerConfig, r *http.Request) (pay.NotifyResult, error) {
+func wechatParseNotify(
+	ctx context.Context,
+	config providerConfig,
+	r *http.Request,
+) (pay.NotifyResult, error) {
 	handler, err := wechatNotifyHandler(ctx, config)
 	if err != nil {
 		return pay.NotifyResult{}, err

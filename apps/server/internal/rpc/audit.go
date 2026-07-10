@@ -43,7 +43,10 @@ func (s *AuditService) ListAuditLogs(
 	if raw := req.Msg.GetActorId(); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid actor id"))
+			return nil, connect.NewError(
+				connect.CodeInvalidArgument,
+				errors.New("invalid actor id"),
+			)
 		}
 		actorID = pgtype.UUID{Bytes: id, Valid: true}
 	}

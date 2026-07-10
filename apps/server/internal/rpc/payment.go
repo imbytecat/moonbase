@@ -43,12 +43,26 @@ type PaymentCheckoutService struct {
 	core *paymentCore
 }
 
-func NewPaymentService(repo repository.Querier, gateway pay.Gateway, checkout *pay.CheckoutManager, logger *slog.Logger) *PaymentService {
-	return &PaymentService{core: &paymentCore{repo: repo, gateway: gateway, checkout: checkout, logger: logger}}
+func NewPaymentService(
+	repo repository.Querier,
+	gateway pay.Gateway,
+	checkout *pay.CheckoutManager,
+	logger *slog.Logger,
+) *PaymentService {
+	return &PaymentService{
+		core: &paymentCore{repo: repo, gateway: gateway, checkout: checkout, logger: logger},
+	}
 }
 
-func NewPaymentCheckoutService(repo repository.Querier, gateway pay.Gateway, checkout *pay.CheckoutManager, logger *slog.Logger) *PaymentCheckoutService {
-	return &PaymentCheckoutService{core: &paymentCore{repo: repo, gateway: gateway, checkout: checkout, logger: logger}}
+func NewPaymentCheckoutService(
+	repo repository.Querier,
+	gateway pay.Gateway,
+	checkout *pay.CheckoutManager,
+	logger *slog.Logger,
+) *PaymentCheckoutService {
+	return &PaymentCheckoutService{
+		core: &paymentCore{repo: repo, gateway: gateway, checkout: checkout, logger: logger},
+	}
 }
 
 var _ paymentv1connect.PaymentServiceHandler = (*PaymentService)(nil)
@@ -69,7 +83,9 @@ func (s *PaymentService) CreateDemoCheckout(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	return connect.NewResponse(&paymentv1.CreateDemoCheckoutResponse{CheckoutUrl: issued.CheckoutURL}), nil
+	return connect.NewResponse(
+		&paymentv1.CreateDemoCheckoutResponse{CheckoutUrl: issued.CheckoutURL},
+	), nil
 }
 
 func (s *PaymentCheckoutService) GetCheckoutSession(
@@ -90,10 +106,16 @@ func (s *PaymentCheckoutService) GetCheckoutSession(
 		ReturnPath: session.ReturnPath, ExpiresAt: timestamppb.New(session.ExpiresAt),
 		PaymentMethods: methods, PaymentMethod: session.PaymentMethod,
 	}
-	if order, err := s.core.repo.GetPaymentOrderByCheckoutSession(ctx, pgtype.Text{String: session.ID, Valid: true}); err == nil {
+	if order, err := s.core.repo.GetPaymentOrderByCheckoutSession(
+		ctx,
+		pgtype.Text{String: session.ID, Valid: true},
+	); err == nil {
 		out.Status = order.Status
 		out.Order = checkoutOrderToProto(order, req.Msg.GetSession())
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+	} else if !errors.Is(
+		err,
+		pgx.ErrNoRows,
+	) {
 		return nil, s.core.internal(ctx, "get checkout order", err)
 	}
 	return connect.NewResponse(&paymentv1.GetCheckoutSessionResponse{Session: out}), nil
@@ -109,7 +131,10 @@ func (s *PaymentCheckoutService) PlanCheckout(
 	}
 	if session.Status != "open" {
 		if session.PaymentMethod != req.Msg.GetPaymentMethod() {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("checkout path is already locked"))
+			return nil, connect.NewError(
+				connect.CodeFailedPrecondition,
+				errors.New("checkout path is already locked"),
+			)
 		}
 		descriptor, ok := s.core.gateway.Describe(session.Provider)
 		if !ok {
@@ -119,11 +144,21 @@ func (s *PaymentCheckoutService) PlanCheckout(
 			return product.ID == session.ProductID
 		})
 		if index < 0 {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("planned payment product is unavailable"))
+			return nil, connect.NewError(
+				connect.CodeFailedPrecondition,
+				errors.New("planned payment product is unavailable"),
+			)
 		}
-		return connect.NewResponse(planCheckoutResponse(req.Msg.GetPaymentMethod(), descriptor.Products[index])), nil
+		return connect.NewResponse(
+			planCheckoutResponse(req.Msg.GetPaymentMethod(), descriptor.Products[index]),
+		), nil
 	}
-	profile, plan, err := s.core.route(ctx, session.Purpose, req.Msg.GetPaymentMethod(), clientContext(req))
+	profile, plan, err := s.core.route(
+		ctx,
+		session.Purpose,
+		req.Msg.GetPaymentMethod(),
+		clientContext(req),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -132,15 +167,23 @@ func (s *PaymentCheckoutService) PlanCheckout(
 		ProfileName: profile.Name, Provider: profile.Provider, ProductID: plan.ProductID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("checkout path is already locked"))
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			errors.New("checkout path is already locked"),
+		)
 	}
 	if err != nil {
 		return nil, s.core.internal(ctx, "plan checkout", err)
 	}
-	return connect.NewResponse(planCheckoutResponse(req.Msg.GetPaymentMethod(), pay.ProductDescriptor{Input: plan.Input})), nil
+	return connect.NewResponse(
+		planCheckoutResponse(req.Msg.GetPaymentMethod(), pay.ProductDescriptor{Input: plan.Input}),
+	), nil
 }
 
-func planCheckoutResponse(method string, product pay.ProductDescriptor) *paymentv1.PlanCheckoutResponse {
+func planCheckoutResponse(
+	method string,
+	product pay.ProductDescriptor,
+) *paymentv1.PlanCheckoutResponse {
 	js, ui := product.Input.JSONForm()
 	return &paymentv1.PlanCheckoutResponse{
 		PaymentMethod: method,
@@ -156,8 +199,12 @@ func (s *PaymentCheckoutService) ConfirmCheckout(
 	if err != nil {
 		return nil, err
 	}
-	if (session.Status != "planned" && session.Status != "confirmed") || session.PaymentMethod != req.Msg.GetPaymentMethod() {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("checkout must be planned before confirmation"))
+	if (session.Status != "planned" && session.Status != "confirmed") ||
+		session.PaymentMethod != req.Msg.GetPaymentMethod() {
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			errors.New("checkout must be planned before confirmation"),
+		)
 	}
 	inputs := map[string]any{}
 	if req.Msg.GetInputs() != nil {
@@ -171,7 +218,10 @@ func (s *PaymentCheckoutService) ConfirmCheckout(
 		return product.ID == session.ProductID
 	})
 	if product < 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("planned payment product is unavailable"))
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			errors.New("planned payment product is unavailable"),
+		)
 	}
 	if err := descriptor.Products[product].Input.Validate(inputs); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -185,14 +235,23 @@ func (s *PaymentCheckoutService) ConfirmCheckout(
 		ID: session.ID, OutTradeNo: newOutTradeNo(), Inputs: inputJSON,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("checkout session cannot create an order"))
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			errors.New("checkout session cannot create an order"),
+		)
 	}
 	if err != nil {
 		return nil, s.core.internal(ctx, "start checkout order", err)
 	}
 	order := paymentOrderFromStart(started)
 	if order.Status == "creating" {
-		order, err = s.core.createProviderOrder(ctx, order, inputs, session.ReturnPath, clientContext(req))
+		order, err = s.core.createProviderOrder(
+			ctx,
+			order,
+			inputs,
+			session.ReturnPath,
+			clientContext(req),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +269,10 @@ func (s *PaymentCheckoutService) GetCheckoutOrder(
 	if err != nil {
 		return nil, err
 	}
-	order, err := s.core.repo.GetPaymentOrderByCheckoutSession(ctx, pgtype.Text{String: session.ID, Valid: true})
+	order, err := s.core.repo.GetPaymentOrderByCheckoutSession(
+		ctx,
+		pgtype.Text{String: session.ID, Valid: true},
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("checkout order not found"))
 	}
@@ -226,13 +288,21 @@ func (s *PaymentCheckoutService) GetCheckoutOrder(
 	}), nil
 }
 
-func (c *paymentCore) route(ctx context.Context, purpose, method string, client pay.ClientContext) (kitsettings.GenericProfile, pay.PlanResult, error) {
+func (c *paymentCore) route(
+	ctx context.Context,
+	purpose, method string,
+	client pay.ClientContext,
+) (kitsettings.GenericProfile, pay.PlanResult, error) {
 	profiles, err := c.gateway.ProfilesFor(ctx, purpose)
 	if err != nil {
 		return kitsettings.GenericProfile{}, pay.PlanResult{}, err
 	}
 	for _, profile := range profiles {
-		plan, err := c.gateway.Plan(ctx, profile, pay.PlanRequest{PaymentMethod: method, Client: client})
+		plan, err := c.gateway.Plan(
+			ctx,
+			profile,
+			pay.PlanRequest{PaymentMethod: method, Client: client},
+		)
 		if err == nil {
 			return profile, plan, nil
 		}
@@ -240,11 +310,16 @@ func (c *paymentCore) route(ctx context.Context, purpose, method string, client 
 			return kitsettings.GenericProfile{}, pay.PlanResult{}, c.unavailable(err)
 		}
 	}
-	return kitsettings.GenericProfile{}, pay.PlanResult{}, connect.NewError(connect.CodeFailedPrecondition,
-		fmt.Errorf("payment method %q is not available", method))
+	return kitsettings.GenericProfile{}, pay.PlanResult{}, connect.NewError(
+		connect.CodeFailedPrecondition,
+		fmt.Errorf("payment method %q is not available", method),
+	)
 }
 
-func (c *paymentCore) availableMethods(ctx context.Context, purpose string) ([]*paymentv1.CheckoutPaymentMethod, error) {
+func (c *paymentCore) availableMethods(
+	ctx context.Context,
+	purpose string,
+) ([]*paymentv1.CheckoutPaymentMethod, error) {
 	profiles, err := c.gateway.ProfilesFor(ctx, purpose)
 	if err != nil {
 		return nil, err
@@ -275,7 +350,13 @@ func (c *paymentCore) availableMethods(ctx context.Context, purpose string) ([]*
 	return out, nil
 }
 
-func (c *paymentCore) createProviderOrder(ctx context.Context, order repository.PaymentOrder, inputs map[string]any, returnPath string, client pay.ClientContext) (repository.PaymentOrder, error) {
+func (c *paymentCore) createProviderOrder(
+	ctx context.Context,
+	order repository.PaymentOrder,
+	inputs map[string]any,
+	returnPath string,
+	client pay.ClientContext,
+) (repository.PaymentOrder, error) {
 	profile, err := c.gateway.ProfileByID(ctx, order.ProfileID)
 	if err != nil {
 		return order, c.unavailable(err)
@@ -308,7 +389,12 @@ func (c *paymentCore) createProviderOrder(ctx context.Context, order repository.
 	return updated, nil
 }
 
-func (c *paymentCore) reconcile(ctx context.Context, order repository.PaymentOrder, returnPath string, client pay.ClientContext) (repository.PaymentOrder, error) {
+func (c *paymentCore) reconcile(
+	ctx context.Context,
+	order repository.PaymentOrder,
+	returnPath string,
+	client pay.ClientContext,
+) (repository.PaymentOrder, error) {
 	switch order.Status {
 	case "creating":
 		profile, err := c.gateway.ProfileByID(ctx, order.ProfileID)
@@ -353,7 +439,11 @@ func (c *paymentCore) reconcile(ctx context.Context, order repository.PaymentOrd
 	return order, nil
 }
 
-func (c *paymentCore) applyQueryResult(ctx context.Context, order repository.PaymentOrder, result pay.QueryResult) (repository.PaymentOrder, error) {
+func (c *paymentCore) applyQueryResult(
+	ctx context.Context,
+	order repository.PaymentOrder,
+	result pay.QueryResult,
+) (repository.PaymentOrder, error) {
 	switch result.State {
 	case pay.StatePaid:
 		paidAt := result.PaidAt
@@ -375,12 +465,19 @@ func (c *paymentCore) applyQueryResult(ctx context.Context, order repository.Pay
 	}
 }
 
-func (c *paymentCore) markRefunded(ctx context.Context, order repository.PaymentOrder) (repository.PaymentOrder, error) {
+func (c *paymentCore) markRefunded(
+	ctx context.Context,
+	order repository.PaymentOrder,
+) (repository.PaymentOrder, error) {
 	_, err := c.repo.MarkPaymentOrderRefunded(ctx, order.ID)
 	return c.rereadTransition(ctx, order, err)
 }
 
-func (c *paymentCore) rereadTransition(ctx context.Context, order repository.PaymentOrder, err error) (repository.PaymentOrder, error) {
+func (c *paymentCore) rereadTransition(
+	ctx context.Context,
+	order repository.PaymentOrder,
+	err error,
+) (repository.PaymentOrder, error) {
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return order, c.internal(ctx, "update payment order", err)
 	}
@@ -391,7 +488,11 @@ func (c *paymentCore) rereadTransition(ctx context.Context, order repository.Pay
 	return current, nil
 }
 
-func (c *paymentCore) settled(ctx context.Context, order, updated repository.PaymentOrder, err error) (repository.PaymentOrder, error) {
+func (c *paymentCore) settled(
+	ctx context.Context,
+	order, updated repository.PaymentOrder,
+	err error,
+) (repository.PaymentOrder, error) {
 	if err == nil {
 		return updated, nil
 	}
@@ -401,15 +502,23 @@ func (c *paymentCore) settled(ctx context.Context, order, updated repository.Pay
 	return order, c.internal(ctx, "update payment order", err)
 }
 
-func (s *PaymentService) GetPaymentOrder(ctx context.Context, req *connect.Request[paymentv1.GetPaymentOrderRequest]) (*connect.Response[paymentv1.GetPaymentOrderResponse], error) {
+func (s *PaymentService) GetPaymentOrder(
+	ctx context.Context,
+	req *connect.Request[paymentv1.GetPaymentOrderRequest],
+) (*connect.Response[paymentv1.GetPaymentOrderResponse], error) {
 	order, err := s.core.getOrder(ctx, req.Msg.GetId())
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&paymentv1.GetPaymentOrderResponse{Order: paymentOrderToProto(order)}), nil
+	return connect.NewResponse(
+		&paymentv1.GetPaymentOrderResponse{Order: paymentOrderToProto(order)},
+	), nil
 }
 
-func (s *PaymentService) SyncPaymentOrder(ctx context.Context, req *connect.Request[paymentv1.SyncPaymentOrderRequest]) (*connect.Response[paymentv1.SyncPaymentOrderResponse], error) {
+func (s *PaymentService) SyncPaymentOrder(
+	ctx context.Context,
+	req *connect.Request[paymentv1.SyncPaymentOrderRequest],
+) (*connect.Response[paymentv1.SyncPaymentOrderResponse], error) {
 	order, err := s.core.getOrder(ctx, req.Msg.GetId())
 	if err != nil {
 		return nil, err
@@ -418,10 +527,15 @@ func (s *PaymentService) SyncPaymentOrder(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&paymentv1.SyncPaymentOrderResponse{Order: paymentOrderToProto(order)}), nil
+	return connect.NewResponse(
+		&paymentv1.SyncPaymentOrderResponse{Order: paymentOrderToProto(order)},
+	), nil
 }
 
-func (s *PaymentService) ListPaymentOrders(ctx context.Context, req *connect.Request[paymentv1.ListPaymentOrdersRequest]) (*connect.Response[paymentv1.ListPaymentOrdersResponse], error) {
+func (s *PaymentService) ListPaymentOrders(
+	ctx context.Context,
+	req *connect.Request[paymentv1.ListPaymentOrdersRequest],
+) (*connect.Response[paymentv1.ListPaymentOrdersResponse], error) {
 	pageSize := req.Msg.GetPageSize()
 	if pageSize == 0 {
 		pageSize = defaultPaymentPageSize
@@ -439,7 +553,10 @@ func (s *PaymentService) ListPaymentOrders(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, s.core.internal(ctx, "list payment orders", err)
 	}
-	total, err := s.core.repo.CountPaymentOrders(ctx, repository.CountPaymentOrdersParams{Status: status, Provider: provider})
+	total, err := s.core.repo.CountPaymentOrders(
+		ctx,
+		repository.CountPaymentOrdersParams{Status: status, Provider: provider},
+	)
 	if err != nil {
 		return nil, s.core.internal(ctx, "count payment orders", err)
 	}
@@ -447,23 +564,34 @@ func (s *PaymentService) ListPaymentOrders(ctx context.Context, req *connect.Req
 	for i, row := range rows {
 		orders[i] = paymentOrderToProto(row)
 	}
-	return connect.NewResponse(&paymentv1.ListPaymentOrdersResponse{Orders: orders, Total: total}), nil
+	return connect.NewResponse(
+		&paymentv1.ListPaymentOrdersResponse{Orders: orders, Total: total},
+	), nil
 }
 
-func (s *PaymentService) RefundPaymentOrder(ctx context.Context, req *connect.Request[paymentv1.RefundPaymentOrderRequest]) (*connect.Response[paymentv1.RefundPaymentOrderResponse], error) {
+func (s *PaymentService) RefundPaymentOrder(
+	ctx context.Context,
+	req *connect.Request[paymentv1.RefundPaymentOrderRequest],
+) (*connect.Response[paymentv1.RefundPaymentOrderResponse], error) {
 	order, err := s.core.getOrder(ctx, req.Msg.GetId())
 	if err != nil {
 		return nil, err
 	}
 	if order.Status != "paid" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("order is %s, only paid orders can be refunded", order.Status))
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("order is %s, only paid orders can be refunded", order.Status),
+		)
 	}
 	profile, err := s.core.gateway.ProfileByID(ctx, order.ProfileID)
 	if err != nil {
 		return nil, s.core.unavailable(err)
 	}
 	result, err := s.core.gateway.Refund(ctx, profile, pay.RefundRequest{
-		OutTradeNo: order.OutTradeNo, RefundNo: refundNo(order.OutTradeNo), Reason: req.Msg.GetReason(), Amount: order.Amount,
+		OutTradeNo: order.OutTradeNo,
+		RefundNo:   refundNo(order.OutTradeNo),
+		Reason:     req.Msg.GetReason(),
+		Amount:     order.Amount,
 	})
 	if err != nil {
 		return nil, s.core.unavailable(fmt.Errorf("refund: %w", err))
@@ -477,10 +605,15 @@ func (s *PaymentService) RefundPaymentOrder(ctx context.Context, req *connect.Re
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&paymentv1.RefundPaymentOrderResponse{Order: paymentOrderToProto(order)}), nil
+	return connect.NewResponse(
+		&paymentv1.RefundPaymentOrderResponse{Order: paymentOrderToProto(order)},
+	), nil
 }
 
-func (c *paymentCore) resolveCheckout(ctx context.Context, token string) (repository.PaymentCheckoutSession, error) {
+func (c *paymentCore) resolveCheckout(
+	ctx context.Context,
+	token string,
+) (repository.PaymentCheckoutSession, error) {
 	session, err := c.checkout.Resolve(ctx, token)
 	switch {
 	case errors.Is(err, pay.ErrInvalidCheckout):
@@ -497,7 +630,10 @@ func (c *paymentCore) resolveCheckout(ctx context.Context, token string) (reposi
 func (c *paymentCore) getOrder(ctx context.Context, id string) (repository.PaymentOrder, error) {
 	orderID, err := uuid.Parse(id)
 	if err != nil {
-		return repository.PaymentOrder{}, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid order id"))
+		return repository.PaymentOrder{}, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid order id"),
+		)
 	}
 	order, err := c.repo.GetPaymentOrder(ctx, orderID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -565,7 +701,10 @@ func paymentOrderToProto(row repository.PaymentOrder) *paymentv1.PaymentOrder {
 }
 
 func checkoutOrderToProto(row repository.PaymentOrder, token string) *paymentv1.CheckoutOrder {
-	return &paymentv1.CheckoutOrder{Order: paymentOrderToProto(row), Action: actionToProto(row, token)}
+	return &paymentv1.CheckoutOrder{
+		Order:  paymentOrderToProto(row),
+		Action: actionToProto(row, token),
+	}
 }
 
 func actionToProto(row repository.PaymentOrder, token string) *paymentv1.PaymentAction {
@@ -585,13 +724,25 @@ func actionToProto(row repository.PaymentOrder, token string) *paymentv1.Payment
 		}
 		out.Action = &paymentv1.PaymentAction_Qr{Qr: qr}
 	case action.Redirect != nil:
-		out.Action = &paymentv1.PaymentAction_Redirect{Redirect: &paymentv1.RedirectAction{Url: action.Redirect.URL}}
+		out.Action = &paymentv1.PaymentAction_Redirect{
+			Redirect: &paymentv1.RedirectAction{Url: action.Redirect.URL},
+		}
 	case action.Form != nil:
-		out.Action = &paymentv1.PaymentAction_Form{Form: &paymentv1.FormAction{Url: action.Form.URL, Method: action.Form.Method, Fields: action.Form.Fields}}
+		out.Action = &paymentv1.PaymentAction_Form{
+			Form: &paymentv1.FormAction{
+				Url:    action.Form.URL,
+				Method: action.Form.Method,
+				Fields: action.Form.Fields,
+			},
+		}
 	case action.Wait != nil:
-		out.Action = &paymentv1.PaymentAction_Wait{Wait: &paymentv1.WaitAction{PollAfterMs: action.Wait.PollAfterMS}}
+		out.Action = &paymentv1.PaymentAction_Wait{
+			Wait: &paymentv1.WaitAction{PollAfterMs: action.Wait.PollAfterMS},
+		}
 	case action.HostedFlow != nil:
-		out.Action = &paymentv1.PaymentAction_HostedFlow{HostedFlow: &paymentv1.HostedFlowAction{Url: "/api/payment/hosted-flow/" + token}}
+		out.Action = &paymentv1.PaymentAction_HostedFlow{
+			HostedFlow: &paymentv1.HostedFlowAction{Url: "/api/payment/hosted-flow/" + token},
+		}
 	default:
 		return nil
 	}

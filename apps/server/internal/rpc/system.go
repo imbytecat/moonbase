@@ -74,7 +74,11 @@ func NewSystemService(
 ) *SystemService {
 	base := systemBase{settings: store, logger: logger}
 	return &SystemService{
-		systemStorage: &systemStorage{systemBase: base, storageTester: storageTester, storageRegistry: storageRegistry},
+		systemStorage: &systemStorage{
+			systemBase:      base,
+			storageTester:   storageTester,
+			storageRegistry: storageRegistry,
+		},
 		systemCaptcha: &systemCaptcha{systemBase: base, captchaRegistry: captchaRegistry},
 		systemEmail:   &systemEmail{systemBase: base, emailRegistry: emailRegistry, mailer: mailer},
 		systemSms:     &systemSms{systemBase: base, smsRegistry: smsRegistry, smser: smser},

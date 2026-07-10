@@ -41,14 +41,28 @@ type registration struct {
 
 type Registration struct{ entry registration }
 
-func Register[T any](key string, presentation integration.Presentation, contract config.Contract[T], send func(context.Context, T, Message) error) Registration {
+func Register[T any](
+	key string,
+	presentation integration.Presentation,
+	contract config.Contract[T],
+	send func(context.Context, T, Message) error,
+) Registration {
 	definitionErr := contract.ValidateDefinition()
 	if send == nil {
 		definitionErr = errors.New("provider operation is missing")
 	}
 	return Registration{entry: registration{
-		descriptor: Descriptor{Key: key, Presentation: presentation, JSONSchema: contract.JSONSchema(), UISchema: contract.UISchema()},
-		contract:   contractOps{create: contract.CreateWrite, update: contract.UpdateWrite, view: contract.View},
+		descriptor: Descriptor{
+			Key:          key,
+			Presentation: presentation,
+			JSONSchema:   contract.JSONSchema(),
+			UISchema:     contract.UISchema(),
+		},
+		contract: contractOps{
+			create: contract.CreateWrite,
+			update: contract.UpdateWrite,
+			view:   contract.View,
+		},
 		send: func(ctx context.Context, values map[string]any, message Message) error {
 			typed, err := contract.Decode(values)
 			if err != nil {
@@ -68,7 +82,10 @@ type Registry struct {
 var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registration, 0, len(registrations)), byKey: make(map[string]int, len(registrations))}
+	r := Registry{
+		entries: make([]registration, 0, len(registrations)),
+		byKey:   make(map[string]int, len(registrations)),
+	}
 	for _, item := range registrations {
 		e := item.entry
 		if e.descriptor.Key == "" {
@@ -118,7 +135,12 @@ func (r Registry) Providers() []string {
 	return out
 }
 
-func (r Registry) SendTemplate(ctx context.Context, provider string, values map[string]any, templateCode, e164, content string) error {
+func (r Registry) SendTemplate(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	templateCode, e164, content string,
+) error {
 	e, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured
@@ -126,11 +148,20 @@ func (r Registry) SendTemplate(ctx context.Context, provider string, values map[
 	return e.send(ctx, values, Message{TemplateCode: templateCode, E164: e164, Content: content})
 }
 
-func (r Registry) SendCode(ctx context.Context, provider string, values map[string]any, e164, code string) error {
+func (r Registry) SendCode(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	e164, code string,
+) error {
 	return r.SendTemplate(ctx, provider, values, "", e164, code)
 }
 
-func (r Registry) CreateConfig(provider string, values map[string]any, secrets map[string]string) (map[string]any, error) {
+func (r Registry) CreateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", provider)
@@ -138,7 +169,12 @@ func (r Registry) CreateConfig(provider string, values map[string]any, secrets m
 	return e.contract.create(values, secrets)
 }
 
-func (r Registry) UpdateConfig(provider string, values map[string]any, secrets map[string]string, stored map[string]any) (map[string]any, error) {
+func (r Registry) UpdateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+	stored map[string]any,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", provider)

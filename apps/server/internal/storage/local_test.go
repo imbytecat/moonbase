@@ -37,7 +37,10 @@ func (m *memQuerier) UpsertSetting(_ context.Context, arg repository.UpsertSetti
 	return nil
 }
 
-func (m *memQuerier) GetOrCreateSetting(_ context.Context, arg repository.GetOrCreateSettingParams) (repository.Setting, error) {
+func (m *memQuerier) GetOrCreateSetting(
+	_ context.Context,
+	arg repository.GetOrCreateSettingParams,
+) (repository.Setting, error) {
 	if raw, ok := m.rows[arg.Key]; ok {
 		return repository.Setting{Key: arg.Key, Value: raw}, nil
 	}
@@ -66,15 +69,29 @@ func newLocalFixture(t *testing.T) (*settings.Store, *Client) {
 func TestLocalPutThenGetRoundtrip(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle(
+		"/files/{purpose}/{key...}",
+		NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))),
+	)
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 
-	putURL, err := client.PresignPut(t.Context(), PurposeAvatars, "u1/pic.png", "image/png", time.Minute)
+	putURL, err := client.PresignPut(
+		t.Context(),
+		PurposeAvatars,
+		"u1/pic.png",
+		"image/png",
+		time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+putURL, strings.NewReader("payload"))
+	req, err := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodPut,
+		srv.URL+putURL,
+		strings.NewReader("payload"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,15 +126,29 @@ func TestLocalPutThenGetRoundtrip(t *testing.T) {
 func TestLocalServesPublicPurposeWithoutSignature(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle(
+		"/files/{purpose}/{key...}",
+		NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))),
+	)
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 
-	putURL, err := client.PresignPut(t.Context(), PurposeAvatars, "u1/pic.png", "image/png", time.Minute)
+	putURL, err := client.PresignPut(
+		t.Context(),
+		PurposeAvatars,
+		"u1/pic.png",
+		"image/png",
+		time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+putURL, strings.NewReader("payload"))
+	req, err := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodPut,
+		srv.URL+putURL,
+		strings.NewReader("payload"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +182,13 @@ func TestLocalRejectsTamperedAndExpiredSignatures(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/files/{purpose}/{key...}", handler)
 
-	signed, err := client.LocalSignedURL(t.Context(), http.MethodGet, privatePurpose, "u1/pic.png", time.Minute)
+	signed, err := client.LocalSignedURL(
+		t.Context(),
+		http.MethodGet,
+		privatePurpose,
+		"u1/pic.png",
+		time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,11 +241,22 @@ func TestLocalResolveURLPublicPurposeIsUnsignedAndStable(t *testing.T) {
 
 func TestLocalObjectPathRejectsTraversal(t *testing.T) {
 	registry := NewRegistry()
-	profile := kitsettings.GenericProfile{Provider: "local", Config: map[string]any{"directory": "/srv/data"}}
-	if _, err := registry.ObjectPath(profile.Provider, profile.Config, "../etc/passwd"); err == nil {
+	profile := kitsettings.GenericProfile{
+		Provider: "local",
+		Config:   map[string]any{"directory": "/srv/data"},
+	}
+	if _, err := registry.ObjectPath(
+		profile.Provider,
+		profile.Config,
+		"../etc/passwd",
+	); err == nil {
 		t.Fatal("path traversal must be rejected")
 	}
-	if _, err := registry.ObjectPath(profile.Provider, profile.Config, "avatars/u1/pic.png"); err != nil {
+	if _, err := registry.ObjectPath(
+		profile.Provider,
+		profile.Config,
+		"avatars/u1/pic.png",
+	); err != nil {
 		t.Fatalf("legit key rejected: %v", err)
 	}
 }
@@ -231,15 +279,29 @@ func TestLocalTestProvesDirectoryWritable(t *testing.T) {
 func TestLocalDeleteRemovesObjectAndIsIdempotent(t *testing.T) {
 	store, client := newLocalFixture(t)
 	mux := http.NewServeMux()
-	mux.Handle("/files/{purpose}/{key...}", NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	mux.Handle(
+		"/files/{purpose}/{key...}",
+		NewHandler(store, client, slog.New(slog.NewTextHandler(io.Discard, nil))),
+	)
 	srv := httptest.NewServer(http.StripPrefix("/api", mux))
 	defer srv.Close()
 
-	putURL, err := client.PresignPut(t.Context(), PurposeAvatars, "u1/pic.png", "image/png", time.Minute)
+	putURL, err := client.PresignPut(
+		t.Context(),
+		PurposeAvatars,
+		"u1/pic.png",
+		"image/png",
+		time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, srv.URL+putURL, strings.NewReader("payload"))
+	req, err := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodPut,
+		srv.URL+putURL,
+		strings.NewReader("payload"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -99,11 +99,16 @@ func NewRegistry(registrations ...Registration) (Registry, error) {
 		if entry.descriptor.Presentation.Name == "" {
 			return Registry{}, fmt.Errorf("provider %q 缺少 presentation", entry.descriptor.Key)
 		}
-		if iconRef := entry.descriptor.Presentation.IconRef; iconRef != "" && !iconRefPattern.MatchString(iconRef) {
+		if iconRef := entry.descriptor.Presentation.IconRef; iconRef != "" &&
+			!iconRefPattern.MatchString(iconRef) {
 			return Registry{}, fmt.Errorf("provider %q 的 icon_ref 无效", entry.descriptor.Key)
 		}
 		if entry.definitionErr != nil {
-			return Registry{}, fmt.Errorf("provider %q 定义无效: %w", entry.descriptor.Key, entry.definitionErr)
+			return Registry{}, fmt.Errorf(
+				"provider %q 定义无效: %w",
+				entry.descriptor.Key,
+				entry.definitionErr,
+			)
 		}
 		if _, exists := registry.byKey[entry.descriptor.Key]; exists {
 			return Registry{}, fmt.Errorf("provider key %q 重复", entry.descriptor.Key)
@@ -140,7 +145,12 @@ func (r Registry) Providers() []string {
 	return out
 }
 
-func (r Registry) Send(ctx context.Context, provider string, values map[string]any, message Message) error {
+func (r Registry) Send(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	message Message,
+) error {
 	entry, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured

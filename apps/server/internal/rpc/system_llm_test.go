@@ -12,11 +12,21 @@ import (
 func TestInvalidStoredLlmProfileHasSafeProjection(t *testing.T) {
 	q := newMemSettingsQuerier()
 	store := settings.NewStore(q)
-	if err := store.SetLlm(t.Context(), settings.Llm{Profiles: []kitsettings.GenericProfile{{Id: "bad", Provider: "openai", Config: map[string]any{"apiKey": "secret"}}}}); err != nil {
+	if err := store.SetLlm(
+		t.Context(),
+		settings.Llm{
+			Profiles: []kitsettings.GenericProfile{
+				{Id: "bad", Provider: "openai", Config: map[string]any{"apiKey": "secret"}},
+			},
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 	svc, _ := newLlmSystemService(q)
-	resp, err := svc.GetSystemSettings(t.Context(), connect.NewRequest(&systemv1.GetSystemSettingsRequest{}))
+	resp, err := svc.GetSystemSettings(
+		t.Context(),
+		connect.NewRequest(&systemv1.GetSystemSettingsRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

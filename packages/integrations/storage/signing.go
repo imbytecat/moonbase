@@ -12,7 +12,10 @@ import (
 
 func SignedURL(secret []byte, method, purpose, key string, expires time.Duration) string {
 	exp := time.Now().Add(expires).Unix()
-	q := url.Values{"exp": {strconv.FormatInt(exp, 10)}, "sig": {Signature(secret, method, purpose, key, exp)}}
+	q := url.Values{
+		"exp": {strconv.FormatInt(exp, 10)},
+		"sig": {Signature(secret, method, purpose, key, exp)},
+	}
 	return "/api/files/" + purpose + "/" + key + "?" + q.Encode()
 }
 

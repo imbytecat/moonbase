@@ -14,7 +14,12 @@ import (
 // NewPool connects with pgx internals (connect/acquire errors) logged to
 // logger at warn level; logSQL additionally traces every statement with args
 // and duration at debug level.
-func NewPool(ctx context.Context, url string, logger *slog.Logger, logSQL bool) (*pgxpool.Pool, error) {
+func NewPool(
+	ctx context.Context,
+	url string,
+	logger *slog.Logger,
+	logSQL bool,
+) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)

@@ -17,7 +17,10 @@ func TestCatalog(t *testing.T) {
 		{Key: "role.write", Description: "Create, update and delete roles"},
 		{Key: "settings.read", Description: "View business settings"},
 		{Key: "settings.write", Description: "Change business settings"},
-		{Key: "system.read", Description: "View system settings (storage, captcha, email, SMS, AI, payments)"},
+		{
+			Key:         "system.read",
+			Description: "View system settings (storage, captcha, email, SMS, AI, payments)",
+		},
 		{Key: "system.write", Description: "Change system settings and run channel tests"},
 		{Key: "workflow.read", Description: "View workflow runs and their steps"},
 		{Key: "workflow.write", Description: "Cancel, resume and trigger workflows"},

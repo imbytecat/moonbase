@@ -195,7 +195,10 @@ func (s *AuthService) BindPhone(
 	}
 	// The code must have been issued for THIS user binding THIS phone.
 	if !row.UserID.Valid || uuid.UUID(row.UserID.Bytes) != id.UserID {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid or expired code"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid or expired code"),
+		)
 	}
 	if err := s.repo.SetUserPhone(ctx, repository.SetUserPhoneParams{
 		ID:    id.UserID,
@@ -288,7 +291,10 @@ func (s *AuthService) normalizedAllowedPhone(ctx context.Context, input string) 
 	if err != nil {
 		return "", s.internal(ctx, "load auth settings", err)
 	}
-	e164, region, err := phone.NormalizeWithRegion(input, phone.DefaultRegion(authCfg.AllowedPhoneRegions))
+	e164, region, err := phone.NormalizeWithRegion(
+		input,
+		phone.DefaultRegion(authCfg.AllowedPhoneRegions),
+	)
 	if err != nil {
 		return "", connect.NewError(connect.CodeInvalidArgument, phone.ErrInvalid)
 	}
@@ -416,7 +422,10 @@ func (s *AuthService) BindEmail(
 		return nil, s.verifyConsumeError(ctx, "bind email", err)
 	}
 	if !row.UserID.Valid || uuid.UUID(row.UserID.Bytes) != id.UserID {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid or expired code"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid or expired code"),
+		)
 	}
 	if err := s.repo.SetUserEmail(ctx, repository.SetUserEmailParams{
 		ID:    id.UserID,
@@ -438,7 +447,11 @@ func (s *AuthService) BindEmail(
 
 // requirePassword gates identifier-lifecycle actions: a hijacked cookie alone
 // must not be able to strip recovery channels.
-func (s *AuthService) requirePassword(ctx context.Context, userID uuid.UUID, password string) error {
+func (s *AuthService) requirePassword(
+	ctx context.Context,
+	userID uuid.UUID,
+	password string,
+) error {
 	user, err := s.repo.GetUser(ctx, userID)
 	if err != nil {
 		return s.internal(ctx, "get user", err)
@@ -448,7 +461,10 @@ func (s *AuthService) requirePassword(ctx context.Context, userID uuid.UUID, pas
 		return s.internal(ctx, "verify password", err)
 	}
 	if !ok {
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("current password is incorrect"))
+		return connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("current password is incorrect"),
+		)
 	}
 	return nil
 }

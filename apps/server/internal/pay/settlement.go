@@ -36,7 +36,11 @@ type SettlementDispatcher struct {
 	logger   *slog.Logger
 }
 
-func NewSettlementDispatcher(repo repository.Querier, handlers map[string]SettlementHandler, logger *slog.Logger) *SettlementDispatcher {
+func NewSettlementDispatcher(
+	repo repository.Querier,
+	handlers map[string]SettlementHandler,
+	logger *slog.Logger,
+) *SettlementDispatcher {
 	return &SettlementDispatcher{repo: repo, handlers: handlers, logger: logger}
 }
 
@@ -58,7 +62,14 @@ func (d *SettlementDispatcher) DispatchOne(ctx context.Context) (bool, error) {
 		return true, d.repo.MarkSettlementEventDelivered(ctx, row.ID)
 	}
 	if err := handler.HandleSettlement(ctx, event); err != nil {
-		d.logger.WarnContext(ctx, "payment settlement delivery failed", "event", row.ID, "error", err)
+		d.logger.WarnContext(
+			ctx,
+			"payment settlement delivery failed",
+			"event",
+			row.ID,
+			"error",
+			err,
+		)
 		delay := time.Second * time.Duration(1<<min(row.Attempts, 8))
 		if retryErr := d.repo.RetrySettlementEvent(ctx, repository.RetrySettlementEventParams{
 			ID: row.ID, NextAttemptAt: time.Now().Add(delay), LastError: err.Error(),

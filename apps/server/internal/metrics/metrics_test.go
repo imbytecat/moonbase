@@ -23,7 +23,11 @@ func TestCodeString(t *testing.T) {
 	}{
 		{"success", nil, "ok"},
 		{"typed", connect.NewError(connect.CodeNotFound, errors.New("x")), "not_found"},
-		{"denied", connect.NewError(connect.CodePermissionDenied, errors.New("x")), "permission_denied"},
+		{
+			"denied",
+			connect.NewError(connect.CodePermissionDenied, errors.New("x")),
+			"permission_denied",
+		},
 		{"plain", errors.New("bare"), "unknown"},
 	}
 	for _, tc := range cases {

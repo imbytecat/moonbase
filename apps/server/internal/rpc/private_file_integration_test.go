@@ -46,9 +46,13 @@ func TestPermanentFileURLPrivatePurposeAuthThenSignedRedirect(t *testing.T) {
 	loginAsAdmin(t, baseURL, client)
 
 	var fileID uuid.UUID
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		`INSERT INTO files (object_key, content_type, uploaded_by, purpose) VALUES ($1, $2, $3, $4) RETURNING id`,
-		"m1/doc.txt", "text/plain", uuid.New(), privatePurpose,
+		"m1/doc.txt",
+		"text/plain",
+		uuid.New(),
+		privatePurpose,
 	).Scan(&fileID); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +65,12 @@ func TestPermanentFileURLPrivatePurposeAuthThenSignedRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, serverURL+putURL, strings.NewReader("secret"))
+	putReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPut,
+		serverURL+putURL,
+		strings.NewReader("secret"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,9 +169,13 @@ func TestPermanentFileURLPrivatePurposeS3SignedRedirect(t *testing.T) {
 
 	key := "private-test/" + uuid.NewString() + ".txt"
 	var fileID uuid.UUID
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		`INSERT INTO files (object_key, content_type, uploaded_by, purpose) VALUES ($1, $2, $3, $4) RETURNING id`,
-		key, "text/plain", uuid.New(), privatePurpose,
+		key,
+		"text/plain",
+		uuid.New(),
+		privatePurpose,
 	).Scan(&fileID); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +188,12 @@ func TestPermanentFileURLPrivatePurposeS3SignedRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, putURL, strings.NewReader("secret"))
+	putReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPut,
+		putURL,
+		strings.NewReader("secret"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

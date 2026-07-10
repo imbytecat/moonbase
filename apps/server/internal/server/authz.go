@@ -155,9 +155,19 @@ var authzRules = map[string]auth.Rule{
 	paymentv1connect.PaymentCheckoutServicePlanCheckoutProcedure:       {Public: true},
 	paymentv1connect.PaymentCheckoutServiceConfirmCheckoutProcedure:    {Public: true},
 	paymentv1connect.PaymentCheckoutServiceGetCheckoutOrderProcedure:   {Public: true},
-	paymentv1connect.PaymentServiceCreateDemoCheckoutProcedure:         {Permission: "payment.write"},
-	paymentv1connect.PaymentServiceGetPaymentOrderProcedure:            {Permission: "payment.read"},
-	paymentv1connect.PaymentServiceSyncPaymentOrderProcedure:           {Permission: "payment.write"},
-	paymentv1connect.PaymentServiceListPaymentOrdersProcedure:          {Permission: "payment.read"},
-	paymentv1connect.PaymentServiceRefundPaymentOrderProcedure:         {Permission: "payment.write"},
+	paymentv1connect.PaymentServiceCreateDemoCheckoutProcedure: {
+		Permission: "payment.write",
+	},
+	paymentv1connect.PaymentServiceGetPaymentOrderProcedure: {
+		Permission: "payment.read",
+	},
+	paymentv1connect.PaymentServiceSyncPaymentOrderProcedure: {
+		Permission: "payment.write",
+	},
+	paymentv1connect.PaymentServiceListPaymentOrdersProcedure: {
+		Permission: "payment.read",
+	},
+	paymentv1connect.PaymentServiceRefundPaymentOrderProcedure: {
+		Permission: "payment.write",
+	},
 }

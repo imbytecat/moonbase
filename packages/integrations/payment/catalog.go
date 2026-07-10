@@ -45,7 +45,10 @@ func (r Registry) ValidateProducts(provider string, products []string) error {
 		return ErrNotConfigured
 	}
 	for _, id := range products {
-		if !slices.ContainsFunc(descriptor.Products, func(product ProductDescriptor) bool { return product.ID == id }) {
+		if !slices.ContainsFunc(
+			descriptor.Products,
+			func(product ProductDescriptor) bool { return product.ID == id },
+		) {
 			return fmt.Errorf("%w: %q for provider %q", ErrUnknownMethod, id, provider)
 		}
 	}

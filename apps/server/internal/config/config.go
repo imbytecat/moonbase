@@ -46,11 +46,11 @@ type CORSConfig struct {
 // No admin email on purpose: the identifier model makes email optional, and
 // a real one is bound later via the profile page (code-verified).
 type AuthConfig struct {
-	SessionTTLHours         int    `mapstructure:"session_ttl_hours" default:"168"`
+	SessionTTLHours         int    `mapstructure:"session_ttl_hours"          default:"168"`
 	SessionMaxLifetimeHours int    `mapstructure:"session_max_lifetime_hours" default:"720"`
-	SecureCookie            bool   `mapstructure:"secure_cookie" default:"false"`
-	AdminUsername           string `mapstructure:"admin_username" default:"admin"`
-	AdminPassword           string `mapstructure:"admin_password" default:"admin123"`
+	SecureCookie            bool   `mapstructure:"secure_cookie"              default:"false"`
+	AdminUsername           string `mapstructure:"admin_username"             default:"admin"`
+	AdminPassword           string `mapstructure:"admin_password"             default:"admin123"`
 }
 
 func (a AuthConfig) SessionTTL() time.Duration {
@@ -84,7 +84,7 @@ type OtelConfig struct {
 	// TraceEndpoint is the OTLP/gRPC collector address, e.g. "localhost:4317".
 	// Empty disables tracing entirely.
 	TraceEndpoint string `mapstructure:"trace_endpoint" default:""`
-	ServiceName   string `mapstructure:"service_name" default:"moonbase"`
+	ServiceName   string `mapstructure:"service_name"   default:"moonbase"`
 	// Insecure sends OTLP over plaintext (no TLS) — for a local collector.
 	Insecure bool `mapstructure:"insecure" default:"false"`
 	// SampleRatio is the head-based sampling probability in [0,1]. 1 records

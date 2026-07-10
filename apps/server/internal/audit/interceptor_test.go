@@ -21,7 +21,10 @@ type fakeAuditQuerier struct {
 	inserted []repository.InsertAuditLogParams
 }
 
-func (f *fakeAuditQuerier) InsertAuditLog(_ context.Context, arg repository.InsertAuditLogParams) error {
+func (f *fakeAuditQuerier) InsertAuditLog(
+	_ context.Context,
+	arg repository.InsertAuditLogParams,
+) error {
 	f.inserted = append(f.inserted, arg)
 	return nil
 }
@@ -56,9 +59,11 @@ func TestInterceptorRecordsMutations(t *testing.T) {
 	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
 
 	interceptor := NewInterceptor(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	next := connect.UnaryFunc(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
-		return connect.NewResponse(&userv1.DeleteUserResponse{}), nil
-	})
+	next := connect.UnaryFunc(
+		func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+			return connect.NewResponse(&userv1.DeleteUserResponse{}), nil
+		},
+	)
 	targetID := uuid.NewString()
 	_, err := interceptor(next)(ctx, newFakeRequest(
 		"/user.v1.UserService/DeleteUser",
@@ -95,16 +100,23 @@ func TestInterceptorRecordsMutations(t *testing.T) {
 func TestInterceptorSkipsReads(t *testing.T) {
 	repo := &fakeAuditQuerier{}
 	interceptor := NewInterceptor(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	next := connect.UnaryFunc(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
-		return connect.NewResponse(&userv1.ListUsersResponse{}), nil
-	})
+	next := connect.UnaryFunc(
+		func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+			return connect.NewResponse(&userv1.ListUsersResponse{}), nil
+		},
+	)
 
 	for _, procedure := range []string{
 		"/user.v1.UserService/ListUsers",
 		"/system.v1.SystemService/GetSystemSettings",
 		"/auth.v1.AuthService/Logout",
 	} {
-		if _, err := interceptor(next)(t.Context(), newFakeRequest(procedure, &userv1.ListUsersRequest{})); err != nil {
+		if _, err := interceptor(
+			next,
+		)(
+			t.Context(),
+			newFakeRequest(procedure, &userv1.ListUsersRequest{}),
+		); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -116,9 +128,11 @@ func TestInterceptorSkipsReads(t *testing.T) {
 func TestInterceptorExtractsNestedProfileID(t *testing.T) {
 	repo := &fakeAuditQuerier{}
 	interceptor := NewInterceptor(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	next := connect.UnaryFunc(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
-		return connect.NewResponse(&systemv1.UpdateCaptchaProfileResponse{}), nil
-	})
+	next := connect.UnaryFunc(
+		func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+			return connect.NewResponse(&systemv1.UpdateCaptchaProfileResponse{}), nil
+		},
+	)
 
 	_, err := interceptor(next)(t.Context(), newFakeRequest(
 		"/system.v1.SystemService/UpdateCaptchaProfile",
@@ -137,9 +151,11 @@ func TestInterceptorExtractsNestedProfileID(t *testing.T) {
 func TestInterceptorRecordsErrorResult(t *testing.T) {
 	repo := &fakeAuditQuerier{}
 	interceptor := NewInterceptor(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	next := connect.UnaryFunc(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
-		return nil, connect.NewError(connect.CodePermissionDenied, nil)
-	})
+	next := connect.UnaryFunc(
+		func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
+			return nil, connect.NewError(connect.CodePermissionDenied, nil)
+		},
+	)
 
 	_, err := interceptor(next)(t.Context(), newFakeRequest(
 		"/user.v1.UserService/DeleteUser",

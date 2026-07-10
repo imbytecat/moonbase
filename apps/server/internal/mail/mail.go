@@ -27,7 +27,11 @@ type Sender interface {
 }
 
 type ProfileSender interface {
-	SendWith(ctx context.Context, profile kitsettings.GenericProfile, to, subject, textBody string) error
+	SendWith(
+		ctx context.Context,
+		profile kitsettings.GenericProfile,
+		to, subject, textBody string,
+	) error
 }
 
 type Client struct {
@@ -61,7 +65,12 @@ func (c *Client) SendWith(
 	profile kitsettings.GenericProfile,
 	to, subject, textBody string,
 ) error {
-	return c.registry.Send(ctx, profile.Provider, profile.Config, email.Message{To: to, Subject: subject, TextBody: textBody})
+	return c.registry.Send(
+		ctx,
+		profile.Provider,
+		profile.Config,
+		email.Message{To: to, Subject: subject, TextBody: textBody},
+	)
 }
 
 func (c *Client) Usable(ctx context.Context, purpose string) (bool, error) {

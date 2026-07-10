@@ -58,7 +58,12 @@ func (o integrationOps[P]) delete(ctx context.Context, base *systemBase, id stri
 // bindMany is the one binding write: every id must resolve, an empty list
 // unbinds. Single-valued integrations pass ≤1 id; multi-valued ones (oauth
 // login) pass the full ordered selection.
-func (o integrationOps[P]) bindMany(ctx context.Context, base *systemBase, purpose string, profileIDs []string) (settings.Integration[P], error) {
+func (o integrationOps[P]) bindMany(
+	ctx context.Context,
+	base *systemBase,
+	purpose string,
+	profileIDs []string,
+) (settings.Integration[P], error) {
 	var zero settings.Integration[P]
 	if !o.purposes.Known(purpose) {
 		return zero, connect.NewError(connect.CodeInvalidArgument,
@@ -84,7 +89,11 @@ func (o integrationOps[P]) bindMany(ctx context.Context, base *systemBase, purpo
 	return cfg, nil
 }
 
-func (o integrationOps[P]) bind(ctx context.Context, base *systemBase, purpose, profileID string) (settings.Integration[P], error) {
+func (o integrationOps[P]) bind(
+	ctx context.Context,
+	base *systemBase,
+	purpose, profileID string,
+) (settings.Integration[P], error) {
 	ids := []string{}
 	if profileID != "" {
 		ids = []string{profileID}

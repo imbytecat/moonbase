@@ -54,7 +54,12 @@ func alipayClient(config providerConfig) (*alipay.Client, error) {
 	return client, nil
 }
 
-func alipayCreate(ctx context.Context, config providerConfig, req pay.CreateRequest, notifyURL string) (string, error) {
+func alipayCreate(
+	ctx context.Context,
+	config providerConfig,
+	req pay.CreateRequest,
+	notifyURL string,
+) (string, error) {
 	client, err := alipayClient(config)
 	if err != nil {
 		return "", err
@@ -150,7 +155,11 @@ func alipayCreate(ctx context.Context, config providerConfig, req pay.CreateRequ
 	}
 }
 
-func alipayQuery(ctx context.Context, config providerConfig, outTradeNo string) (pay.QueryResult, error) {
+func alipayQuery(
+	ctx context.Context,
+	config providerConfig,
+	outTradeNo string,
+) (pay.QueryResult, error) {
 	client, err := alipayClient(config)
 	if err != nil {
 		return pay.QueryResult{}, err
@@ -175,7 +184,11 @@ func alipayQuery(ctx context.Context, config providerConfig, outTradeNo string) 
 	}, nil
 }
 
-func alipayRefund(ctx context.Context, config providerConfig, req pay.RefundRequest) (pay.RefundResult, error) {
+func alipayRefund(
+	ctx context.Context,
+	config providerConfig,
+	req pay.RefundRequest,
+) (pay.RefundResult, error) {
 	client, err := alipayClient(config)
 	if err != nil {
 		return pay.RefundResult{}, err
@@ -200,7 +213,11 @@ func alipayQueryRefund(_ context.Context, _ providerConfig, _ string) (bool, err
 	return true, nil
 }
 
-func alipayParseNotify(ctx context.Context, config providerConfig, r *http.Request) (pay.NotifyResult, error) {
+func alipayParseNotify(
+	ctx context.Context,
+	config providerConfig,
+	r *http.Request,
+) (pay.NotifyResult, error) {
 	client, err := alipayClient(config)
 	if err != nil {
 		return pay.NotifyResult{}, err

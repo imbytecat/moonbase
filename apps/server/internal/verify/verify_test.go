@@ -20,7 +20,10 @@ type fakeStore struct {
 	recentCount int64
 }
 
-func (f *fakeStore) CreateVerificationToken(_ context.Context, arg repository.CreateVerificationTokenParams) (repository.VerificationToken, error) {
+func (f *fakeStore) CreateVerificationToken(
+	_ context.Context,
+	arg repository.CreateVerificationTokenParams,
+) (repository.VerificationToken, error) {
 	row := repository.VerificationToken{
 		ID:         uuid.New(),
 		Purpose:    arg.Purpose,
@@ -33,7 +36,10 @@ func (f *fakeStore) CreateVerificationToken(_ context.Context, arg repository.Cr
 	return row, nil
 }
 
-func (f *fakeStore) GetActiveVerificationToken(_ context.Context, arg repository.GetActiveVerificationTokenParams) (repository.VerificationToken, error) {
+func (f *fakeStore) GetActiveVerificationToken(
+	_ context.Context,
+	arg repository.GetActiveVerificationTokenParams,
+) (repository.VerificationToken, error) {
 	for i := len(f.tokens) - 1; i >= 0; i-- {
 		t := f.tokens[i]
 		if t.Purpose == arg.Purpose && t.Target == arg.Target && !t.ConsumedAt.Valid {
@@ -43,9 +49,13 @@ func (f *fakeStore) GetActiveVerificationToken(_ context.Context, arg repository
 	return repository.VerificationToken{}, pgx.ErrNoRows
 }
 
-func (f *fakeStore) GetVerificationTokenBySecret(_ context.Context, arg repository.GetVerificationTokenBySecretParams) (repository.VerificationToken, error) {
+func (f *fakeStore) GetVerificationTokenBySecret(
+	_ context.Context,
+	arg repository.GetVerificationTokenBySecretParams,
+) (repository.VerificationToken, error) {
 	for _, t := range f.tokens {
-		if t.Purpose == arg.Purpose && string(t.SecretHash) == string(arg.SecretHash) && !t.ConsumedAt.Valid {
+		if t.Purpose == arg.Purpose && string(t.SecretHash) == string(arg.SecretHash) &&
+			!t.ConsumedAt.Valid {
 			return t, nil
 		}
 	}
@@ -72,7 +82,10 @@ func (f *fakeStore) ConsumeVerificationToken(_ context.Context, id uuid.UUID) er
 	return pgx.ErrNoRows
 }
 
-func (f *fakeStore) CountRecentVerificationTokens(_ context.Context, _ repository.CountRecentVerificationTokensParams) (int64, error) {
+func (f *fakeStore) CountRecentVerificationTokens(
+	_ context.Context,
+	_ repository.CountRecentVerificationTokensParams,
+) (int64, error) {
 	return f.recentCount, nil
 }
 
@@ -104,7 +117,15 @@ func TestIssueAndConsumeCode(t *testing.T) {
 	}
 
 	// Single-use: the same code is dead after consumption.
-	if _, err := svc.ConsumeCode(t.Context(), PurposeSmsLogin, "+8613800138000", code); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.ConsumeCode(
+		t.Context(),
+		PurposeSmsLogin,
+		"+8613800138000",
+		code,
+	); !errors.Is(
+		err,
+		ErrInvalid,
+	) {
 		t.Fatalf("reuse must fail with ErrInvalid, got %v", err)
 	}
 }
@@ -119,12 +140,28 @@ func TestConsumeCodeWrongGuessesExhaustAttempts(t *testing.T) {
 	}
 
 	for range maxAttempts {
-		if _, err := svc.ConsumeCode(t.Context(), PurposeSmsLogin, "+8613800138000", "000000"); !errors.Is(err, ErrInvalid) {
+		if _, err := svc.ConsumeCode(
+			t.Context(),
+			PurposeSmsLogin,
+			"+8613800138000",
+			"000000",
+		); !errors.Is(
+			err,
+			ErrInvalid,
+		) {
 			t.Fatalf("wrong guess must return ErrInvalid, got %v", err)
 		}
 	}
 	// Attempts exhausted: even the RIGHT code is now rejected.
-	if _, err := svc.ConsumeCode(t.Context(), PurposeSmsLogin, "+8613800138000", code); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.ConsumeCode(
+		t.Context(),
+		PurposeSmsLogin,
+		"+8613800138000",
+		code,
+	); !errors.Is(
+		err,
+		ErrInvalid,
+	) {
 		t.Fatalf("exhausted token must reject the correct code, got %v", err)
 	}
 }
@@ -133,14 +170,30 @@ func TestIssueCodeRateLimited(t *testing.T) {
 	store := &fakeStore{recentCount: 1}
 	svc := NewService(store)
 
-	if _, err := svc.IssueCode(t.Context(), PurposeSmsLogin, "+8613800138000", uuid.New()); !errors.Is(err, ErrRateLimited) {
+	if _, err := svc.IssueCode(
+		t.Context(),
+		PurposeSmsLogin,
+		"+8613800138000",
+		uuid.New(),
+	); !errors.Is(
+		err,
+		ErrRateLimited,
+	) {
 		t.Fatalf("send within cooldown must be rate limited, got %v", err)
 	}
 }
 
 func TestConsumeCodeUnknownTarget(t *testing.T) {
 	svc := NewService(&fakeStore{})
-	if _, err := svc.ConsumeCode(t.Context(), PurposeSmsLogin, "+8613800138000", "123456"); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.ConsumeCode(
+		t.Context(),
+		PurposeSmsLogin,
+		"+8613800138000",
+		"123456",
+	); !errors.Is(
+		err,
+		ErrInvalid,
+	) {
 		t.Fatalf("no token for target must be ErrInvalid, got %v", err)
 	}
 }
@@ -165,7 +218,14 @@ func TestLinkTokenRoundTrip(t *testing.T) {
 	if uuid.UUID(row.UserID.Bytes) != userID {
 		t.Fatal("consumed token must carry the issuing user")
 	}
-	if _, err := svc.ConsumeLinkToken(t.Context(), PurposePasswordReset, token); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.ConsumeLinkToken(
+		t.Context(),
+		PurposePasswordReset,
+		token,
+	); !errors.Is(
+		err,
+		ErrInvalid,
+	) {
 		t.Fatalf("link token must be single-use, got %v", err)
 	}
 	// Wrong purpose never matches even with the right secret.
@@ -173,7 +233,14 @@ func TestLinkTokenRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.ConsumeLinkToken(t.Context(), PurposePasswordReset, token2); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.ConsumeLinkToken(
+		t.Context(),
+		PurposePasswordReset,
+		token2,
+	); !errors.Is(
+		err,
+		ErrInvalid,
+	) {
 		t.Fatalf("cross-purpose consumption must fail, got %v", err)
 	}
 }

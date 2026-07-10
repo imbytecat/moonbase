@@ -41,23 +41,38 @@ type fakeAuthQuerier struct {
 	setUserAvatar      func(ctx context.Context, arg repository.SetUserAvatarParams) error
 }
 
-func (f *fakeAuthQuerier) GetUserByEmail(ctx context.Context, email string) (repository.User, error) {
+func (f *fakeAuthQuerier) GetUserByEmail(
+	ctx context.Context,
+	email string,
+) (repository.User, error) {
 	return f.getUserByEmail(ctx, email)
 }
 
-func (f *fakeAuthQuerier) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
+func (f *fakeAuthQuerier) GetUserByUsername(
+	ctx context.Context,
+	username string,
+) (repository.User, error) {
 	return f.getUserByUsername(ctx, username)
 }
 
-func (f *fakeAuthQuerier) GetUserByPhone(ctx context.Context, phone string) (repository.User, error) {
+func (f *fakeAuthQuerier) GetUserByPhone(
+	ctx context.Context,
+	phone string,
+) (repository.User, error) {
 	return f.getUserByPhone(ctx, phone)
 }
 
-func (f *fakeAuthQuerier) CreateSession(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
+func (f *fakeAuthQuerier) CreateSession(
+	ctx context.Context,
+	arg repository.CreateSessionParams,
+) (repository.Session, error) {
 	return f.createSession(ctx, arg)
 }
 
-func (f *fakeAuthQuerier) GetSessionIdentity(ctx context.Context, tokenHash []byte) (repository.GetSessionIdentityRow, error) {
+func (f *fakeAuthQuerier) GetSessionIdentity(
+	ctx context.Context,
+	tokenHash []byte,
+) (repository.GetSessionIdentityRow, error) {
 	return f.getSessionIdentity(ctx, tokenHash)
 }
 
@@ -76,11 +91,17 @@ func (f *fakeAuthQuerier) GetUser(ctx context.Context, id uuid.UUID) (repository
 	return f.getUser(ctx, id)
 }
 
-func (f *fakeAuthQuerier) UpdateUserPassword(ctx context.Context, arg repository.UpdateUserPasswordParams) error {
+func (f *fakeAuthQuerier) UpdateUserPassword(
+	ctx context.Context,
+	arg repository.UpdateUserPasswordParams,
+) error {
 	return f.updatePassword(ctx, arg)
 }
 
-func (f *fakeAuthQuerier) DeleteOtherUserSessions(ctx context.Context, arg repository.DeleteOtherUserSessionsParams) error {
+func (f *fakeAuthQuerier) DeleteOtherUserSessions(
+	ctx context.Context,
+	arg repository.DeleteOtherUserSessionsParams,
+) error {
 	return f.deleteOtherSess(ctx, arg)
 }
 
@@ -88,11 +109,17 @@ func (f *fakeAuthQuerier) ClearUserPhone(ctx context.Context, id uuid.UUID) (int
 	return f.clearUserPhone(ctx, id)
 }
 
-func (f *fakeAuthQuerier) DeleteUserSessionByID(ctx context.Context, arg repository.DeleteUserSessionByIDParams) (int64, error) {
+func (f *fakeAuthQuerier) DeleteUserSessionByID(
+	ctx context.Context,
+	arg repository.DeleteUserSessionByIDParams,
+) (int64, error) {
 	return f.deleteSessionByID(ctx, arg)
 }
 
-func (f *fakeAuthQuerier) UpdateUser(ctx context.Context, arg repository.UpdateUserParams) (repository.User, error) {
+func (f *fakeAuthQuerier) UpdateUser(
+	ctx context.Context,
+	arg repository.UpdateUserParams,
+) (repository.User, error) {
 	return f.updateUser(ctx, arg)
 }
 
@@ -100,7 +127,10 @@ func (f *fakeAuthQuerier) GetFile(ctx context.Context, id uuid.UUID) (repository
 	return f.getFile(ctx, id)
 }
 
-func (f *fakeAuthQuerier) SetUserAvatar(ctx context.Context, arg repository.SetUserAvatarParams) error {
+func (f *fakeAuthQuerier) SetUserAvatar(
+	ctx context.Context,
+	arg repository.SetUserAvatarParams,
+) error {
 	return f.setUserAvatar(ctx, arg)
 }
 
@@ -261,11 +291,20 @@ func TestLoginSetsSessionCookie(t *testing.T) {
 	var storedHash []byte
 	svc := newAuthService(&fakeAuthQuerier{
 		getUserByEmail: func(context.Context, string) (repository.User, error) {
-			return repository.User{ID: userID, Email: "user@example.com", PasswordHash: hash, IsActive: true}, nil
+			return repository.User{
+				ID:           userID,
+				Email:        "user@example.com",
+				PasswordHash: hash,
+				IsActive:     true,
+			}, nil
 		},
 		createSession: func(_ context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
 			storedHash = arg.TokenHash
-			return repository.Session{ID: uuid.New(), UserID: arg.UserID, TokenHash: arg.TokenHash}, nil
+			return repository.Session{
+				ID:        uuid.New(),
+				UserID:    arg.UserID,
+				TokenHash: arg.TokenHash,
+			}, nil
 		},
 		getSessionIdentity: func(context.Context, []byte) (repository.GetSessionIdentityRow, error) {
 			return repository.GetSessionIdentityRow{
@@ -298,7 +337,9 @@ func TestLoginSetsSessionCookie(t *testing.T) {
 	if len(storedHash) == 0 {
 		t.Fatal("session must be persisted with a token hash")
 	}
-	if got := resp.Msg.GetUser().GetPermissions(); len(got) != 1 || got[0] != authv1.Permission_PERMISSION_REPORT_READ {
+	if got := resp.Msg.GetUser().
+		GetPermissions(); len(got) != 1 ||
+		got[0] != authv1.Permission_PERMISSION_REPORT_READ {
 		t.Fatalf("permissions = %v, want [report.read]", got)
 	}
 }
@@ -312,7 +353,10 @@ func TestGetMeUsesInjectedIdentity(t *testing.T) {
 		Permissions: auth.PermissionSet("report.read", "user.read"),
 	}
 
-	resp, err := svc.GetMe(auth.WithIdentity(t.Context(), id), connect.NewRequest(&authv1.GetMeRequest{}))
+	resp, err := svc.GetMe(
+		auth.WithIdentity(t.Context(), id),
+		connect.NewRequest(&authv1.GetMeRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +383,10 @@ func TestRegisterDisabled(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
-		t.Fatalf("code = %v, want permission_denied (registration defaults to disabled)", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want permission_denied (registration defaults to disabled)",
+			connect.CodeOf(err),
+		)
 	}
 }
 
@@ -352,18 +399,42 @@ func TestSignupIdentifierValues(t *testing.T) {
 	}{
 		{"username policy accepts username", settings.Auth{SignupIdentifiers: []string{"username"}},
 			&authv1.RegisterRequest{Username: "alice"}, false},
-		{"username policy rejects missing username", settings.Auth{SignupIdentifiers: []string{"username"}},
-			&authv1.RegisterRequest{}, true},
+		{
+			"username policy rejects missing username",
+			settings.Auth{SignupIdentifiers: []string{"username"}},
+			&authv1.RegisterRequest{},
+			true,
+		},
 		{"username policy rejects email", settings.Auth{SignupIdentifiers: []string{"username"}},
 			&authv1.RegisterRequest{Username: "alice", Email: "a@example.com"}, true},
 		{"email policy accepts email+code", settings.Auth{SignupIdentifiers: []string{"email"}},
 			&authv1.RegisterRequest{Email: "a@example.com", EmailCode: "123456"}, false},
-		{"email policy rejects username", settings.Auth{SignupIdentifiers: []string{"email"}},
-			&authv1.RegisterRequest{Username: "alice", Email: "a@example.com", EmailCode: "123456"}, true},
-		{"both policy requires both", settings.Auth{SignupIdentifiers: []string{"username", "email"}},
-			&authv1.RegisterRequest{Username: "alice"}, true},
-		{"both policy accepts both", settings.Auth{SignupIdentifiers: []string{"username", "email"}},
-			&authv1.RegisterRequest{Username: "alice", Email: "a@example.com", EmailCode: "123456"}, false},
+		{
+			"email policy rejects username",
+			settings.Auth{SignupIdentifiers: []string{"email"}},
+			&authv1.RegisterRequest{
+				Username:  "alice",
+				Email:     "a@example.com",
+				EmailCode: "123456",
+			},
+			true,
+		},
+		{
+			"both policy requires both",
+			settings.Auth{SignupIdentifiers: []string{"username", "email"}},
+			&authv1.RegisterRequest{Username: "alice"},
+			true,
+		},
+		{
+			"both policy accepts both",
+			settings.Auth{SignupIdentifiers: []string{"username", "email"}},
+			&authv1.RegisterRequest{
+				Username:  "alice",
+				Email:     "a@example.com",
+				EmailCode: "123456",
+			},
+			false,
+		},
 		{"phone policy requires phone", settings.Auth{SignupIdentifiers: []string{"phone"}},
 			&authv1.RegisterRequest{}, true},
 		{"phone policy requires code", settings.Auth{SignupIdentifiers: []string{"phone"}},
@@ -387,7 +458,8 @@ func TestSignupIdentifierValues(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if values.username != tt.msg.GetUsername() || values.email != tt.msg.GetEmail() || values.phone != tt.msg.GetPhone() {
+			if values.username != tt.msg.GetUsername() || values.email != tt.msg.GetEmail() ||
+				values.phone != tt.msg.GetPhone() {
 				t.Fatalf("values = %+v, want fields from %+v", values, tt.msg)
 			}
 		})
@@ -508,7 +580,10 @@ func TestRevokeMySessionScopedToCaller(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodeNotFound {
-		t.Fatalf("code = %v, want not_found (someone else's session must look nonexistent)", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want not_found (someone else's session must look nonexistent)",
+			connect.CodeOf(err),
+		)
 	}
 	if gotUserID != userID {
 		t.Fatalf("query scoped to %s, want caller %s", gotUserID, userID)
@@ -527,7 +602,12 @@ func TestUpdateProfileTransfersAvatarToOwnedFile(t *testing.T) {
 			return repository.User{ID: arg.ID}, nil
 		},
 		getFile: func(_ context.Context, id uuid.UUID) (repository.File, error) {
-			return repository.File{ID: id, ObjectKey: "avatars/self/new.png", UploadedBy: userID, Purpose: "avatars"}, nil
+			return repository.File{
+				ID:         id,
+				ObjectKey:  "avatars/self/new.png",
+				UploadedBy: userID,
+				Purpose:    "avatars",
+			}, nil
 		},
 		setUserAvatar: func(_ context.Context, arg repository.SetUserAvatarParams) error {
 			got = &arg
@@ -564,7 +644,12 @@ func TestUpdateProfileRejectsUnownedAvatarFile(t *testing.T) {
 			return repository.User{ID: arg.ID}, nil
 		},
 		getFile: func(_ context.Context, id uuid.UUID) (repository.File, error) {
-			return repository.File{ID: id, ObjectKey: "avatars/other/x.png", UploadedBy: otherID, Purpose: "avatars"}, nil
+			return repository.File{
+				ID:         id,
+				ObjectKey:  "avatars/other/x.png",
+				UploadedBy: otherID,
+				Purpose:    "avatars",
+			}, nil
 		},
 		setUserAvatar: func(context.Context, repository.SetUserAvatarParams) error {
 			attached = true
@@ -578,7 +663,10 @@ func TestUpdateProfileRejectsUnownedAvatarFile(t *testing.T) {
 	}))
 
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("code = %v, want invalid_argument for a file the caller didn't upload", connect.CodeOf(err))
+		t.Fatalf(
+			"code = %v, want invalid_argument for a file the caller didn't upload",
+			connect.CodeOf(err),
+		)
 	}
 	if attached {
 		t.Fatal("must not attach a file the caller didn't upload")

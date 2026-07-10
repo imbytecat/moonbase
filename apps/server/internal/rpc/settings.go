@@ -40,7 +40,13 @@ func NewSettingsService(
 	smsRegistry smsint.Registry,
 	logger *slog.Logger,
 ) *SettingsService {
-	return &SettingsService{settings: store, repo: repo, mailer: mailer, smsRegistry: smsRegistry, logger: logger}
+	return &SettingsService{
+		settings:    store,
+		repo:        repo,
+		mailer:      mailer,
+		smsRegistry: smsRegistry,
+		logger:      logger,
+	}
 }
 
 var _ settingsv1connect.SettingsServiceHandler = (*SettingsService)(nil)
@@ -157,13 +163,19 @@ func (s *SettingsService) resolveSiteAssetURL(ctx context.Context, fileID string
 // validateSiteAssetFile rejects a brand asset id that is not an uploaded site
 // asset, so settings can never point at an arbitrary or missing file. Empty
 // passes through, clearing that slot.
-func (s *SettingsService) validateSiteAssetFile(ctx context.Context, fileID string) (string, error) {
+func (s *SettingsService) validateSiteAssetFile(
+	ctx context.Context,
+	fileID string,
+) (string, error) {
 	if fileID == "" {
 		return "", nil
 	}
 	parsed, err := uuid.Parse(fileID)
 	if err != nil {
-		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("invalid asset file id"))
+		return "", connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid asset file id"),
+		)
 	}
 	file, err := s.repo.GetFile(ctx, parsed)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -173,7 +185,10 @@ func (s *SettingsService) validateSiteAssetFile(ctx context.Context, fileID stri
 		return "", s.internal(ctx, "get asset file", err)
 	}
 	if file.Purpose != storage.PurposeSiteAssets {
-		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("file is not a site asset"))
+		return "", connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("file is not a site asset"),
+		)
 	}
 	return fileID, nil
 }

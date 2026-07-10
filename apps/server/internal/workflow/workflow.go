@@ -29,7 +29,13 @@ type Engine struct {
 // New initializes DBOS against the given database URL and launches the
 // executor. Call Shutdown on process exit. store and objects back the scheduled
 // unattached-file sweep.
-func New(ctx context.Context, databaseURL, appName string, store ReclaimStore, objects ObjectDeleter, logger *slog.Logger) (*Engine, error) {
+func New(
+	ctx context.Context,
+	databaseURL, appName string,
+	store ReclaimStore,
+	objects ObjectDeleter,
+	logger *slog.Logger,
+) (*Engine, error) {
 	dctx, err := dbos.NewDBOSContext(ctx, dbos.Config{
 		AppName:     appName,
 		DatabaseURL: databaseURL,

@@ -32,7 +32,12 @@ type FileHandler struct {
 	logger *slog.Logger
 }
 
-func NewFileHandler(store *settings.Store, client *Client, repo repository.Querier, logger *slog.Logger) *FileHandler {
+func NewFileHandler(
+	store *settings.Store,
+	client *Client,
+	repo repository.Querier,
+	logger *slog.Logger,
+) *FileHandler {
 	return &FileHandler{store: store, client: client, repo: repo, logger: logger}
 }
 
@@ -93,7 +98,12 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // serveLocal streams the bytes directly — a 302 back to the same server is a
 // pointless round trip. Files are spiritually immutable (ADR-0003), so the
 // year-long immutable cache is sound.
-func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, profile kitsettings.GenericProfile, file repository.File) {
+func (h *FileHandler) serveLocal(
+	w http.ResponseWriter,
+	r *http.Request,
+	profile kitsettings.GenericProfile,
+	file repository.File,
+) {
 	path, err := h.client.ObjectPath(profile, file.ObjectKey)
 	if err != nil {
 		http.NotFound(w, r)
@@ -125,7 +135,12 @@ func (h *FileHandler) serveLocal(w http.ResponseWriter, r *http.Request, profile
 // cached briefly (rebinding a profile leaves stale redirects alive for at
 // most an hour); a signed URL carries an expiry, so caching the redirect
 // would outlive it — never store those.
-func (h *FileHandler) redirect(w http.ResponseWriter, r *http.Request, cfg kitsettings.GenericProfile, file repository.File) {
+func (h *FileHandler) redirect(
+	w http.ResponseWriter,
+	r *http.Request,
+	cfg kitsettings.GenericProfile,
+	file repository.File,
+) {
 	u, err := h.client.ResolveURL(r.Context(), file.Purpose, file.ObjectKey, time.Hour)
 	if err != nil {
 		h.internal(w, r, "resolve url", err)

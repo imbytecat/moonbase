@@ -33,8 +33,18 @@ const (
 
 // Purposes is the catalog served to the admin UI, in display order.
 var Purposes = integration.Catalog{
-	{Key: PurposeAvatars, Name: "用户头像", Description: "用户资料与列表展示的公开头像", Cardinality: integration.Single},
-	{Key: PurposeSiteAssets, Name: "站点资源", Description: "登录页与站点导航使用的公开品牌资源", Cardinality: integration.Single},
+	{
+		Key:         PurposeAvatars,
+		Name:        "用户头像",
+		Description: "用户资料与列表展示的公开头像",
+		Cardinality: integration.Single,
+	},
+	{
+		Key:         PurposeSiteAssets,
+		Name:        "站点资源",
+		Description: "登录页与站点导航使用的公开品牌资源",
+		Cardinality: integration.Single,
+	},
 }
 
 // Visibility is a static property of a purpose (public / private), fixed in
@@ -76,7 +86,11 @@ var ErrNotConfigured = fmt.Errorf("file storage is not configured")
 // Delete. Reads happen through the permanent /f/{file_id} handler (ADR-0004),
 // never through URLs minted by RPC services.
 type ObjectStore interface {
-	PresignPut(ctx context.Context, purpose, key, contentType string, expires time.Duration) (string, error)
+	PresignPut(
+		ctx context.Context,
+		purpose, key, contentType string,
+		expires time.Duration,
+	) (string, error)
 	// Delete removes an object. It is idempotent: deleting a key that no longer
 	// exists returns nil, so the unattached-file sweep can safely re-run after a
 	// crash (ADR-0003).
@@ -96,7 +110,11 @@ func NewClient(store *settings.Store, registry storageint.Registry) *Client {
 	return &Client{store: store, registry: registry}
 }
 
-func (c *Client) LocalSignedURL(ctx context.Context, method, purpose, key string, expires time.Duration) (string, error) {
+func (c *Client) LocalSignedURL(
+	ctx context.Context,
+	method, purpose, key string,
+	expires time.Duration,
+) (string, error) {
 	secret, err := c.store.StorageSignKey(ctx)
 	if err != nil {
 		return "", err
@@ -109,15 +127,32 @@ var (
 	_ ConnectionTester = (*Client)(nil)
 )
 
-func (c *Client) PresignPut(ctx context.Context, purpose, key, contentType string, expires time.Duration) (string, error) {
+func (c *Client) PresignPut(
+	ctx context.Context,
+	purpose, key, contentType string,
+	expires time.Duration,
+) (string, error) {
 	cfg, err := c.profileFor(ctx, purpose)
 	if err != nil {
 		return "", err
 	}
-	return c.registry.PresignPut(c, ctx, cfg.Provider, cfg.Config, purpose, key, contentType, expires)
+	return c.registry.PresignPut(
+		c,
+		ctx,
+		cfg.Provider,
+		cfg.Config,
+		purpose,
+		key,
+		contentType,
+		expires,
+	)
 }
 
-func (c *Client) ResolveURL(ctx context.Context, purpose, key string, expires time.Duration) (string, error) {
+func (c *Client) ResolveURL(
+	ctx context.Context,
+	purpose, key string,
+	expires time.Duration,
+) (string, error) {
 	cfg, err := c.profileFor(ctx, purpose)
 	if err != nil {
 		return "", err
@@ -144,7 +179,10 @@ func (c *Client) ObjectPath(profile kitsettings.GenericProfile, key string) (str
 	return c.registry.ObjectPath(profile.Provider, profile.Config, key)
 }
 
-func (c *Client) profileFor(ctx context.Context, purpose string) (kitsettings.GenericProfile, error) {
+func (c *Client) profileFor(
+	ctx context.Context,
+	purpose string,
+) (kitsettings.GenericProfile, error) {
 	st, err := c.store.Storage(ctx)
 	if err != nil {
 		return kitsettings.GenericProfile{}, err

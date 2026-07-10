@@ -10,7 +10,14 @@ import (
 
 const PurposeLogin = "login"
 
-var Purposes = integration.Catalog{{Key: PurposeLogin, Name: "第三方登录", Description: "登录页可用的外部身份提供方", Cardinality: integration.Multiple}}
+var Purposes = integration.Catalog{
+	{
+		Key:         PurposeLogin,
+		Name:        "第三方登录",
+		Description: "登录页可用的外部身份提供方",
+		Cardinality: integration.Multiple,
+	},
+}
 
 var ErrNotConfigured = oauthint.ErrNotConfigured
 
@@ -49,7 +56,10 @@ func (c *Client) profileFor(ctx context.Context, key string) (kitsettings.Generi
 	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
-func (c *Client) AuthorizeURL(ctx context.Context, key, redirectURI, state string) (string, FlowSecrets, error) {
+func (c *Client) AuthorizeURL(
+	ctx context.Context,
+	key, redirectURI, state string,
+) (string, FlowSecrets, error) {
 	profile, err := c.profileFor(ctx, key)
 	if err != nil {
 		return "", FlowSecrets{}, err
@@ -57,12 +67,23 @@ func (c *Client) AuthorizeURL(ctx context.Context, key, redirectURI, state strin
 	return c.registry.AuthorizeURL(ctx, profile.Provider, profile.Config, redirectURI, state)
 }
 
-func (c *Client) Exchange(ctx context.Context, key, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
+func (c *Client) Exchange(
+	ctx context.Context,
+	key, code, redirectURI string,
+	secrets FlowSecrets,
+) (ExternalIdentity, error) {
 	profile, err := c.profileFor(ctx, key)
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
-	external, err := c.registry.Exchange(ctx, profile.Provider, profile.Config, code, redirectURI, secrets)
+	external, err := c.registry.Exchange(
+		ctx,
+		profile.Provider,
+		profile.Config,
+		code,
+		redirectURI,
+		secrets,
+	)
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
@@ -83,7 +104,14 @@ func UsableProviders(cfg Config, registry oauthint.Registry) []ProviderOption {
 	for _, profile := range cfg.ProfilesFor(PurposeLogin) {
 		view, valid := registry.ViewConfig(profile.Provider, profile.Config)
 		if valid {
-			out = append(out, ProviderOption{Key: configKey(view.Values), Name: profile.Name, Provider: profile.Provider})
+			out = append(
+				out,
+				ProviderOption{
+					Key:      configKey(view.Values),
+					Name:     profile.Name,
+					Provider: profile.Provider,
+				},
+			)
 		}
 	}
 	return out

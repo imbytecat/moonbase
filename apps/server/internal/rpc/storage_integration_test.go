@@ -26,14 +26,21 @@ func TestFileAttachmentBlocksFileDeletion(t *testing.T) {
 	ctx := t.Context()
 
 	var fileID uuid.UUID
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		`INSERT INTO files (object_key, content_type, uploaded_by) VALUES ($1, $2, $3) RETURNING id`,
-		"avatars/fk-test/abc.png", "image/png", uuid.New(),
+		"avatars/fk-test/abc.png",
+		"image/png",
+		uuid.New(),
 	).Scan(&fileID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM file_attachments WHERE file_id = $1`, fileID)
+		_, _ = pool.Exec(
+			context.Background(),
+			`DELETE FROM file_attachments WHERE file_id = $1`,
+			fileID,
+		)
 		_, _ = pool.Exec(context.Background(), `DELETE FROM files WHERE id = $1`, fileID)
 	})
 
@@ -116,7 +123,11 @@ func TestPresignAvatarUploadLandsFilesRow(t *testing.T) {
 		t.Fatalf("no files row for file_id %s: %v", fileID, err)
 	}
 	if objectKey != resp.Msg.GetObjectKey() {
-		t.Fatalf("persisted object_key = %q, response object_key = %q", objectKey, resp.Msg.GetObjectKey())
+		t.Fatalf(
+			"persisted object_key = %q, response object_key = %q",
+			objectKey,
+			resp.Msg.GetObjectKey(),
+		)
 	}
 	if contentType != "image/png" {
 		t.Fatalf("persisted content_type = %q, want image/png", contentType)

@@ -173,8 +173,18 @@ func Register[T any](
 	return Registration{
 		key: key, presentation: presentation, definitionErr: definitionErr,
 		entry: registryEntry{
-			descriptor: Descriptor{Key: key, Presentation: presentation, ConfigSchema: contract.JSONSchema(), UISchema: contract.UISchema(), Payment: payment},
-			contract:   configOps{create: contract.CreateWrite, update: contract.UpdateWrite, view: contract.View},
+			descriptor: Descriptor{
+				Key:          key,
+				Presentation: presentation,
+				ConfigSchema: contract.JSONSchema(),
+				UISchema:     contract.UISchema(),
+				Payment:      payment,
+			},
+			contract: configOps{
+				create: contract.CreateWrite,
+				update: contract.UpdateWrite,
+				view:   contract.View,
+			},
 			create: func(ctx context.Context, values map[string]any, request CreateRequest) (Action, error) {
 				typed, err := contract.Decode(values)
 				if err != nil {
@@ -189,12 +199,17 @@ func Register[T any](
 var paymentIconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registryEntry, 0, len(registrations)), byKey: make(map[string]int, len(registrations))}
+	r := Registry{
+		entries: make([]registryEntry, 0, len(registrations)),
+		byKey:   make(map[string]int, len(registrations)),
+	}
 	for _, registration := range registrations {
-		if registration.key == "" || registration.presentation.Name == "" || registration.definitionErr != nil {
+		if registration.key == "" || registration.presentation.Name == "" ||
+			registration.definitionErr != nil {
 			return Registry{}, errors.New("payment provider registration is invalid")
 		}
-		if registration.presentation.IconRef != "" && !paymentIconRefPattern.MatchString(registration.presentation.IconRef) {
+		if registration.presentation.IconRef != "" &&
+			!paymentIconRefPattern.MatchString(registration.presentation.IconRef) {
 			return Registry{}, fmt.Errorf("provider %q has invalid icon_ref", registration.key)
 		}
 		if _, exists := r.byKey[registration.key]; exists {
@@ -214,7 +229,12 @@ func MustRegistry(registrations ...Registration) Registry {
 	return r
 }
 
-func (r Registry) Create(ctx context.Context, provider string, values map[string]any, request CreateRequest) (Action, error) {
+func (r Registry) Create(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	request CreateRequest,
+) (Action, error) {
 	entry, ok := r.entry(provider)
 	if !ok {
 		return Action{}, ErrNotConfigured
@@ -222,7 +242,12 @@ func (r Registry) Create(ctx context.Context, provider string, values map[string
 	return entry.create(ctx, values, request)
 }
 
-func (r Registry) Plan(ctx context.Context, provider string, values map[string]any, request PlanRequest) (PlanResult, error) {
+func (r Registry) Plan(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	request PlanRequest,
+) (PlanResult, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok {
 		return PlanResult{}, ErrNotConfigured
@@ -233,7 +258,12 @@ func (r Registry) Plan(ctx context.Context, provider string, values map[string]a
 	return PlanResult{}, ErrNotConfigured
 }
 
-func (r Registry) Query(ctx context.Context, provider string, values map[string]any, outTradeNo string) (QueryResult, error) {
+func (r Registry) Query(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	outTradeNo string,
+) (QueryResult, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok {
 		return QueryResult{}, ErrNotConfigured
@@ -244,7 +274,12 @@ func (r Registry) Query(ctx context.Context, provider string, values map[string]
 	return QueryResult{}, ErrNotConfigured
 }
 
-func (r Registry) Refund(ctx context.Context, provider string, values map[string]any, request RefundRequest) (RefundResult, error) {
+func (r Registry) Refund(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	request RefundRequest,
+) (RefundResult, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok {
 		return RefundResult{}, ErrNotConfigured
@@ -255,7 +290,12 @@ func (r Registry) Refund(ctx context.Context, provider string, values map[string
 	return RefundResult{}, ErrNotConfigured
 }
 
-func (r Registry) QueryRefund(ctx context.Context, provider string, values map[string]any, refundNo string) (bool, error) {
+func (r Registry) QueryRefund(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	refundNo string,
+) (bool, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok {
 		return false, ErrNotConfigured
@@ -266,7 +306,12 @@ func (r Registry) QueryRefund(ctx context.Context, provider string, values map[s
 	return false, ErrNotConfigured
 }
 
-func (r Registry) ParseNotify(ctx context.Context, provider string, values map[string]any, request *http.Request) (NotifyResult, error) {
+func (r Registry) ParseNotify(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	request *http.Request,
+) (NotifyResult, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok {
 		return NotifyResult{}, ErrNotConfigured
@@ -277,7 +322,12 @@ func (r Registry) ParseNotify(ctx context.Context, provider string, values map[s
 	return NotifyResult{}, ErrNotConfigured
 }
 
-func (r Registry) RecoverAction(ctx context.Context, provider string, values map[string]any, outTradeNo string) (Action, error) {
+func (r Registry) RecoverAction(
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	outTradeNo string,
+) (Action, error) {
 	entry, ok := r.usableEntry(provider, values)
 	if !ok || entry.recoverAction == nil {
 		return Action{}, ErrNotConfigured
@@ -296,7 +346,11 @@ func (r Registry) RenderHostedFlow(provider, product, payload string) ([]byte, e
 	return nil, ErrNotConfigured
 }
 
-func (r Registry) CreateConfig(provider string, values map[string]any, secrets map[string]string) (map[string]any, error) {
+func (r Registry) CreateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+) (map[string]any, error) {
 	entry, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("unknown payment provider %q", provider)
@@ -392,7 +446,9 @@ func cloneProviderDescriptor(descriptor ProviderDescriptor) ProviderDescriptor {
 	for i := range out.Products {
 		out.Products[i].Input.Fields = slices.Clone(descriptor.Products[i].Input.Fields)
 		for j := range out.Products[i].Input.Fields {
-			out.Products[i].Input.Fields[j].Options = slices.Clone(descriptor.Products[i].Input.Fields[j].Options)
+			out.Products[i].Input.Fields[j].Options = slices.Clone(
+				descriptor.Products[i].Input.Fields[j].Options,
+			)
 			if condition := descriptor.Products[i].Input.Fields[j].ShowWhen; condition != nil {
 				cloned := *condition
 				cloned.Values = slices.Clone(condition.Values)

@@ -75,7 +75,11 @@ func (p SessionPolicy) renewedExpiry(now, expiresAt, createdAt time.Time) (time.
 // token as "Authorization: Bearer <token>" — one sessions table, one
 // revocation story. It never rejects: unauthenticated requests proceed with
 // no identity and the authz interceptor decides per-RPC.
-func NewMiddleware(repo repository.Querier, logger *slog.Logger, policy SessionPolicy) *authn.Middleware {
+func NewMiddleware(
+	repo repository.Querier,
+	logger *slog.Logger,
+	policy SessionPolicy,
+) *authn.Middleware {
 	return authn.NewMiddleware(func(ctx context.Context, r *http.Request) (any, error) {
 		token := sessionToken(r)
 		if token == "" {
@@ -129,8 +133,14 @@ func sessionToken(r *http.Request) string {
 }
 
 var (
-	errUnauthenticated  = connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
-	errPermissionDenied = connect.NewError(connect.CodePermissionDenied, errors.New("permission denied"))
+	errUnauthenticated = connect.NewError(
+		connect.CodeUnauthenticated,
+		errors.New("authentication required"),
+	)
+	errPermissionDenied = connect.NewError(
+		connect.CodePermissionDenied,
+		errors.New("permission denied"),
+	)
 )
 
 // Rule is the access requirement for one RPC procedure.

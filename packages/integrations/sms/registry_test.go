@@ -10,7 +10,7 @@ import (
 
 type testConfig struct {
 	Endpoint string `json:"endpoint" jsonschema:"required,minLength=1"`
-	Secret   string `json:"secret" jsonschema:"required,minLength=1"`
+	Secret   string `json:"secret"   jsonschema:"required,minLength=1"`
 }
 
 func TestRegistryRejectsInvalidConfigBeforeSending(t *testing.T) {
@@ -25,7 +25,14 @@ func TestRegistryRejectsInvalidConfigBeforeSending(t *testing.T) {
 		},
 	))
 
-	err := registry.SendTemplate(t.Context(), "test", map[string]any{"endpoint": "https://example.com"}, "SMS_1", "+8613800138000", "123456")
+	err := registry.SendTemplate(
+		t.Context(),
+		"test",
+		map[string]any{"endpoint": "https://example.com"},
+		"SMS_1",
+		"+8613800138000",
+		"123456",
+	)
 	if err == nil {
 		t.Fatal("invalid config should be rejected")
 	}

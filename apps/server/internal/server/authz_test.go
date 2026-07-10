@@ -78,7 +78,11 @@ func TestAuthzRulesCoverEveryProcedure(t *testing.T) {
 func TestAuthzRulePermissionsExist(t *testing.T) {
 	for proc, rule := range authzRules {
 		if rule.Permission != "" && !auth.IsKnownPermission(rule.Permission) {
-			t.Errorf("rule for %s requires unknown permission %q — add it to auth.Catalog", proc, rule.Permission)
+			t.Errorf(
+				"rule for %s requires unknown permission %q — add it to auth.Catalog",
+				proc,
+				rule.Permission,
+			)
 		}
 	}
 }

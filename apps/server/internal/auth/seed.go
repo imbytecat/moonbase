@@ -25,12 +25,29 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9._-]{2,31}$`)
 // The admin has only the username identifier: a fabricated email couldn't
 // receive password-reset mail anyway — bind a real one later via the profile
 // page (code-verified).
-func Seed(ctx context.Context, repo repository.Querier, logger *slog.Logger, adminUsername, adminPassword string) error {
-	adminRole, err := ensureRole(ctx, repo, "admin", "Full access to everything", []string{WildcardPermission})
+func Seed(
+	ctx context.Context,
+	repo repository.Querier,
+	logger *slog.Logger,
+	adminUsername, adminPassword string,
+) error {
+	adminRole, err := ensureRole(
+		ctx,
+		repo,
+		"admin",
+		"Full access to everything",
+		[]string{WildcardPermission},
+	)
 	if err != nil {
 		return err
 	}
-	if _, err := ensureRole(ctx, repo, "user", "Default role for regular users", []string{"report.read"}); err != nil {
+	if _, err := ensureRole(
+		ctx,
+		repo,
+		"user",
+		"Default role for regular users",
+		[]string{"report.read"},
+	); err != nil {
 		return err
 	}
 
@@ -43,7 +60,10 @@ func Seed(ctx context.Context, repo repository.Querier, logger *slog.Logger, adm
 	}
 
 	if !usernamePattern.MatchString(adminUsername) {
-		return fmt.Errorf("invalid admin username %q: must start with a letter and use only letters, digits, '.', '_' or '-' (3-32 chars)", adminUsername)
+		return fmt.Errorf(
+			"invalid admin username %q: must start with a letter and use only letters, digits, '.', '_' or '-' (3-32 chars)",
+			adminUsername,
+		)
 	}
 
 	hash, err := HashPassword(adminPassword)
@@ -68,7 +88,12 @@ func Seed(ctx context.Context, repo repository.Querier, logger *slog.Logger, adm
 	return nil
 }
 
-func ensureRole(ctx context.Context, repo repository.Querier, name, description string, perms []string) (uuid.UUID, error) {
+func ensureRole(
+	ctx context.Context,
+	repo repository.Querier,
+	name, description string,
+	perms []string,
+) (uuid.UUID, error) {
 	role, err := repo.GetRoleByName(ctx, name)
 	if err == nil {
 		return role.ID, nil

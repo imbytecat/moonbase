@@ -59,7 +59,10 @@ func (r *issuerRepo) UpsertSetting(_ context.Context, arg repository.UpsertSetti
 	return nil
 }
 
-func (r *issuerRepo) GetOrCreateSetting(_ context.Context, arg repository.GetOrCreateSettingParams) (repository.Setting, error) {
+func (r *issuerRepo) GetOrCreateSetting(
+	_ context.Context,
+	arg repository.GetOrCreateSettingParams,
+) (repository.Setting, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if value, ok := r.settings[arg.Key]; ok {
@@ -69,7 +72,10 @@ func (r *issuerRepo) GetOrCreateSetting(_ context.Context, arg repository.GetOrC
 	return repository.Setting{Key: arg.Key, Value: bytes.Clone(arg.Value)}, nil
 }
 
-func (r *issuerRepo) InsertCheckoutSession(_ context.Context, arg repository.InsertCheckoutSessionParams) (repository.PaymentCheckoutSession, error) {
+func (r *issuerRepo) InsertCheckoutSession(
+	_ context.Context,
+	arg repository.InsertCheckoutSessionParams,
+) (repository.PaymentCheckoutSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := arg.Purpose + "\x00" + arg.IdempotencyKey
@@ -87,7 +93,10 @@ func (r *issuerRepo) InsertCheckoutSession(_ context.Context, arg repository.Ins
 	return row, nil
 }
 
-func (r *issuerRepo) GetCheckoutSessionByIdempotency(_ context.Context, arg repository.GetCheckoutSessionByIdempotencyParams) (repository.PaymentCheckoutSession, error) {
+func (r *issuerRepo) GetCheckoutSessionByIdempotency(
+	_ context.Context,
+	arg repository.GetCheckoutSessionByIdempotencyParams,
+) (repository.PaymentCheckoutSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	id, ok := r.byKey[arg.Purpose+"\x00"+arg.IdempotencyKey]
@@ -97,7 +106,10 @@ func (r *issuerRepo) GetCheckoutSessionByIdempotency(_ context.Context, arg repo
 	return r.sessions[id], nil
 }
 
-func (r *issuerRepo) GetCheckoutSession(_ context.Context, id string) (repository.PaymentCheckoutSession, error) {
+func (r *issuerRepo) GetCheckoutSession(
+	_ context.Context,
+	id string,
+) (repository.PaymentCheckoutSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	row, ok := r.sessions[id]
@@ -120,8 +132,12 @@ func TestCheckoutIssuerConcurrentFirstUseKeepsEveryURLValid(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			checkout, err := issuer.Create(context.Background(), CheckoutCommand{
-				Purpose: PurposeCheckout, BusinessReference: "order", IdempotencyKey: string(rune('a' + i)),
-				Subject: "并发首用", Amount: 100, ReturnPath: "/orders",
+				Purpose:           PurposeCheckout,
+				BusinessReference: "order",
+				IdempotencyKey:    string(rune('a' + i)),
+				Subject:           "并发首用",
+				Amount:            100,
+				ReturnPath:        "/orders",
 			})
 			if err != nil {
 				errs <- err

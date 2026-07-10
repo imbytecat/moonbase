@@ -12,7 +12,18 @@ import (
 
 func TestLocalStorageDirectoryMustBePersistedExplicitly(t *testing.T) {
 	svc, _ := newSystemService(newMemSettingsQuerier())
-	_, err := svc.CreateStorageProfile(t.Context(), connect.NewRequest(&systemv1.CreateStorageProfileRequest{Profile: &systemv1.ProfileInput{Name: "本地", Provider: "local", Config: profileWrite(t, map[string]any{}, nil)}}))
+	_, err := svc.CreateStorageProfile(
+		t.Context(),
+		connect.NewRequest(
+			&systemv1.CreateStorageProfileRequest{
+				Profile: &systemv1.ProfileInput{
+					Name:     "本地",
+					Provider: "local",
+					Config:   profileWrite(t, map[string]any{}, nil),
+				},
+			},
+		),
+	)
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("code = %v, want invalid_argument", connect.CodeOf(err))
 	}
@@ -21,11 +32,29 @@ func TestLocalStorageDirectoryMustBePersistedExplicitly(t *testing.T) {
 func TestInvalidStoredStorageProfileHasSafeProjection(t *testing.T) {
 	q := newMemSettingsQuerier()
 	store := settings.NewStore(q)
-	if err := store.SetStorage(t.Context(), settings.Storage{Profiles: []kitsettings.GenericProfile{{Id: "bad", Name: "坏配置", Provider: "s3", Config: map[string]any{"endpoint": "s3.example.com", "secretAccessKey": "must-not-leak"}}}}); err != nil {
+	if err := store.SetStorage(
+		t.Context(),
+		settings.Storage{
+			Profiles: []kitsettings.GenericProfile{
+				{
+					Id:       "bad",
+					Name:     "坏配置",
+					Provider: "s3",
+					Config: map[string]any{
+						"endpoint":        "s3.example.com",
+						"secretAccessKey": "must-not-leak",
+					},
+				},
+			},
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 	svc, _ := newSystemService(q)
-	resp, err := svc.GetSystemSettings(t.Context(), connect.NewRequest(&systemv1.GetSystemSettingsRequest{}))
+	resp, err := svc.GetSystemSettings(
+		t.Context(),
+		connect.NewRequest(&systemv1.GetSystemSettingsRequest{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

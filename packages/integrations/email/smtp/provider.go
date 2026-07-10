@@ -25,7 +25,11 @@ func (encryption) JSONSchema() *invopop.Schema {
 	return &invopop.Schema{
 		Type: "string",
 		OneOf: []*invopop.Schema{
-			{Const: string(encryptionStartTLS), Title: "STARTTLS", Description: "常用 587 端口，连接后升级为加密"},
+			{
+				Const:       string(encryptionStartTLS),
+				Title:       "STARTTLS",
+				Description: "常用 587 端口，连接后升级为加密",
+			},
 			{Const: string(encryptionSSL), Title: "SSL/TLS", Description: "常用 465 端口，全程加密"},
 			{Const: string(encryptionNone), Title: "不加密", Description: "明文传输，仅用于本地调试"},
 		},
@@ -33,13 +37,13 @@ func (encryption) JSONSchema() *invopop.Schema {
 }
 
 type providerConfig struct {
-	FromAddress string     `json:"fromAddress" jsonschema:"required,title=发件地址,minLength=1,maxLength=254"`
+	FromAddress string     `json:"fromAddress"        jsonschema:"required,title=发件地址,minLength=1,maxLength=254"`
 	FromName    string     `json:"fromName,omitempty" jsonschema:"title=发件人名称,maxLength=100"`
-	Host        string     `json:"host" jsonschema:"required,title=服务器地址,minLength=1,maxLength=253"`
-	Port        int        `json:"port" jsonschema:"required,title=端口,default=587,minimum=1,maximum=65535"`
+	Host        string     `json:"host"               jsonschema:"required,title=服务器地址,minLength=1,maxLength=253"`
+	Port        int        `json:"port"               jsonschema:"required,title=端口,default=587,minimum=1,maximum=65535"`
 	Username    string     `json:"username,omitempty" jsonschema:"title=用户名,maxLength=128"`
 	Password    string     `json:"password,omitempty" jsonschema:"title=密码,minLength=1,maxLength=128"`
-	Encryption  encryption `json:"encryption" jsonschema:"required,title=加密方式,default=starttls"`
+	Encryption  encryption `json:"encryption"         jsonschema:"required,title=加密方式,default=starttls"`
 }
 
 func (providerConfig) JSONSchemaExtend(schema *invopop.Schema) {

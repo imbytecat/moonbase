@@ -21,7 +21,13 @@ type stubObjectStore struct {
 	url string
 }
 
-func (s stubObjectStore) PresignPut(context.Context, string, string, string, time.Duration) (string, error) {
+func (s stubObjectStore) PresignPut(
+	context.Context,
+	string,
+	string,
+	string,
+	time.Duration,
+) (string, error) {
 	return s.url, nil
 }
 
@@ -38,7 +44,10 @@ type fakeStorageQuerier struct {
 	insertFile func(ctx context.Context, arg repository.InsertFileParams) (repository.File, error)
 }
 
-func (f *fakeStorageQuerier) InsertFile(ctx context.Context, arg repository.InsertFileParams) (repository.File, error) {
+func (f *fakeStorageQuerier) InsertFile(
+	ctx context.Context,
+	arg repository.InsertFileParams,
+) (repository.File, error) {
 	return f.insertFile(ctx, arg)
 }
 
@@ -66,10 +75,13 @@ func TestPresignAvatarUploadPersistsFile(t *testing.T) {
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
-	resp, err := svc.PresignAvatarUpload(ctx, connect.NewRequest(&storagev1.PresignAvatarUploadRequest{
-		ContentType:   "image/png",
-		ContentLength: 1024,
-	}))
+	resp, err := svc.PresignAvatarUpload(
+		ctx,
+		connect.NewRequest(&storagev1.PresignAvatarUploadRequest{
+			ContentType:   "image/png",
+			ContentLength: 1024,
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +104,11 @@ func TestPresignAvatarUploadPersistsFile(t *testing.T) {
 	}
 	// file_id echoes the row's id so consumers can attach it later.
 	if resp.Msg.GetFileId() != fileID.String() {
-		t.Fatalf("response file_id = %q, want persisted id %q", resp.Msg.GetFileId(), fileID.String())
+		t.Fatalf(
+			"response file_id = %q, want persisted id %q",
+			resp.Msg.GetFileId(),
+			fileID.String(),
+		)
 	}
 }
 
@@ -118,11 +134,14 @@ func TestPresignSiteAssetUploadPersistsFile(t *testing.T) {
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	ctx := auth.WithIdentity(t.Context(), &auth.Identity{UserID: userID})
-	resp, err := svc.PresignSiteAssetUpload(ctx, connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
-		Kind:          "logo",
-		ContentType:   "image/png",
-		ContentLength: 1024,
-	}))
+	resp, err := svc.PresignSiteAssetUpload(
+		ctx,
+		connect.NewRequest(&storagev1.PresignSiteAssetUploadRequest{
+			Kind:          "logo",
+			ContentType:   "image/png",
+			ContentLength: 1024,
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +160,10 @@ func TestPresignSiteAssetUploadPersistsFile(t *testing.T) {
 		t.Fatalf("persisted purpose = %q, want site-assets", got.Purpose)
 	}
 	if resp.Msg.GetFileId() != fileID.String() {
-		t.Fatalf("response file_id = %q, want persisted id %q", resp.Msg.GetFileId(), fileID.String())
+		t.Fatalf(
+			"response file_id = %q, want persisted id %q",
+			resp.Msg.GetFileId(),
+			fileID.String(),
+		)
 	}
 }

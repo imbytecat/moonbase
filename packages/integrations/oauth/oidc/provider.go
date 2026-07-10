@@ -71,7 +71,11 @@ func oidcScopes(config providerConfig) []string {
 	return scopes
 }
 
-func oidcOauth2Config(config providerConfig, provider *coreoidc.Provider, redirectURI string) oauth2.Config {
+func oidcOauth2Config(
+	config providerConfig,
+	provider *coreoidc.Provider,
+	redirectURI string,
+) oauth2.Config {
 	return oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
@@ -81,7 +85,11 @@ func oidcOauth2Config(config providerConfig, provider *coreoidc.Provider, redire
 	}
 }
 
-func oidcAuthorizeURL(ctx context.Context, config providerConfig, redirectURI, state string) (string, oauthint.FlowSecrets, error) {
+func oidcAuthorizeURL(
+	ctx context.Context,
+	config providerConfig,
+	redirectURI, state string,
+) (string, oauthint.FlowSecrets, error) {
 	provider, err := oidcProvider(ctx, config.Issuer)
 	if err != nil {
 		return "", oauthint.FlowSecrets{}, err
@@ -96,7 +104,12 @@ func oidcAuthorizeURL(ctx context.Context, config providerConfig, redirectURI, s
 	return url, oauthint.FlowSecrets{Nonce: nonce, Verifier: verifier}, nil
 }
 
-func oidcExchange(ctx context.Context, config providerConfig, code, redirectURI string, secrets oauthint.FlowSecrets) (oauthint.ExternalIdentity, error) {
+func oidcExchange(
+	ctx context.Context,
+	config providerConfig,
+	code, redirectURI string,
+	secrets oauthint.FlowSecrets,
+) (oauthint.ExternalIdentity, error) {
 	provider, err := oidcProvider(ctx, config.Issuer)
 	if err != nil {
 		return oauthint.ExternalIdentity{}, err
@@ -109,9 +122,12 @@ func oidcExchange(ctx context.Context, config providerConfig, code, redirectURI 
 	}
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		return oauthint.ExternalIdentity{}, fmt.Errorf("oidc token exchange: response carried no id_token")
+		return oauthint.ExternalIdentity{}, fmt.Errorf(
+			"oidc token exchange: response carried no id_token",
+		)
 	}
-	idToken, err := provider.Verifier(&coreoidc.Config{ClientID: config.ClientID}).Verify(ctx, rawIDToken)
+	idToken, err := provider.Verifier(&coreoidc.Config{ClientID: config.ClientID}).
+		Verify(ctx, rawIDToken)
 	if err != nil {
 		return oauthint.ExternalIdentity{}, fmt.Errorf("oidc id_token verify: %w", err)
 	}

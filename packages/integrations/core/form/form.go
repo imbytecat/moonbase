@@ -265,7 +265,11 @@ func fieldJSON(field Field) map[string]any {
 	case Bool:
 		return map[string]any{"type": "boolean", "title": field.Label}
 	case Enum:
-		return map[string]any{"type": "string", "title": field.Label, "oneOf": optionOneOf(field.Options)}
+		return map[string]any{
+			"type":  "string",
+			"title": field.Label,
+			"oneOf": optionOneOf(field.Options),
+		}
 	case Strings:
 		items := map[string]any{"type": "string"}
 		if len(field.Options) > 0 {

@@ -50,11 +50,20 @@ func (s *systemOauth) CreateOauthProfile(
 		return nil, connect.NewError(connect.CodeAlreadyExists,
 			fmt.Errorf("a login provider with key %q already exists", key))
 	}
-	canonical, err := s.oauthRegistry.CreateConfig(input.GetProvider(), values, input.GetConfig().GetSecrets())
+	canonical, err := s.oauthRegistry.CreateConfig(
+		input.GetProvider(),
+		values,
+		input.GetConfig().GetSecrets(),
+	)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	profile := kitsettings.GenericProfile{Id: uuid.NewString(), Name: input.GetName(), Provider: input.GetProvider(), Config: canonical}
+	profile := kitsettings.GenericProfile{
+		Id:       uuid.NewString(),
+		Name:     input.GetName(),
+		Provider: input.GetProvider(),
+		Config:   canonical,
+	}
 	cfg.Profiles = append(cfg.Profiles, profile)
 	if err := s.settings.SetOauth(ctx, cfg); err != nil {
 		return nil, s.internal(ctx, "save oauth settings", err)
@@ -78,9 +87,17 @@ func (s *systemOauth) UpdateOauthProfile(
 			continue
 		}
 		if stored.Provider != input.GetProvider() {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("oauth provider cannot be changed"))
+			return nil, connect.NewError(
+				connect.CodeInvalidArgument,
+				errors.New("oauth provider cannot be changed"),
+			)
 		}
-		canonical, err := s.oauthRegistry.UpdateConfig(stored.Provider, configValues(input.GetConfig()), input.GetConfig().GetSecrets(), stored.Config)
+		canonical, err := s.oauthRegistry.UpdateConfig(
+			stored.Provider,
+			configValues(input.GetConfig()),
+			input.GetConfig().GetSecrets(),
+			stored.Config,
+		)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
@@ -89,12 +106,19 @@ func (s *systemOauth) UpdateOauthProfile(
 			return nil, connect.NewError(connect.CodeAlreadyExists,
 				fmt.Errorf("a login provider with key %q already exists", key))
 		}
-		updated := kitsettings.GenericProfile{Id: stored.Id, Name: input.GetName(), Provider: stored.Provider, Config: canonical}
+		updated := kitsettings.GenericProfile{
+			Id:       stored.Id,
+			Name:     input.GetName(),
+			Provider: stored.Provider,
+			Config:   canonical,
+		}
 		cfg.Profiles[i] = updated
 		if err := s.settings.SetOauth(ctx, cfg); err != nil {
 			return nil, s.internal(ctx, "save oauth settings", err)
 		}
-		return connect.NewResponse(&systemv1.UpdateOauthProfileResponse{Profile: s.oauthProfileToProto(updated)}), nil
+		return connect.NewResponse(
+			&systemv1.UpdateOauthProfileResponse{Profile: s.oauthProfileToProto(updated)},
+		), nil
 	}
 	return nil, s.oauthOps().errNotFound()
 }
@@ -103,7 +127,8 @@ func (s *systemOauth) BindOauthPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindOauthPurposeRequest],
 ) (*connect.Response[systemv1.BindOauthPurposeResponse], error) {
-	cfg, err := s.oauthOps().bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
+	cfg, err := s.oauthOps().
+		bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +157,13 @@ func (s *systemOauth) DeleteOauthProfile(
 		return nil, s.internal(ctx, "count identities", err)
 	}
 	if count > 0 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("%d account(s) still sign in through this provider — unbind it from the sign-in page instead", count))
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf(
+				"%d account(s) still sign in through this provider — unbind it from the sign-in page instead",
+				count,
+			),
+		)
 	}
 	if err := s.oauthOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
@@ -170,7 +200,10 @@ func (s *systemOauth) DescribeOauthProviders(
 	_ *connect.Request[systemv1.DescribeOauthProvidersRequest],
 ) (*connect.Response[systemv1.DescribeOauthProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeOauthProvidersResponse{
-		Purposes: describePurposes(oauth.Purposes), Providers: describeOauthProviders(s.oauthRegistry),
+		Purposes: describePurposes(
+			oauth.Purposes,
+		),
+		Providers: describeOauthProviders(s.oauthRegistry),
 	}), nil
 }
 
@@ -178,14 +211,30 @@ func describeOauthProviders(registry oauthint.Registry) []*systemv1.ProviderDesc
 	descriptors := registry.Descriptors()
 	out := make([]*systemv1.ProviderDescriptor, len(descriptors))
 	for i, descriptor := range descriptors {
-		out[i] = &systemv1.ProviderDescriptor{Key: descriptor.Key, Presentation: presentationToProto(descriptor.Presentation), Config: &systemv1.ProviderForm{Schema: toStruct(descriptor.JSONSchema), UiSchema: toStruct(descriptor.UISchema)}}
+		out[i] = &systemv1.ProviderDescriptor{
+			Key:          descriptor.Key,
+			Presentation: presentationToProto(descriptor.Presentation),
+			Config: &systemv1.ProviderForm{
+				Schema:   toStruct(descriptor.JSONSchema),
+				UiSchema: toStruct(descriptor.UISchema),
+			},
+		}
 	}
 	return out
 }
 
 func (s *systemOauth) oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.oauthRegistry.ViewConfig(p.Provider, p.Config)
-	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
+	return &systemv1.Profile{
+		Id:       p.Id,
+		Name:     p.Name,
+		Provider: p.Provider,
+		Config: &systemv1.ConfigView{
+			Values:         toStruct(view.Values),
+			SetSecretPaths: view.SetSecretPaths,
+		},
+		ConfigValid: valid,
+	}
 }
 
 func configString(values map[string]any, key string) string {

@@ -34,11 +34,17 @@ func newPoolCollector(statter PoolStatter) *poolCollector {
 		return prometheus.NewDesc(namespace+"_db_"+name, help, nil, nil)
 	}
 	return &poolCollector{
-		statter:  statter,
-		acquired: desc("connections_acquired", "Database connections currently checked out of the pool."),
-		idle:     desc("connections_idle", "Database connections open but idle."),
-		total:    desc("connections_total", "Database connections currently open (acquired + idle)."),
-		max:      desc("connections_max", "Maximum database connections the pool allows."),
+		statter: statter,
+		acquired: desc(
+			"connections_acquired",
+			"Database connections currently checked out of the pool.",
+		),
+		idle: desc("connections_idle", "Database connections open but idle."),
+		total: desc(
+			"connections_total",
+			"Database connections currently open (acquired + idle).",
+		),
+		max: desc("connections_max", "Maximum database connections the pool allows."),
 	}
 }
 

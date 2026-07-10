@@ -22,7 +22,11 @@ const (
 )
 
 type Runtime interface {
-	LocalSignedURL(ctx context.Context, method, purpose, key string, expires time.Duration) (string, error)
+	LocalSignedURL(
+		ctx context.Context,
+		method, purpose, key string,
+		expires time.Duration,
+	) (string, error)
 	VisibilityOf(purpose string) Visibility
 }
 
@@ -64,7 +68,12 @@ type registration struct {
 
 type Registration struct{ entry registration }
 
-func Register[T any](key string, presentation integration.Presentation, contract config.Contract[T], ops Operations[T]) Registration {
+func Register[T any](
+	key string,
+	presentation integration.Presentation,
+	contract config.Contract[T],
+	ops Operations[T],
+) Registration {
 	definitionErr := contract.ValidateDefinition()
 	if ops.PresignPut == nil || ops.ResolveURL == nil || ops.Delete == nil || ops.Test == nil {
 		definitionErr = errors.New("provider operation is missing")
@@ -78,8 +87,17 @@ func Register[T any](key string, presentation integration.Presentation, contract
 		return typed, nil
 	}
 	entry := registration{
-		descriptor:    Descriptor{Key: key, Presentation: presentation, JSONSchema: contract.JSONSchema(), UISchema: contract.UISchema()},
-		contract:      contractOps{create: contract.CreateWrite, update: contract.UpdateWrite, view: contract.View},
+		descriptor: Descriptor{
+			Key:          key,
+			Presentation: presentation,
+			JSONSchema:   contract.JSONSchema(),
+			UISchema:     contract.UISchema(),
+		},
+		contract: contractOps{
+			create: contract.CreateWrite,
+			update: contract.UpdateWrite,
+			view:   contract.View,
+		},
 		definitionErr: definitionErr,
 	}
 	entry.ops.presignPut = func(rt Runtime, ctx context.Context, values map[string]any, purpose, objectKey, contentType string, expires time.Duration) (string, error) {
@@ -130,7 +148,10 @@ type Registry struct {
 var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
-	r := Registry{entries: make([]registration, 0, len(registrations)), byKey: make(map[string]int, len(registrations))}
+	r := Registry{
+		entries: make([]registration, 0, len(registrations)),
+		byKey:   make(map[string]int, len(registrations)),
+	}
 	for _, item := range registrations {
 		e := item.entry
 		if e.descriptor.Key == "" {
@@ -188,14 +209,25 @@ func (r Registry) ConfigUsable(provider string, values map[string]any) bool {
 	_, valid := r.ViewConfig(provider, values)
 	return valid
 }
-func (r Registry) CreateConfig(provider string, values map[string]any, secrets map[string]string) (map[string]any, error) {
+
+func (r Registry) CreateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", provider)
 	}
 	return e.contract.create(values, secrets)
 }
-func (r Registry) UpdateConfig(provider string, values map[string]any, secrets map[string]string, stored map[string]any) (map[string]any, error) {
+
+func (r Registry) UpdateConfig(
+	provider string,
+	values map[string]any,
+	secrets map[string]string,
+	stored map[string]any,
+) (map[string]any, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return nil, fmt.Errorf("未知 provider %q", provider)
@@ -209,28 +241,57 @@ func (r Registry) ViewConfig(provider string, stored map[string]any) (config.Vie
 	}
 	return e.contract.view(stored)
 }
-func (r Registry) PresignPut(rt Runtime, ctx context.Context, provider string, values map[string]any, purpose, key, contentType string, expires time.Duration) (string, error) {
+
+func (r Registry) PresignPut(
+	rt Runtime,
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	purpose, key, contentType string,
+	expires time.Duration,
+) (string, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return "", ErrNotConfigured
 	}
 	return e.ops.presignPut(rt, ctx, values, purpose, key, contentType, expires)
 }
-func (r Registry) ResolveURL(rt Runtime, ctx context.Context, provider string, values map[string]any, purpose, key string, expires time.Duration) (string, error) {
+
+func (r Registry) ResolveURL(
+	rt Runtime,
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	purpose, key string,
+	expires time.Duration,
+) (string, error) {
 	e, ok := r.entry(provider)
 	if !ok {
 		return "", ErrNotConfigured
 	}
 	return e.ops.resolveURL(rt, ctx, values, purpose, key, expires)
 }
-func (r Registry) Delete(rt Runtime, ctx context.Context, provider string, values map[string]any, purpose, key string) error {
+
+func (r Registry) Delete(
+	rt Runtime,
+	ctx context.Context,
+	provider string,
+	values map[string]any,
+	purpose, key string,
+) error {
 	e, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured
 	}
 	return e.ops.delete(rt, ctx, values, purpose, key)
 }
-func (r Registry) Test(ctx context.Context, rt Runtime, provider string, values map[string]any) error {
+
+func (r Registry) Test(
+	ctx context.Context,
+	rt Runtime,
+	provider string,
+	values map[string]any,
+) error {
 	e, ok := r.entry(provider)
 	if !ok {
 		return ErrNotConfigured

@@ -4,8 +4,20 @@ import "testing"
 
 func TestFormValidatesConditionalFields(t *testing.T) {
 	schema := Schema{Fields: []Field{
-		{Key: "mode", Label: "模式", Type: Enum, Required: true, Options: []Option{{Value: "public"}, {Value: "cert"}}},
-		{Key: "certificate", Label: "证书", Type: Text, Required: true, ShowWhen: &ShowWhen{Field: "mode", Values: []string{"cert"}}},
+		{
+			Key:      "mode",
+			Label:    "模式",
+			Type:     Enum,
+			Required: true,
+			Options:  []Option{{Value: "public"}, {Value: "cert"}},
+		},
+		{
+			Key:      "certificate",
+			Label:    "证书",
+			Type:     Text,
+			Required: true,
+			ShowWhen: &ShowWhen{Field: "mode", Values: []string{"cert"}},
+		},
 	}}
 	if err := schema.Validate(map[string]any{"mode": "public"}); err != nil {
 		t.Fatalf("inactive conditional field should be optional: %v", err)
@@ -17,8 +29,23 @@ func TestFormValidatesConditionalFields(t *testing.T) {
 
 func TestJSONFormPreservesOrderOptionsAndConditions(t *testing.T) {
 	schema := Schema{Fields: []Field{
-		{Key: "mode", Label: "模式", Type: Enum, Required: true, Options: []Option{{Value: "public", Label: "公钥", Description: "使用公钥"}, {Value: "cert", Label: "证书"}}},
-		{Key: "certificate", Label: "证书", Type: Text, Required: true, ShowWhen: &ShowWhen{Field: "mode", Values: []string{"cert"}}},
+		{
+			Key:      "mode",
+			Label:    "模式",
+			Type:     Enum,
+			Required: true,
+			Options: []Option{
+				{Value: "public", Label: "公钥", Description: "使用公钥"},
+				{Value: "cert", Label: "证书"},
+			},
+		},
+		{
+			Key:      "certificate",
+			Label:    "证书",
+			Type:     Text,
+			Required: true,
+			ShowWhen: &ShowWhen{Field: "mode", Values: []string{"cert"}},
+		},
 	}}
 	jsonSchema, ui := schema.JSONForm()
 	order := ui["ui:order"].([]any)

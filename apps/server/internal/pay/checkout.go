@@ -50,17 +50,25 @@ type CheckoutManager struct {
 	now       func() time.Time
 }
 
-func NewCheckoutIssuer(repo repository.Querier, store *settings.Store, publicURL string) *CheckoutManager {
+func NewCheckoutIssuer(
+	repo repository.Querier,
+	store *settings.Store,
+	publicURL string,
+) *CheckoutManager {
 	return &CheckoutManager{
 		repo: repo, settings: store, publicURL: strings.TrimSuffix(publicURL, "/"), now: time.Now,
 	}
 }
 
-func (i *CheckoutManager) Create(ctx context.Context, command CheckoutCommand) (IssuedCheckout, error) {
+func (i *CheckoutManager) Create(
+	ctx context.Context,
+	command CheckoutCommand,
+) (IssuedCheckout, error) {
 	if !Purposes.Known(command.Purpose) {
 		return IssuedCheckout{}, fmt.Errorf("unknown payment purpose %q", command.Purpose)
 	}
-	if command.BusinessReference == "" || command.IdempotencyKey == "" || command.Subject == "" || command.Amount <= 0 {
+	if command.BusinessReference == "" || command.IdempotencyKey == "" || command.Subject == "" ||
+		command.Amount <= 0 {
 		return IssuedCheckout{}, fmt.Errorf("invalid checkout command")
 	}
 	if !validReturnPath(command.ReturnPath) {
@@ -81,9 +89,12 @@ func (i *CheckoutManager) Create(ctx context.Context, command CheckoutCommand) (
 		ReturnPath: command.ReturnPath, ExpiresAt: i.now().Add(30 * time.Minute),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		row, err = i.repo.GetCheckoutSessionByIdempotency(ctx, repository.GetCheckoutSessionByIdempotencyParams{
-			Purpose: command.Purpose, IdempotencyKey: command.IdempotencyKey,
-		})
+		row, err = i.repo.GetCheckoutSessionByIdempotency(
+			ctx,
+			repository.GetCheckoutSessionByIdempotencyParams{
+				Purpose: command.Purpose, IdempotencyKey: command.IdempotencyKey,
+			},
+		)
 	}
 	if err != nil {
 		return IssuedCheckout{}, fmt.Errorf("create checkout session: %w", err)
@@ -98,7 +109,10 @@ func (i *CheckoutManager) Create(ctx context.Context, command CheckoutCommand) (
 	return IssuedCheckout{CheckoutURL: i.publicURL + "/checkout/" + token, Token: token}, nil
 }
 
-func (i *CheckoutManager) Resolve(ctx context.Context, token string) (repository.PaymentCheckoutSession, error) {
+func (i *CheckoutManager) Resolve(
+	ctx context.Context,
+	token string,
+) (repository.PaymentCheckoutSession, error) {
 	id, signature, ok := strings.Cut(token, ".")
 	if !ok || id == "" || signature == "" {
 		return repository.PaymentCheckoutSession{}, ErrInvalidCheckout
@@ -164,5 +178,7 @@ func randomSessionID() (string, error) {
 
 func validReturnPath(path string) bool {
 	parsed, err := url.Parse(path)
-	return err == nil && strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") && !parsed.IsAbs() && parsed.Host == ""
+	return err == nil && strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") &&
+		!parsed.IsAbs() &&
+		parsed.Host == ""
 }

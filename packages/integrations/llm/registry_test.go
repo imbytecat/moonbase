@@ -14,7 +14,14 @@ type testConfig struct {
 
 func TestRegistryRejectsInvalidConfigBeforeCompletion(t *testing.T) {
 	called := false
-	r := MustRegistry(Register("test", integration.Presentation{Name: "测试"}, config.MustContract[testConfig](config.Policy{}), func(context.Context, testConfig, Prompt) (string, error) { called = true; return "", nil }))
+	r := MustRegistry(
+		Register(
+			"test",
+			integration.Presentation{Name: "测试"},
+			config.MustContract[testConfig](config.Policy{}),
+			func(context.Context, testConfig, Prompt) (string, error) { called = true; return "", nil },
+		),
+	)
 	_, err := r.Complete(t.Context(), "test", map[string]any{}, "", "hi")
 	if err == nil {
 		t.Fatal("invalid config should fail")

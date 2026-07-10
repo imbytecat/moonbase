@@ -93,7 +93,10 @@ func (s *NotificationService) MarkNotificationsRead(
 	userID := auth.IdentityFromContext(ctx).UserID
 	ids, err := notificationIDs(req.Msg.GetIds())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid notification id"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid notification id"),
+		)
 	}
 	if err := s.repo.MarkNotificationsRead(ctx, repository.MarkNotificationsReadParams{
 		UserID: userID,
@@ -120,7 +123,9 @@ func (s *NotificationService) MarkAllNotificationsRead(
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&notificationv1.MarkAllNotificationsReadResponse{Unread: unread}), nil
+	return connect.NewResponse(
+		&notificationv1.MarkAllNotificationsReadResponse{Unread: unread},
+	), nil
 }
 
 func (s *NotificationService) DeleteNotification(
@@ -130,7 +135,10 @@ func (s *NotificationService) DeleteNotification(
 	userID := auth.IdentityFromContext(ctx).UserID
 	id, err := uuid.Parse(req.Msg.GetId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid notification id"))
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("invalid notification id"),
+		)
 	}
 	if err := s.repo.DeleteNotification(ctx, repository.DeleteNotificationParams{
 		UserID: userID,
