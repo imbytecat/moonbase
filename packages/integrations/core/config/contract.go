@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -124,6 +125,15 @@ func (c Contract[T]) UISchema() map[string]any {
 	return schema
 }
 
+// ValidateDefinition reports whether the contract was constructed and
+// compiled successfully. Registries use it to reject a zero-value Contract.
+func (c Contract[T]) ValidateDefinition() error {
+	if c.validator == nil || c.schema == nil || c.uiSchema == nil {
+		return errors.New("config contract is not initialized")
+	}
+	return nil
+}
+
 // Create validates input and returns its canonical typed representation.
 func (c Contract[T]) Create(input map[string]any) (map[string]any, error) {
 	typed, err := c.Decode(input)
@@ -137,6 +147,9 @@ func (c Contract[T]) Create(input map[string]any) (map[string]any, error) {
 // replacements before materializing a complete canonical config.
 func (c Contract[T]) CreateWrite(values map[string]any, secrets map[string]string) (map[string]any, error) {
 	if err := c.rejectSecretsInValues(values); err != nil {
+		return nil, err
+	}
+	if err := c.validateSecretReplacements(secrets); err != nil {
 		return nil, err
 	}
 	input, err := MergeWrite(values, secrets)
@@ -204,6 +217,9 @@ func (c Contract[T]) UpdateWrite(
 	if err := c.rejectSecretsInValues(values); err != nil {
 		return nil, err
 	}
+	if err := c.validateSecretReplacements(secrets); err != nil {
+		return nil, err
+	}
 	input, err := MergeWrite(values, secrets)
 	if err != nil {
 		return nil, err
@@ -213,22 +229,20 @@ func (c Contract[T]) UpdateWrite(
 
 // View removes secret values and reports only their configured paths.
 func (c Contract[T]) View(stored map[string]any) (View, bool) {
-	canonical, err := c.Create(stored)
-	if err != nil {
-		return View{Values: map[string]any{}}, false
-	}
+	_, validationErr := c.Create(stored)
+	projected := projectKnownObject(c.schema, stored)
 	setPaths := make([]string, 0, len(c.policy.Secrets))
 	for _, path := range c.policy.Secrets {
-		if value, ok, _ := valueAt(canonical, path); ok {
+		if value, ok, _ := valueAt(stored, path); ok {
 			if secret, ok := value.(string); ok && secret != "" {
 				setPaths = append(setPaths, path)
 			}
 		}
-		if err := deleteValueAt(canonical, path); err != nil {
+		if err := deleteValueAt(projected, path); err != nil {
 			return View{Values: map[string]any{}}, false
 		}
 	}
-	return View{Values: canonical, SetSecretPaths: setPaths}, true
+	return View{Values: projected, SetSecretPaths: setPaths}, validationErr == nil
 }
 
 func (c Contract[T]) rejectSecretsInValues(values map[string]any) error {
@@ -237,6 +251,19 @@ func (c Contract[T]) rejectSecretsInValues(values map[string]any) error {
 			return err
 		} else if present {
 			return fmt.Errorf("secret %q must not appear in ordinary values", path)
+		}
+	}
+	return nil
+}
+
+func (c Contract[T]) validateSecretReplacements(secrets map[string]string) error {
+	allowed := make(map[string]struct{}, len(c.policy.Secrets))
+	for _, path := range c.policy.Secrets {
+		allowed[path] = struct{}{}
+	}
+	for path := range secrets {
+		if _, ok := allowed[path]; !ok {
+			return fmt.Errorf("secret %q is not declared by the provider", path)
 		}
 	}
 	return nil
@@ -264,9 +291,6 @@ func (c Contract[T]) Decode(input map[string]any) (T, error) {
 	if err := decoder.Decode(&typed); err != nil {
 		return zero, fmt.Errorf("decode typed config: %w", err)
 	}
-	if decoder.More() {
-		return zero, fmt.Errorf("decode typed config: trailing value")
-	}
 	return typed, nil
 }
 
@@ -285,6 +309,9 @@ func encodeMap[T any](value T) (map[string]any, error) {
 }
 
 func cloneMap(input map[string]any) (map[string]any, error) {
+	if input == nil {
+		return map[string]any{}, nil
+	}
 	raw, err := json.Marshal(input)
 	if err != nil {
 		return nil, fmt.Errorf("encode config: %w", err)
@@ -305,6 +332,15 @@ func pointerTokens(path string) ([]string, error) {
 	raw := strings.Split(path[1:], "/")
 	tokens := make([]string, len(raw))
 	for i, token := range raw {
+		for offset := 0; offset < len(token); offset++ {
+			if token[offset] != '~' {
+				continue
+			}
+			if offset+1 >= len(token) || (token[offset+1] != '0' && token[offset+1] != '1') {
+				return nil, fmt.Errorf("invalid JSON Pointer %q", path)
+			}
+			offset++
+		}
 		token = strings.ReplaceAll(token, "~1", "/")
 		token = strings.ReplaceAll(token, "~0", "~")
 		if token == "" {
@@ -381,42 +417,111 @@ func deleteValueAt(root map[string]any, path string) error {
 
 func applyPolicy(schema map[string]any, policy Policy) (map[string]any, error) {
 	ui := map[string]any{}
+	type policyPath struct {
+		kind   string
+		path   string
+		tokens []string
+		field  map[string]any
+	}
+	paths := make([]policyPath, 0, len(policy.Secrets)+len(policy.CreateOnly))
 	seen := map[string]string{}
 	for _, item := range []struct {
 		kind  string
 		paths []string
-	}{
-		{kind: "secret", paths: policy.Secrets},
-		{kind: "create-only", paths: policy.CreateOnly},
-	} {
+	}{{kind: "secret", paths: policy.Secrets}, {kind: "create-only", paths: policy.CreateOnly}} {
 		for _, path := range item.paths {
-			if previous, ok := seen[path]; ok && previous == item.kind {
-				return nil, fmt.Errorf("duplicate %s path %q", item.kind, path)
+			if previous, ok := seen[path]; ok {
+				return nil, fmt.Errorf("policy path %q is declared as both %s and %s", path, previous, item.kind)
 			}
-			seen[path] = item.kind
 			field, tokens, err := schemaField(schema, path)
 			if err != nil {
 				return nil, err
 			}
-			options := map[string]any{}
-			if item.kind == "secret" {
-				if field["type"] != "string" {
-					return nil, fmt.Errorf("secret path %q must point to a string", path)
-				}
-				minLength, _ := field["minLength"].(float64)
-				if minLength < 1 {
-					return nil, fmt.Errorf("secret path %q must have minLength=1 or greater", path)
-				}
-				field["writeOnly"] = true
-				options["secret"] = true
+			_, hasProperties := field["properties"]
+			_, hasItems := field["items"]
+			if hasProperties || hasItems || field["type"] == "object" || field["type"] == "array" {
+				return nil, fmt.Errorf("policy path %q must point to a leaf field", path)
 			}
-			if item.kind == "create-only" {
-				options["immutable"] = true
-			}
-			mergeUIOptions(ui, tokens, options)
+			seen[path] = item.kind
+			paths = append(paths, policyPath{kind: item.kind, path: path, tokens: tokens, field: field})
 		}
 	}
+	for i, left := range paths {
+		for _, right := range paths[i+1:] {
+			if tokenPrefix(left.tokens, right.tokens) || tokenPrefix(right.tokens, left.tokens) {
+				return nil, fmt.Errorf("policy paths %q and %q conflict", left.path, right.path)
+			}
+		}
+	}
+	for _, item := range paths {
+		options := map[string]any{}
+		if item.kind == "secret" {
+			if item.field["type"] != "string" {
+				return nil, fmt.Errorf("secret path %q must point to a string", item.path)
+			}
+			minLength, _ := item.field["minLength"].(float64)
+			if minLength < 1 {
+				return nil, fmt.Errorf("secret path %q must have minLength=1 or greater", item.path)
+			}
+			item.field["writeOnly"] = true
+			options["secret"] = true
+		} else {
+			options["immutable"] = true
+		}
+		mergeUIOptions(ui, item.tokens, options)
+	}
 	return ui, nil
+}
+
+func tokenPrefix(left, right []string) bool {
+	if len(left) >= len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func projectKnownObject(schema map[string]any, stored map[string]any) map[string]any {
+	projected, _ := projectKnownValue(schema, stored).(map[string]any)
+	if projected == nil {
+		return map[string]any{}
+	}
+	return projected
+}
+
+func projectKnownValue(schema map[string]any, value any) any {
+	if properties, ok := schema["properties"].(map[string]any); ok {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return value
+		}
+		out := make(map[string]any, len(properties))
+		for key, rawField := range properties {
+			storedValue, present := object[key]
+			if !present {
+				continue
+			}
+			field, _ := rawField.(map[string]any)
+			out[key] = projectKnownValue(field, storedValue)
+		}
+		return out
+	}
+	if items, ok := schema["items"].(map[string]any); ok {
+		array, ok := value.([]any)
+		if !ok {
+			return value
+		}
+		out := make([]any, len(array))
+		for i, item := range array {
+			out[i] = projectKnownValue(items, item)
+		}
+		return out
+	}
+	return value
 }
 
 func schemaField(root map[string]any, path string) (map[string]any, []string, error) {

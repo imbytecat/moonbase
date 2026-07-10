@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/imbytecat/moonbase/integrations/core/config"
 	"github.com/imbytecat/moonbase/integrations/core/integration"
@@ -36,9 +37,10 @@ type contractOps struct {
 }
 
 type registration struct {
-	descriptor Descriptor
-	contract   contractOps
-	send       func(context.Context, map[string]any, Message) error
+	descriptor    Descriptor
+	contract      contractOps
+	send          func(context.Context, map[string]any, Message) error
+	definitionErr error
 }
 
 // Registration atomically binds one provider's descriptor, config contract,
@@ -51,6 +53,10 @@ func Register[T any](
 	contract config.Contract[T],
 	send func(context.Context, T, Message) error,
 ) Registration {
+	definitionErr := contract.ValidateDefinition()
+	if send == nil {
+		definitionErr = errors.New("provider operation is missing")
+	}
 	return Registration{entry: registration{
 		descriptor: Descriptor{
 			Key:          key,
@@ -70,6 +76,7 @@ func Register[T any](
 			}
 			return send(ctx, typed, message)
 		},
+		definitionErr: definitionErr,
 	}}
 }
 
@@ -77,6 +84,8 @@ type Registry struct {
 	entries []registration
 	byKey   map[string]int
 }
+
+var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
 
 func NewRegistry(registrations ...Registration) (Registry, error) {
 	registry := Registry{
@@ -90,6 +99,12 @@ func NewRegistry(registrations ...Registration) (Registry, error) {
 		}
 		if entry.descriptor.Presentation.Name == "" {
 			return Registry{}, fmt.Errorf("provider %q 缺少 presentation", entry.descriptor.Key)
+		}
+		if iconRef := entry.descriptor.Presentation.IconRef; iconRef != "" && !iconRefPattern.MatchString(iconRef) {
+			return Registry{}, fmt.Errorf("provider %q 的 icon_ref 无效", entry.descriptor.Key)
+		}
+		if entry.definitionErr != nil {
+			return Registry{}, fmt.Errorf("provider %q 定义无效: %w", entry.descriptor.Key, entry.definitionErr)
 		}
 		if _, exists := registry.byKey[entry.descriptor.Key]; exists {
 			return Registry{}, fmt.Errorf("provider key %q 重复", entry.descriptor.Key)

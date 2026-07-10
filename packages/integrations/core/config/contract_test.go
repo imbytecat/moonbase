@@ -120,4 +120,86 @@ func TestContractAppliesLifecycleAndProjectsSafeView(t *testing.T) {
 	}, nil); err == nil {
 		t.Fatal("secret in ordinary values must fail")
 	}
+	if _, err := contract.CreateWrite(map[string]any{
+		"endpoint": "https://new.example.com",
+		"key":      "stable",
+	}, map[string]string{"/endpoint": "must-not-be-treated-as-secret"}); err == nil {
+		t.Fatal("non-secret path in secret replacements must fail")
+	}
+
+	invalidStored := map[string]any{
+		"endpoint": "https://repair.example.com",
+		"password": "still-secret",
+		"key":      "stable",
+		"unknown":  "drop-me",
+	}
+	view, valid = contract.View(invalidStored)
+	if valid {
+		t.Fatal("stored config with an unknown field must be invalid")
+	}
+	if view.Values["endpoint"] != "https://repair.example.com" || view.Values["key"] != "stable" {
+		t.Fatalf("safe repair projection = %v", view.Values)
+	}
+	if _, ok := view.Values["unknown"]; ok {
+		t.Fatal("unknown fields must be dropped from the repair projection")
+	}
+	if _, ok := view.Values["password"]; ok {
+		t.Fatal("secret must not appear in an invalid repair projection")
+	}
+	if len(view.SetSecretPaths) != 1 || view.SetSecretPaths[0] != "/password" {
+		t.Fatalf("invalid config secret presence = %v", view.SetSecretPaths)
+	}
+}
+
+type nestedLifecycleConfig struct {
+	Credentials struct {
+		Username string `json:"username" jsonschema:"required,minLength=1"`
+		Token    string `json:"token" jsonschema:"required,minLength=1"`
+	} `json:"credentials" jsonschema:"required"`
+}
+
+func TestContractSupportsNestedSecretPointers(t *testing.T) {
+	contract := MustContract[nestedLifecycleConfig](Policy{Secrets: []string{"/credentials/token"}})
+	stored, err := contract.CreateWrite(map[string]any{
+		"credentials": map[string]any{"username": "moonbase"},
+	}, map[string]string{"/credentials/token": "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, valid := contract.View(stored)
+	if !valid {
+		t.Fatal("nested stored config should be valid")
+	}
+	credentials := view.Values["credentials"].(map[string]any)
+	if credentials["username"] != "moonbase" {
+		t.Fatalf("nested values = %v", credentials)
+	}
+	if _, ok := credentials["token"]; ok {
+		t.Fatal("nested secret must not appear in values")
+	}
+}
+
+type policyObjectConfig struct {
+	Credentials struct {
+		Token string `json:"token" jsonschema:"required,minLength=1"`
+	} `json:"credentials" jsonschema:"required"`
+}
+
+func TestContractRejectsInvalidPolicyPaths(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy Policy
+	}{
+		{name: "cross-kind duplicate", policy: Policy{Secrets: []string{"/credentials/token"}, CreateOnly: []string{"/credentials/token"}}},
+		{name: "parent-child conflict", policy: Policy{Secrets: []string{"/credentials/token"}, CreateOnly: []string{"/credentials"}}},
+		{name: "create-only object", policy: Policy{CreateOnly: []string{"/credentials"}}},
+		{name: "invalid pointer escape", policy: Policy{Secrets: []string{"/credentials/~2token"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := NewContract[policyObjectConfig](tt.policy); err == nil {
+				t.Fatalf("NewContract(%+v) must fail", tt.policy)
+			}
+		})
+	}
 }

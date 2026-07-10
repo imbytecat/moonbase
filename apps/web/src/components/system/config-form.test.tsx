@@ -1,9 +1,10 @@
 import { create } from '@bufbuild/protobuf'
 import { ConfigViewSchema, ProfileSchema, ProviderFormSchema } from '@moonbase/api-client'
+import type { RJSFSchema } from '@rjsf/utils'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { ConfigForm } from '#components/system/config-form'
+import { ConfigForm, prepareConfigSchema, splitConfigWrite } from '#components/system/config-form'
 import { jsonSchemaValidator } from '#lib/json-schema-validator'
 
 describe('ConfigForm', () => {
@@ -51,10 +52,47 @@ describe('ConfigForm', () => {
   })
 
   it('使用 Ajv2020 编译 provider schema', () => {
-    const result = jsonSchemaValidator.rawValidation(schema, {
+    const result = jsonSchemaValidator.rawValidation(schema as RJSFSchema, {
       host: 'smtp.example.com',
       password: 'secret',
     })
     expect(result.errors).toBeUndefined()
+  })
+
+  it('编辑时从 dependentRequired 移除已存 secret', () => {
+    const editSchema = prepareConfigSchema(
+      {
+        type: 'object',
+        properties: {
+          username: { type: 'string' },
+          password: { type: 'string' },
+        },
+        required: ['username', 'password'],
+        dependentRequired: { username: ['password'], password: ['username'] },
+      },
+      true,
+      new Set(['/password']),
+      '配置名称',
+    )
+
+    const result = jsonSchemaValidator.rawValidation(editSchema, {
+      name: '主邮件',
+      username: 'mailer',
+    })
+    expect(result.errors).toBeUndefined()
+  })
+
+  it('按嵌套 JSON Pointer 拆分普通值与 secret', () => {
+    expect(
+      splitConfigWrite(
+        {
+          credentials: { username: 'moonbase', token: 'secret' },
+        },
+        new Set(['/credentials/token']),
+      ),
+    ).toEqual({
+      values: { credentials: { username: 'moonbase' } },
+      secrets: { '/credentials/token': 'secret' },
+    })
   })
 })

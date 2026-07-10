@@ -45,3 +45,37 @@ func TestRegistryDecodesTypedConfigBeforeSending(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistryRejectsIncompleteRegistrations(t *testing.T) {
+	validContract := config.MustContract[registryTestConfig](config.Policy{})
+	tests := []struct {
+		name         string
+		registration Registration
+	}{
+		{
+			name: "invalid icon",
+			registration: Register("bad", integration.Presentation{
+				Name: "坏图标", IconRef: "CloudOutlined",
+			}, validContract, func(context.Context, registryTestConfig, Message) error { return nil }),
+		},
+		{
+			name: "zero contract",
+			registration: Register("bad", integration.Presentation{
+				Name: "缺少契约", IconRef: "antd:ApiOutlined",
+			}, config.Contract[registryTestConfig]{}, func(context.Context, registryTestConfig, Message) error { return nil }),
+		},
+		{
+			name: "nil operation",
+			registration: Register("bad", integration.Presentation{
+				Name: "缺少操作", IconRef: "antd:ApiOutlined",
+			}, validContract, nil),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := NewRegistry(tt.registration); err == nil {
+				t.Fatal("NewRegistry must fail")
+			}
+		})
+	}
+}

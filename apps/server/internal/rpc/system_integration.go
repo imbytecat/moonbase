@@ -146,7 +146,7 @@ func (o integrationOps[P]) bind(ctx context.Context, s *SystemService, purpose, 
 }
 
 // resolveTestProfile implements the shared test-RPC convention: pass a
-// profile to test unsaved form values (empty secrets fall back to the stored
+// profile to test unsaved form values (missing secrets fall back to the stored
 // profile with the same id), or a profile id to test a stored profile as-is.
 func (o integrationOps[P]) resolveTestProfile(ctx context.Context, s *SystemService, in *P, id string) (P, error) {
 	var zero P

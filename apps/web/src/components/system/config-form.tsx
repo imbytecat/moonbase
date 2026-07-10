@@ -92,6 +92,17 @@ function pointerForKey(key: string): string {
   return `/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`
 }
 
+function pointerForTokens(tokens: string[]): string {
+  return tokens.map(pointerForKey).join('')
+}
+
+function pointerTokens(pointer: string): string[] {
+  return pointer
+    .slice(1)
+    .split('/')
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
 function initialFormData(profile: Profile | undefined): JsonObject {
   const out: JsonObject = { name: profile?.name ?? '' }
   for (const [key, val] of Object.entries(profile?.config?.values ?? {})) {
@@ -104,35 +115,43 @@ function prepareUiSchema(
   base: UiSchema,
   profile: Profile | undefined,
   nameField: NameField,
-): { uiSchema: UiSchema; secretKeys: Set<string> } {
+): { uiSchema: UiSchema; secretPaths: Set<string> } {
   const isEdit = profile !== undefined
-  const secretKeys = new Set<string>()
+  const secretPaths = new Set<string>()
   const order = (base['ui:order'] as string[] | undefined) ?? []
   const nameUi: Record<string, unknown> = {
     'ui:placeholder': nameField.placeholder ?? '便于识别的名称',
   }
   if (nameField.help) nameUi['ui:help'] = nameField.help
-  const uiSchema: UiSchema = { name: nameUi }
-  if (order.length > 0) uiSchema['ui:order'] = ['name', ...order]
-  for (const [key, raw] of Object.entries(base)) {
-    if (key === 'ui:order') continue
-    const entry = { ...(raw as Record<string, unknown>) }
-    const opts = { ...((entry['ui:options'] as Record<string, unknown> | undefined) ?? {}) }
-    if (opts.secret) {
-      secretKeys.add(key)
-      opts.secretSet = profile?.config?.setSecretPaths.includes(pointerForKey(key)) === true
+  const visit = (raw: UiSchema, path: string[]): UiSchema => {
+    const out: UiSchema = {}
+    for (const [key, value] of Object.entries(raw)) {
+      if (key.startsWith('ui:') || typeof value !== 'object' || value === null) {
+        out[key] = value
+        continue
+      }
+      out[key] = visit(value as UiSchema, [...path, key])
     }
-    if (opts.immutable && isEdit) entry['ui:disabled'] = true
-    entry['ui:options'] = opts
-    uiSchema[key] = entry
+    const opts = { ...((out['ui:options'] as Record<string, unknown> | undefined) ?? {}) }
+    const pointer = pointerForTokens(path)
+    if (opts.secret) {
+      secretPaths.add(pointer)
+      opts.secretSet = profile?.config?.setSecretPaths.includes(pointer) === true
+    }
+    if (opts.immutable && isEdit) out['ui:disabled'] = true
+    if (Object.keys(opts).length > 0) out['ui:options'] = opts as never
+    return out
   }
-  return { uiSchema, secretKeys }
+  const uiSchema = visit(base, [])
+  uiSchema.name = nameUi
+  if (order.length > 0) uiSchema['ui:order'] = ['name', ...order]
+  return { uiSchema, secretPaths }
 }
 
-function prepareSchema(
+export function prepareConfigSchema(
   base: RJSFSchema,
   isEdit: boolean,
-  secretKeys: Set<string>,
+  secretPaths: Set<string>,
   nameLabel: string,
 ): RJSFSchema {
   const source = base as {
@@ -144,19 +163,77 @@ function prepareSchema(
   const required = ['name', ...(source.required ?? [])]
   const schema = { ...(base as object), type: 'object', properties, required } as RJSFSchema
   if (!isEdit) return schema
-  // Editing a masked secret may leave it blank to keep the stored value, so a
-  // secret is not required on edit — drop it from every required list.
-  schema.required = required.filter((key) => !secretKeys.has(key))
-  if (Array.isArray(source.allOf)) {
-    schema.allOf = source.allOf.map((clause) => {
-      const cloned = structuredClone(clause) as { then?: { required?: string[] } }
-      if (cloned.then?.required) {
-        cloned.then.required = cloned.then.required.filter((key) => !secretKeys.has(key))
+
+  const relax = (raw: RJSFSchema, path: string[]): RJSFSchema => {
+    const out = structuredClone(raw) as RJSFSchema & {
+      dependentRequired?: Record<string, string[]>
+      dependentSchemas?: Record<string, RJSFSchema | boolean>
+      properties?: Record<string, RJSFSchema>
+    }
+    if (out.required) {
+      out.required = out.required.filter(
+        (key) => !secretPaths.has(pointerForTokens([...path, key])),
+      )
+    }
+    if (out.dependentRequired) {
+      for (const [key, dependencies] of Object.entries(out.dependentRequired)) {
+        out.dependentRequired[key] = dependencies.filter(
+          (dependency) => !secretPaths.has(pointerForTokens([...path, dependency])),
+        )
       }
-      return cloned
-    }) as RJSFSchema['allOf']
+    }
+    if (out.properties) {
+      for (const [key, child] of Object.entries(out.properties)) {
+        if (typeof child === 'object') out.properties[key] = relax(child, [...path, key])
+      }
+    }
+    if (out.dependentSchemas) {
+      for (const [key, child] of Object.entries(out.dependentSchemas)) {
+        if (typeof child === 'object') out.dependentSchemas[key] = relax(child, path)
+      }
+    }
+    for (const keyword of ['allOf', 'anyOf', 'oneOf'] as const) {
+      const branches = out[keyword]
+      if (Array.isArray(branches)) {
+        out[keyword] = branches.map((branch) =>
+          typeof branch === 'object' ? relax(branch, path) : branch,
+        )
+      }
+    }
+    for (const keyword of ['then', 'else'] as const) {
+      const branch = out[keyword]
+      if (branch && typeof branch === 'object') out[keyword] = relax(branch, path)
+    }
+    return out
   }
-  return schema
+  return relax(schema, [])
+}
+
+export function splitConfigWrite(
+  config: JsonObject,
+  secretPaths: Set<string>,
+): { values: JsonObject; secrets: Record<string, string> } {
+  const values = structuredClone(config)
+  const secrets: Record<string, string> = {}
+  for (const path of secretPaths) {
+    const tokens = pointerTokens(path)
+    let current: JsonObject | undefined = values
+    for (const token of tokens.slice(0, -1)) {
+      const next: unknown = current?.[token]
+      if (typeof next !== 'object' || next === null || Array.isArray(next)) {
+        current = undefined
+        break
+      }
+      current = next as JsonObject
+    }
+    if (!current) continue
+    const key = tokens.at(-1)
+    if (key === undefined) continue
+    const value = current[key]
+    delete current[key]
+    if (typeof value === 'string' && value !== '') secrets[path] = value
+  }
+  return { values, secrets }
 }
 
 export function ConfigForm({
@@ -181,39 +258,31 @@ export function ConfigForm({
   actions?: (current: ConfigProfileInput) => ReactNode
 }) {
   const isEdit = profile !== undefined
-  const { uiSchema, secretKeys } = useMemo(
+  const { uiSchema, secretPaths } = useMemo(
     () => prepareUiSchema((providerForm.uiSchema ?? {}) as UiSchema, profile, nameField),
     [providerForm, profile, nameField],
   )
   const schema = useMemo(
     () =>
-      prepareSchema(
+      prepareConfigSchema(
         (providerForm.schema ?? {}) as RJSFSchema,
         isEdit,
-        secretKeys,
+        secretPaths,
         nameField.label ?? '配置名称',
       ),
-    [providerForm, isEdit, secretKeys, nameField.label],
+    [providerForm, isEdit, secretPaths, nameField.label],
   )
   const initialJson = useMemo(() => JSON.stringify(initialFormData(profile)), [profile])
   const [formData, setFormData] = useState<JsonObject>(() => initialFormData(profile))
 
   const toInput = (data: JsonObject): ConfigProfileInput => {
     const { name, ...rawConfig } = data
-    const values: JsonObject = {}
-    const secrets: Record<string, string> = {}
-    for (const [key, value] of Object.entries(rawConfig)) {
-      if (!secretKeys.has(key)) {
-        values[key] = value
-        continue
-      }
-      if (typeof value === 'string' && value !== '') secrets[pointerForKey(key)] = value
-    }
+    const config = splitConfigWrite(rawConfig, secretPaths)
     return {
       id: profile?.id ?? '',
       name: typeof name === 'string' ? name : '',
       provider,
-      config: { values, secrets },
+      config,
     }
   }
 

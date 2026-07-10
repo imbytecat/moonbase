@@ -3,8 +3,9 @@ syntax = "proto3";
 // Package system.v1 is the SYSTEM settings surface: infrastructure integrations
 // (file storage, CAPTCHA, email, SMS, LLM, third-party login) configured by
 // platform operators behind system.read / system.write. Provider config is
-// schema-driven: drivers describe fields, base masks secrets and keeps stored
-// secret values on empty updates. Business toggles live in settings.v1 instead.
+// schema-driven: drivers describe fields, base projects secrets safely and
+// keeps stored secret values when their write path is absent. Business toggles
+// live in settings.v1 instead.
 package system.v1;
 
 import "buf/validate/validate.proto";
@@ -270,9 +271,9 @@ message BindStoragePurposeResponse {
 }
 
 // Validates a config end-to-end (bucket reachable / directory writable).
-// Pass profile to test unsaved form values (an empty secret falls back to
-// the stored profile with the same id), or profile_id to test a stored
-// profile as-is.
+// Pass profile to test unsaved form values (a missing secret path keeps the
+// stored value from the profile with the same id), or profile_id to test a
+// stored profile as-is.
 message TestStorageConnectionRequest {
   optional ProfileInput profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
@@ -284,8 +285,8 @@ message TestStorageConnectionResponse {
 }
 
 // Sends a test mail through the given (or stored) profile. Pass profile to
-// test unsaved form values (an empty secret falls back to the stored profile
-// with the same id), or profile_id to test a stored profile as-is.
+// test unsaved form values (a missing secret path keeps the stored value from
+// the profile with the same id), or profile_id to test a stored profile as-is.
 message SendTestEmailRequest {
   string to = 1 [(buf.validate.field).string.email = true];
   optional ProfileInput profile = 2;
@@ -316,8 +317,8 @@ message SendTestSmsResponse {
 
 // Sends a short prompt through the given (or stored) model config and returns
 // the completion — proves endpoint, key and model in one call. Pass profile to
-// test unsaved form values (an empty secret falls back to the stored profile
-// with the same id), or profile_id to test a stored profile as-is.
+// test unsaved form values (a missing secret path keeps the stored value from
+// the profile with the same id), or profile_id to test a stored profile as-is.
 message TestLlmRequest {
   optional ProfileInput profile = 1;
   string profile_id = 2 [(buf.validate.field).string.max_len = 36];
