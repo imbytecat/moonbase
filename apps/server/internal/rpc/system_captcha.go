@@ -13,10 +13,18 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) captchaOps() integrationOps[kitsettings.GenericProfile] {
+// systemCaptcha is the captcha integration's admin surface: profile CRUD,
+// purpose binding and provider descriptors. It owns only the captcha registry
+// on top of the shared systemBase.
+type systemCaptcha struct {
+	systemBase
+	captchaRegistry captchaint.Registry
+}
+
+func (s *systemCaptcha) captchaOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{name: "captcha", load: s.settings.Captcha, save: s.settings.SetCaptcha, purposes: captcha.Purposes}
 }
-func (s *SystemService) CreateCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.CreateCaptchaProfileRequest]) (*connect.Response[systemv1.CreateCaptchaProfileResponse], error) {
+func (s *systemCaptcha) CreateCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.CreateCaptchaProfileRequest]) (*connect.Response[systemv1.CreateCaptchaProfileResponse], error) {
 	in := req.Msg.GetProfile()
 	cfg, err := s.settings.Captcha(ctx)
 	if err != nil {
@@ -33,7 +41,7 @@ func (s *SystemService) CreateCaptchaProfile(ctx context.Context, req *connect.R
 	}
 	return connect.NewResponse(&systemv1.CreateCaptchaProfileResponse{Profile: s.captchaProfileToProto(p)}), nil
 }
-func (s *SystemService) UpdateCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.UpdateCaptchaProfileRequest]) (*connect.Response[systemv1.UpdateCaptchaProfileResponse], error) {
+func (s *systemCaptcha) UpdateCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.UpdateCaptchaProfileRequest]) (*connect.Response[systemv1.UpdateCaptchaProfileResponse], error) {
 	in := req.Msg.GetProfile()
 	cfg, err := s.settings.Captcha(ctx)
 	if err != nil {
@@ -59,20 +67,27 @@ func (s *SystemService) UpdateCaptchaProfile(ctx context.Context, req *connect.R
 	}
 	return nil, s.captchaOps().errNotFound()
 }
-func (s *SystemService) DeleteCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.DeleteCaptchaProfileRequest]) (*connect.Response[systemv1.DeleteCaptchaProfileResponse], error) {
-	if err := s.captchaOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+func (s *systemCaptcha) DeleteCaptchaProfile(ctx context.Context, req *connect.Request[systemv1.DeleteCaptchaProfileRequest]) (*connect.Response[systemv1.DeleteCaptchaProfileResponse], error) {
+	if err := s.captchaOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteCaptchaProfileResponse{}), nil
 }
-func (s *SystemService) BindCaptchaPurpose(ctx context.Context, req *connect.Request[systemv1.BindCaptchaPurposeRequest]) (*connect.Response[systemv1.BindCaptchaPurposeResponse], error) {
-	cfg, err := s.captchaOps().bind(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileId())
+func (s *systemCaptcha) BindCaptchaPurpose(ctx context.Context, req *connect.Request[systemv1.BindCaptchaPurposeRequest]) (*connect.Response[systemv1.BindCaptchaPurposeResponse], error) {
+	cfg, err := s.captchaOps().bind(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindCaptchaPurposeResponse{Captcha: s.toProtoCaptcha(cfg)}), nil
 }
-func (s *SystemService) toProtoCaptcha(cfg settings.Captcha) *systemv1.CaptchaSettings {
+func (s *systemCaptcha) captchaSnapshot(ctx context.Context) (*systemv1.CaptchaSettings, error) {
+	cfg, err := s.settings.Captcha(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load captcha settings", err)
+	}
+	return s.toProtoCaptcha(cfg), nil
+}
+func (s *systemCaptcha) toProtoCaptcha(cfg settings.Captcha) *systemv1.CaptchaSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.captchaProfileToProto(p)
@@ -83,7 +98,7 @@ func (s *SystemService) toProtoCaptcha(cfg settings.Captcha) *systemv1.CaptchaSe
 	}
 	return &systemv1.CaptchaSettings{Profiles: profiles, Bindings: bindings}
 }
-func (s *SystemService) DescribeCaptchaProviders(_ context.Context, _ *connect.Request[systemv1.DescribeCaptchaProvidersRequest]) (*connect.Response[systemv1.DescribeCaptchaProvidersResponse], error) {
+func (s *systemCaptcha) DescribeCaptchaProviders(_ context.Context, _ *connect.Request[systemv1.DescribeCaptchaProvidersRequest]) (*connect.Response[systemv1.DescribeCaptchaProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeCaptchaProvidersResponse{Purposes: describePurposes(captcha.Purposes), Providers: describeCaptchaProviders(s.captchaRegistry)}), nil
 }
 func describeCaptchaProviders(r captchaint.Registry) []*systemv1.ProviderDescriptor {
@@ -94,7 +109,7 @@ func describeCaptchaProviders(r captchaint.Registry) []*systemv1.ProviderDescrip
 	}
 	return out
 }
-func (s *SystemService) captchaProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemCaptcha) captchaProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.captchaRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }

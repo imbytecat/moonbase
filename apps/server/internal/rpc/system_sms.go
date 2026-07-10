@@ -17,7 +17,16 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/sms"
 )
 
-func (s *SystemService) smsOps() integrationOps[kitsettings.GenericProfile] {
+// systemSms is the sms integration's admin surface: profile CRUD, purpose
+// binding, test send and provider descriptors. It owns only the sms registry
+// and sender on top of the shared systemBase.
+type systemSms struct {
+	systemBase
+	smsRegistry smsint.Registry
+	smser       sms.ProfileSender
+}
+
+func (s *systemSms) smsOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{
 		name:     "sms",
 		load:     s.settings.Sms,
@@ -51,7 +60,7 @@ func presentationToProto(presentation integration.Presentation) *systemv1.Presen
 	}
 }
 
-func (s *SystemService) CreateSmsProfile(
+func (s *systemSms) CreateSmsProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateSmsProfileRequest],
 ) (*connect.Response[systemv1.CreateSmsProfileResponse], error) {
@@ -74,7 +83,7 @@ func (s *SystemService) CreateSmsProfile(
 	}), nil
 }
 
-func (s *SystemService) UpdateSmsProfile(
+func (s *systemSms) UpdateSmsProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateSmsProfileRequest],
 ) (*connect.Response[systemv1.UpdateSmsProfileResponse], error) {
@@ -104,21 +113,21 @@ func (s *SystemService) UpdateSmsProfile(
 	return nil, s.smsOps().errNotFound()
 }
 
-func (s *SystemService) DeleteSmsProfile(
+func (s *systemSms) DeleteSmsProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.DeleteSmsProfileRequest],
 ) (*connect.Response[systemv1.DeleteSmsProfileResponse], error) {
-	if err := s.smsOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+	if err := s.smsOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteSmsProfileResponse{}), nil
 }
 
-func (s *SystemService) BindSmsPurpose(
+func (s *systemSms) BindSmsPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindSmsPurposeRequest],
 ) (*connect.Response[systemv1.BindSmsPurposeResponse], error) {
-	cfg, err := s.smsOps().bind(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileId())
+	cfg, err := s.smsOps().bind(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +136,7 @@ func (s *SystemService) BindSmsPurpose(
 	}), nil
 }
 
-func (s *SystemService) SendTestSms(
+func (s *systemSms) SendTestSms(
 	ctx context.Context,
 	req *connect.Request[systemv1.SendTestSmsRequest],
 ) (*connect.Response[systemv1.SendTestSmsResponse], error) {
@@ -148,7 +157,7 @@ func (s *SystemService) SendTestSms(
 	return connect.NewResponse(&systemv1.SendTestSmsResponse{Ok: true}), nil
 }
 
-func (s *SystemService) resolveSmsTestProfile(ctx context.Context, input *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
+func (s *systemSms) resolveSmsTestProfile(ctx context.Context, input *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
 	cfg, err := s.settings.Sms(ctx)
 	if err != nil {
 		return kitsettings.GenericProfile{}, s.internal(ctx, "load sms settings", err)
@@ -179,7 +188,7 @@ func (s *SystemService) resolveSmsTestProfile(ctx context.Context, input *system
 	return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, errors.New("provide a profile or profile_id to test"))
 }
 
-func (s *SystemService) DescribeSmsProviders(
+func (s *systemSms) DescribeSmsProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeSmsProvidersRequest],
 ) (*connect.Response[systemv1.DescribeSmsProvidersResponse], error) {
@@ -198,7 +207,7 @@ func describeSmsProviders(registry smsint.Registry) []*systemv1.ProviderDescript
 	return out
 }
 
-func (s *SystemService) smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemSms) smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.smsRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }
@@ -214,7 +223,15 @@ func toStruct(m map[string]any) *structpb.Struct {
 	return s
 }
 
-func (s *SystemService) toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {
+func (s *systemSms) smsSnapshot(ctx context.Context) (*systemv1.SmsSettings, error) {
+	cfg, err := s.settings.Sms(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load sms settings", err)
+	}
+	return s.toProtoSms(cfg), nil
+}
+
+func (s *systemSms) toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.smsProfileToProto(p)

@@ -24,28 +24,36 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
-// SystemService manages infrastructure integrations (system.*). Every
-// integration is profile-based and shares the integrationOps lifecycle
-// (system_integration.go) with per-integration proto mapping in
-// system_<integration>.go; every integration has purpose bindings (oauth login
-// and payment purposes are multi-valued, the rest single-valued). Secrets are
-// write-only over the wire; testable integrations have a test RPC so operators
-// can validate config before relying on it.
+// systemBase carries the two dependencies every integration admin surface
+// shares — the settings store it reads and writes, and the logger it reports
+// internal failures through. Each per-integration handler (system_<x>.go)
+// embeds it, so none of them re-declare settings/logger or the internal error
+// helper.
+type systemBase struct {
+	settings *settings.Store
+	logger   *slog.Logger
+}
+
+func (b *systemBase) internal(ctx context.Context, op string, err error) error {
+	b.logger.ErrorContext(ctx, "rpc failed", "op", op, "error", err)
+	return connect.NewError(connect.CodeInternal, errors.New("internal error"))
+}
+
+// SystemService is a thin facade over the per-integration admin handlers. Each
+// handler (system_<integration>.go) owns only its own dependencies; the facade
+// composes them by embedding and satisfies the generated SystemServiceHandler
+// through Go method promotion. The only behaviour it owns is the
+// cross-integration settings snapshot — every other RPC is promoted from an
+// embedded handler. Adding an integration = one more embedded field here plus
+// its own file; it never widens a shared dependency list.
 type SystemService struct {
-	settings        *settings.Store
-	repo            repository.Querier
-	storageTester   storage.ConnectionTester
-	storageRegistry storageint.Registry
-	captchaRegistry captchaint.Registry
-	llmRegistry     llmint.Registry
-	mailer          mail.ProfileSender
-	emailRegistry   emailint.Registry
-	oauthRegistry   oauthint.Registry
-	paymentRegistry paymentint.Registry
-	smsRegistry     smsint.Registry
-	smser           sms.ProfileSender
-	chatter         llm.Chatter
-	logger          *slog.Logger
+	*systemStorage
+	*systemCaptcha
+	*systemEmail
+	*systemSms
+	*systemLlm
+	*systemOauth
+	*systemPayment
 }
 
 func NewSystemService(
@@ -64,21 +72,15 @@ func NewSystemService(
 	chatter llm.Chatter,
 	logger *slog.Logger,
 ) *SystemService {
+	base := systemBase{settings: store, logger: logger}
 	return &SystemService{
-		settings:        store,
-		repo:            repo,
-		storageTester:   storageTester,
-		storageRegistry: storageRegistry,
-		captchaRegistry: captchaRegistry,
-		llmRegistry:     llmRegistry,
-		emailRegistry:   emailRegistry,
-		oauthRegistry:   oauthRegistry,
-		paymentRegistry: paymentRegistry,
-		smsRegistry:     smsRegistry,
-		mailer:          mailer,
-		smser:           smser,
-		chatter:         chatter,
-		logger:          logger,
+		systemStorage: &systemStorage{systemBase: base, storageTester: storageTester, storageRegistry: storageRegistry},
+		systemCaptcha: &systemCaptcha{systemBase: base, captchaRegistry: captchaRegistry},
+		systemEmail:   &systemEmail{systemBase: base, emailRegistry: emailRegistry, mailer: mailer},
+		systemSms:     &systemSms{systemBase: base, smsRegistry: smsRegistry, smser: smser},
+		systemLlm:     &systemLlm{systemBase: base, llmRegistry: llmRegistry, chatter: chatter},
+		systemOauth:   &systemOauth{systemBase: base, oauthRegistry: oauthRegistry, repo: repo},
+		systemPayment: &systemPayment{systemBase: base, paymentRegistry: paymentRegistry},
 	}
 }
 
@@ -95,43 +97,46 @@ func (s *SystemService) GetSystemSettings(
 	return connect.NewResponse(out), nil
 }
 
+// snapshot assembles the read-only view of every integration by delegating to
+// each handler's own settings projection, then composes them in proto order.
+// Each xxxSnapshot method is promoted from its embedded handler.
 func (s *SystemService) snapshot(ctx context.Context) (*systemv1.GetSystemSettingsResponse, error) {
-	st, err := s.settings.Storage(ctx)
+	storageSettings, err := s.storageSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load storage settings", err)
+		return nil, err
 	}
-	captchaCfg, err := s.settings.Captcha(ctx)
+	captchaSettings, err := s.captchaSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load captcha settings", err)
+		return nil, err
 	}
-	emailCfg, err := s.settings.Email(ctx)
+	emailSettings, err := s.emailSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load email settings", err)
+		return nil, err
 	}
-	smsCfg, err := s.settings.Sms(ctx)
+	smsSettings, err := s.smsSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load sms settings", err)
+		return nil, err
 	}
-	llmCfg, err := s.settings.Llm(ctx)
+	llmSettings, err := s.llmSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load llm settings", err)
+		return nil, err
 	}
-	oauthCfg, err := s.settings.Oauth(ctx)
+	oauthSettings, err := s.oauthSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load oauth settings", err)
+		return nil, err
 	}
-	paymentCfg, err := s.settings.Payment(ctx)
+	paymentSettings, err := s.paymentSnapshot(ctx)
 	if err != nil {
-		return nil, s.internal(ctx, "load payment settings", err)
+		return nil, err
 	}
 	return &systemv1.GetSystemSettingsResponse{
-		Storage: s.toProtoStorage(st),
-		Captcha: s.toProtoCaptcha(captchaCfg),
-		Email:   s.toProtoEmail(emailCfg),
-		Sms:     s.toProtoSms(smsCfg),
-		Llm:     s.toProtoLlm(llmCfg),
-		Oauth:   s.toProtoOauth(oauthCfg),
-		Payment: s.toProtoPayment(paymentCfg),
+		Storage: storageSettings,
+		Captcha: captchaSettings,
+		Email:   emailSettings,
+		Sms:     smsSettings,
+		Llm:     llmSettings,
+		Oauth:   oauthSettings,
+		Payment: paymentSettings,
 	}, nil
 }
 
@@ -143,9 +148,4 @@ func testFailureMessage(err, notConfigured error, friendly string) string {
 		return friendly
 	}
 	return err.Error()
-}
-
-func (s *SystemService) internal(ctx context.Context, op string, err error) error {
-	s.logger.ErrorContext(ctx, "rpc failed", "op", op, "error", err)
-	return connect.NewError(connect.CodeInternal, errors.New("internal error"))
 }

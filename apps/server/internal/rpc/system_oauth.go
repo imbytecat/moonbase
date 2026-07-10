@@ -12,10 +12,21 @@ import (
 	oauthint "github.com/imbytecat/moonbase/integrations/oauth"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/oauth"
+	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) oauthOps() integrationOps[kitsettings.GenericProfile] {
+// systemOauth is the login-provider integration's admin surface: profile CRUD,
+// login binding and provider descriptors. Beyond the shared systemBase it owns
+// the oauth registry and the repository (it guards deletes against live
+// identities via CountIdentitiesByProvider).
+type systemOauth struct {
+	systemBase
+	oauthRegistry oauthint.Registry
+	repo          repository.Querier
+}
+
+func (s *systemOauth) oauthOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{
 		name:     "login provider",
 		load:     s.settings.Oauth,
@@ -24,7 +35,7 @@ func (s *SystemService) oauthOps() integrationOps[kitsettings.GenericProfile] {
 	}
 }
 
-func (s *SystemService) CreateOauthProfile(
+func (s *systemOauth) CreateOauthProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateOauthProfileRequest],
 ) (*connect.Response[systemv1.CreateOauthProfileResponse], error) {
@@ -53,7 +64,7 @@ func (s *SystemService) CreateOauthProfile(
 	}), nil
 }
 
-func (s *SystemService) UpdateOauthProfile(
+func (s *systemOauth) UpdateOauthProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateOauthProfileRequest],
 ) (*connect.Response[systemv1.UpdateOauthProfileResponse], error) {
@@ -88,11 +99,11 @@ func (s *SystemService) UpdateOauthProfile(
 	return nil, s.oauthOps().errNotFound()
 }
 
-func (s *SystemService) BindOauthPurpose(
+func (s *systemOauth) BindOauthPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindOauthPurposeRequest],
 ) (*connect.Response[systemv1.BindOauthPurposeResponse], error) {
-	cfg, err := s.oauthOps().bindMany(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
+	cfg, err := s.oauthOps().bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +112,7 @@ func (s *SystemService) BindOauthPurpose(
 	}), nil
 }
 
-func (s *SystemService) DeleteOauthProfile(
+func (s *systemOauth) DeleteOauthProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.DeleteOauthProfileRequest],
 ) (*connect.Response[systemv1.DeleteOauthProfileResponse], error) {
@@ -124,13 +135,21 @@ func (s *SystemService) DeleteOauthProfile(
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("%d account(s) still sign in through this provider — unbind it from the sign-in page instead", count))
 	}
-	if err := s.oauthOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+	if err := s.oauthOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteOauthProfileResponse{}), nil
 }
 
-func (s *SystemService) toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings {
+func (s *systemOauth) oauthSnapshot(ctx context.Context) (*systemv1.OauthSettings, error) {
+	cfg, err := s.settings.Oauth(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load oauth settings", err)
+	}
+	return s.toProtoOauth(cfg), nil
+}
+
+func (s *systemOauth) toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.oauthProfileToProto(p)
@@ -146,7 +165,7 @@ func (s *SystemService) toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings
 	return &systemv1.OauthSettings{Profiles: profiles, Bindings: bindings}
 }
 
-func (s *SystemService) DescribeOauthProviders(
+func (s *systemOauth) DescribeOauthProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeOauthProvidersRequest],
 ) (*connect.Response[systemv1.DescribeOauthProvidersResponse], error) {
@@ -164,7 +183,7 @@ func describeOauthProviders(registry oauthint.Registry) []*systemv1.ProviderDesc
 	return out
 }
 
-func (s *SystemService) oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemOauth) oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.oauthRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }

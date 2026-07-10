@@ -13,10 +13,19 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) llmOps() integrationOps[kitsettings.GenericProfile] {
+// systemLlm is the llm integration's admin surface: profile CRUD, purpose
+// binding, connectivity test and provider descriptors. It owns only the llm
+// registry and chatter on top of the shared systemBase.
+type systemLlm struct {
+	systemBase
+	llmRegistry llmint.Registry
+	chatter     llm.Chatter
+}
+
+func (s *systemLlm) llmOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{name: "model", load: s.settings.Llm, save: s.settings.SetLlm, purposes: llm.Purposes}
 }
-func (s *SystemService) CreateLlmProfile(ctx context.Context, req *connect.Request[systemv1.CreateLlmProfileRequest]) (*connect.Response[systemv1.CreateLlmProfileResponse], error) {
+func (s *systemLlm) CreateLlmProfile(ctx context.Context, req *connect.Request[systemv1.CreateLlmProfileRequest]) (*connect.Response[systemv1.CreateLlmProfileResponse], error) {
 	in := req.Msg.GetProfile()
 	cfg, err := s.settings.Llm(ctx)
 	if err != nil {
@@ -33,7 +42,7 @@ func (s *SystemService) CreateLlmProfile(ctx context.Context, req *connect.Reque
 	}
 	return connect.NewResponse(&systemv1.CreateLlmProfileResponse{Profile: s.llmProfileToProto(p)}), nil
 }
-func (s *SystemService) UpdateLlmProfile(ctx context.Context, req *connect.Request[systemv1.UpdateLlmProfileRequest]) (*connect.Response[systemv1.UpdateLlmProfileResponse], error) {
+func (s *systemLlm) UpdateLlmProfile(ctx context.Context, req *connect.Request[systemv1.UpdateLlmProfileRequest]) (*connect.Response[systemv1.UpdateLlmProfileResponse], error) {
 	in := req.Msg.GetProfile()
 	cfg, err := s.settings.Llm(ctx)
 	if err != nil {
@@ -59,20 +68,20 @@ func (s *SystemService) UpdateLlmProfile(ctx context.Context, req *connect.Reque
 	}
 	return nil, s.llmOps().errNotFound()
 }
-func (s *SystemService) DeleteLlmProfile(ctx context.Context, req *connect.Request[systemv1.DeleteLlmProfileRequest]) (*connect.Response[systemv1.DeleteLlmProfileResponse], error) {
-	if err := s.llmOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+func (s *systemLlm) DeleteLlmProfile(ctx context.Context, req *connect.Request[systemv1.DeleteLlmProfileRequest]) (*connect.Response[systemv1.DeleteLlmProfileResponse], error) {
+	if err := s.llmOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteLlmProfileResponse{}), nil
 }
-func (s *SystemService) BindLlmPurpose(ctx context.Context, req *connect.Request[systemv1.BindLlmPurposeRequest]) (*connect.Response[systemv1.BindLlmPurposeResponse], error) {
-	cfg, err := s.llmOps().bind(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileId())
+func (s *systemLlm) BindLlmPurpose(ctx context.Context, req *connect.Request[systemv1.BindLlmPurposeRequest]) (*connect.Response[systemv1.BindLlmPurposeResponse], error) {
+	cfg, err := s.llmOps().bind(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindLlmPurposeResponse{Llm: s.toProtoLlm(cfg)}), nil
 }
-func (s *SystemService) TestLlm(ctx context.Context, req *connect.Request[systemv1.TestLlmRequest]) (*connect.Response[systemv1.TestLlmResponse], error) {
+func (s *systemLlm) TestLlm(ctx context.Context, req *connect.Request[systemv1.TestLlmRequest]) (*connect.Response[systemv1.TestLlmResponse], error) {
 	p, err := s.resolveLlmTestProfile(ctx, req.Msg.GetProfile(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
@@ -83,7 +92,7 @@ func (s *SystemService) TestLlm(ctx context.Context, req *connect.Request[system
 	}
 	return connect.NewResponse(&systemv1.TestLlmResponse{Ok: true, Message: reply}), nil
 }
-func (s *SystemService) resolveLlmTestProfile(ctx context.Context, in *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
+func (s *systemLlm) resolveLlmTestProfile(ctx context.Context, in *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
 	cfg, err := s.settings.Llm(ctx)
 	if err != nil {
 		return kitsettings.GenericProfile{}, s.internal(ctx, "load llm settings", err)
@@ -113,7 +122,14 @@ func (s *SystemService) resolveLlmTestProfile(ctx context.Context, in *systemv1.
 	}
 	return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, errors.New("provide a profile or profile_id to test"))
 }
-func (s *SystemService) toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
+func (s *systemLlm) llmSnapshot(ctx context.Context) (*systemv1.LlmSettings, error) {
+	cfg, err := s.settings.Llm(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load llm settings", err)
+	}
+	return s.toProtoLlm(cfg), nil
+}
+func (s *systemLlm) toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.llmProfileToProto(p)
@@ -124,7 +140,7 @@ func (s *SystemService) toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
 	}
 	return &systemv1.LlmSettings{Profiles: profiles, Bindings: bindings}
 }
-func (s *SystemService) DescribeLlmProviders(_ context.Context, _ *connect.Request[systemv1.DescribeLlmProvidersRequest]) (*connect.Response[systemv1.DescribeLlmProvidersResponse], error) {
+func (s *systemLlm) DescribeLlmProviders(_ context.Context, _ *connect.Request[systemv1.DescribeLlmProvidersRequest]) (*connect.Response[systemv1.DescribeLlmProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeLlmProvidersResponse{Purposes: describePurposes(llm.Purposes), Providers: describeLlmProviders(s.llmRegistry)}), nil
 }
 func describeLlmProviders(r llmint.Registry) []*systemv1.ProviderDescriptor {
@@ -135,7 +151,7 @@ func describeLlmProviders(r llmint.Registry) []*systemv1.ProviderDescriptor {
 	}
 	return out
 }
-func (s *SystemService) llmProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemLlm) llmProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.llmRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }

@@ -14,7 +14,16 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) emailOps() integrationOps[kitsettings.GenericProfile] {
+// systemEmail is the email integration's admin surface: profile CRUD, purpose
+// binding, test send and provider descriptors. It owns only the email registry
+// and mailer on top of the shared systemBase.
+type systemEmail struct {
+	systemBase
+	emailRegistry emailint.Registry
+	mailer        mail.ProfileSender
+}
+
+func (s *systemEmail) emailOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{
 		name:     "email",
 		load:     s.settings.Email,
@@ -23,7 +32,7 @@ func (s *SystemService) emailOps() integrationOps[kitsettings.GenericProfile] {
 	}
 }
 
-func (s *SystemService) CreateEmailProfile(
+func (s *systemEmail) CreateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreateEmailProfileRequest],
 ) (*connect.Response[systemv1.CreateEmailProfileResponse], error) {
@@ -49,7 +58,7 @@ func (s *SystemService) CreateEmailProfile(
 	}), nil
 }
 
-func (s *SystemService) UpdateEmailProfile(
+func (s *systemEmail) UpdateEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdateEmailProfileRequest],
 ) (*connect.Response[systemv1.UpdateEmailProfileResponse], error) {
@@ -85,21 +94,21 @@ func (s *SystemService) UpdateEmailProfile(
 	return nil, s.emailOps().errNotFound()
 }
 
-func (s *SystemService) DeleteEmailProfile(
+func (s *systemEmail) DeleteEmailProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.DeleteEmailProfileRequest],
 ) (*connect.Response[systemv1.DeleteEmailProfileResponse], error) {
-	if err := s.emailOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+	if err := s.emailOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteEmailProfileResponse{}), nil
 }
 
-func (s *SystemService) BindEmailPurpose(
+func (s *systemEmail) BindEmailPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindEmailPurposeRequest],
 ) (*connect.Response[systemv1.BindEmailPurposeResponse], error) {
-	cfg, err := s.emailOps().bind(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileId())
+	cfg, err := s.emailOps().bind(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +117,7 @@ func (s *SystemService) BindEmailPurpose(
 	}), nil
 }
 
-func (s *SystemService) SendTestEmail(
+func (s *systemEmail) SendTestEmail(
 	ctx context.Context,
 	req *connect.Request[systemv1.SendTestEmailRequest],
 ) (*connect.Response[systemv1.SendTestEmailResponse], error) {
@@ -127,7 +136,7 @@ func (s *SystemService) SendTestEmail(
 	return connect.NewResponse(&systemv1.SendTestEmailResponse{Ok: true}), nil
 }
 
-func (s *SystemService) resolveEmailTestProfile(
+func (s *systemEmail) resolveEmailTestProfile(
 	ctx context.Context,
 	input *systemv1.ProfileInput,
 	id string,
@@ -177,7 +186,15 @@ func configValues(write *systemv1.ConfigWrite) map[string]any {
 	return write.GetValues().AsMap()
 }
 
-func (s *SystemService) toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
+func (s *systemEmail) emailSnapshot(ctx context.Context) (*systemv1.EmailSettings, error) {
+	cfg, err := s.settings.Email(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load email settings", err)
+	}
+	return s.toProtoEmail(cfg), nil
+}
+
+func (s *systemEmail) toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.emailProfileToProto(p)
@@ -193,7 +210,7 @@ func (s *SystemService) toProtoEmail(cfg settings.Email) *systemv1.EmailSettings
 	return &systemv1.EmailSettings{Profiles: profiles, Bindings: bindings}
 }
 
-func (s *SystemService) DescribeEmailProviders(
+func (s *systemEmail) DescribeEmailProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeEmailProvidersRequest],
 ) (*connect.Response[systemv1.DescribeEmailProvidersResponse], error) {
@@ -217,7 +234,7 @@ func describeEmailProviders(registry emailint.Registry) []*systemv1.ProviderDesc
 	return out
 }
 
-func (s *SystemService) emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemEmail) emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.emailRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{
 		Id: p.Id, Name: p.Name, Provider: p.Provider,

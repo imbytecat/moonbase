@@ -14,7 +14,15 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-func (s *SystemService) paymentOps() integrationOps[kitsettings.GenericProfile] {
+// systemPayment is the payment integration's admin surface: profile CRUD (with
+// product validation), purpose binding and provider descriptors. It owns only
+// the payment registry on top of the shared systemBase.
+type systemPayment struct {
+	systemBase
+	paymentRegistry paymentint.Registry
+}
+
+func (s *systemPayment) paymentOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{
 		name:     "payment",
 		load:     s.settings.Payment,
@@ -23,7 +31,7 @@ func (s *SystemService) paymentOps() integrationOps[kitsettings.GenericProfile] 
 	}
 }
 
-func (s *SystemService) CreatePaymentProfile(
+func (s *systemPayment) CreatePaymentProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.CreatePaymentProfileRequest],
 ) (*connect.Response[systemv1.CreatePaymentProfileResponse], error) {
@@ -49,7 +57,7 @@ func (s *SystemService) CreatePaymentProfile(
 	}), nil
 }
 
-func (s *SystemService) UpdatePaymentProfile(
+func (s *systemPayment) UpdatePaymentProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.UpdatePaymentProfileRequest],
 ) (*connect.Response[systemv1.UpdatePaymentProfileResponse], error) {
@@ -93,21 +101,21 @@ func paymentProducts(values map[string]any) []string {
 	return out
 }
 
-func (s *SystemService) DeletePaymentProfile(
+func (s *systemPayment) DeletePaymentProfile(
 	ctx context.Context,
 	req *connect.Request[systemv1.DeletePaymentProfileRequest],
 ) (*connect.Response[systemv1.DeletePaymentProfileResponse], error) {
-	if err := s.paymentOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+	if err := s.paymentOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeletePaymentProfileResponse{}), nil
 }
 
-func (s *SystemService) BindPaymentPurpose(
+func (s *systemPayment) BindPaymentPurpose(
 	ctx context.Context,
 	req *connect.Request[systemv1.BindPaymentPurposeRequest],
 ) (*connect.Response[systemv1.BindPaymentPurposeResponse], error) {
-	cfg, err := s.paymentOps().bindMany(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
+	cfg, err := s.paymentOps().bindMany(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileIds())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +124,15 @@ func (s *SystemService) BindPaymentPurpose(
 	}), nil
 }
 
-func (s *SystemService) toProtoPayment(cfg settings.Payment) *systemv1.PaymentSettings {
+func (s *systemPayment) paymentSnapshot(ctx context.Context) (*systemv1.PaymentSettings, error) {
+	cfg, err := s.settings.Payment(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load payment settings", err)
+	}
+	return s.toProtoPayment(cfg), nil
+}
+
+func (s *systemPayment) toProtoPayment(cfg settings.Payment) *systemv1.PaymentSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.paymentProfileToProto(p)
@@ -131,7 +147,7 @@ func (s *SystemService) toProtoPayment(cfg settings.Payment) *systemv1.PaymentSe
 	return &systemv1.PaymentSettings{Profiles: profiles, Bindings: bindings}
 }
 
-func (s *SystemService) DescribePaymentProviders(
+func (s *systemPayment) DescribePaymentProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribePaymentProvidersRequest],
 ) (*connect.Response[systemv1.DescribePaymentProvidersResponse], error) {
@@ -168,7 +184,7 @@ func describePaymentProviders(registry paymentint.Registry) []*systemv1.Provider
 	return providers
 }
 
-func (s *SystemService) paymentProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemPayment) paymentProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.paymentRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{
 		Id: p.Id, Name: p.Name, Provider: p.Provider,

@@ -14,11 +14,20 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 
-func (s *SystemService) storageOps() integrationOps[kitsettings.GenericProfile] {
+// systemStorage is the storage integration's admin surface: profile CRUD,
+// purpose binding, connection test and provider descriptors. It owns only the
+// storage tester and registry on top of the shared systemBase.
+type systemStorage struct {
+	systemBase
+	storageTester   storage.ConnectionTester
+	storageRegistry storageint.Registry
+}
+
+func (s *systemStorage) storageOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{name: "storage", load: s.settings.Storage, save: s.settings.SetStorage, purposes: storage.Purposes}
 }
 
-func (s *SystemService) CreateStorageProfile(ctx context.Context, req *connect.Request[systemv1.CreateStorageProfileRequest]) (*connect.Response[systemv1.CreateStorageProfileResponse], error) {
+func (s *systemStorage) CreateStorageProfile(ctx context.Context, req *connect.Request[systemv1.CreateStorageProfileRequest]) (*connect.Response[systemv1.CreateStorageProfileResponse], error) {
 	input := req.Msg.GetProfile()
 	cfg, err := s.settings.Storage(ctx)
 	if err != nil {
@@ -36,7 +45,7 @@ func (s *SystemService) CreateStorageProfile(ctx context.Context, req *connect.R
 	return connect.NewResponse(&systemv1.CreateStorageProfileResponse{Profile: s.storageProfileToProto(profile)}), nil
 }
 
-func (s *SystemService) UpdateStorageProfile(ctx context.Context, req *connect.Request[systemv1.UpdateStorageProfileRequest]) (*connect.Response[systemv1.UpdateStorageProfileResponse], error) {
+func (s *systemStorage) UpdateStorageProfile(ctx context.Context, req *connect.Request[systemv1.UpdateStorageProfileRequest]) (*connect.Response[systemv1.UpdateStorageProfileResponse], error) {
 	input := req.Msg.GetProfile()
 	cfg, err := s.settings.Storage(ctx)
 	if err != nil {
@@ -63,21 +72,21 @@ func (s *SystemService) UpdateStorageProfile(ctx context.Context, req *connect.R
 	return nil, s.storageOps().errNotFound()
 }
 
-func (s *SystemService) DeleteStorageProfile(ctx context.Context, req *connect.Request[systemv1.DeleteStorageProfileRequest]) (*connect.Response[systemv1.DeleteStorageProfileResponse], error) {
-	if err := s.storageOps().delete(ctx, s, req.Msg.GetId()); err != nil {
+func (s *systemStorage) DeleteStorageProfile(ctx context.Context, req *connect.Request[systemv1.DeleteStorageProfileRequest]) (*connect.Response[systemv1.DeleteStorageProfileResponse], error) {
+	if err := s.storageOps().delete(ctx, &s.systemBase, req.Msg.GetId()); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.DeleteStorageProfileResponse{}), nil
 }
-func (s *SystemService) BindStoragePurpose(ctx context.Context, req *connect.Request[systemv1.BindStoragePurposeRequest]) (*connect.Response[systemv1.BindStoragePurposeResponse], error) {
-	cfg, err := s.storageOps().bind(ctx, s, req.Msg.GetPurpose(), req.Msg.GetProfileId())
+func (s *systemStorage) BindStoragePurpose(ctx context.Context, req *connect.Request[systemv1.BindStoragePurposeRequest]) (*connect.Response[systemv1.BindStoragePurposeResponse], error) {
+	cfg, err := s.storageOps().bind(ctx, &s.systemBase, req.Msg.GetPurpose(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&systemv1.BindStoragePurposeResponse{Storage: s.toProtoStorage(cfg)}), nil
 }
 
-func (s *SystemService) TestStorageConnection(ctx context.Context, req *connect.Request[systemv1.TestStorageConnectionRequest]) (*connect.Response[systemv1.TestStorageConnectionResponse], error) {
+func (s *systemStorage) TestStorageConnection(ctx context.Context, req *connect.Request[systemv1.TestStorageConnectionRequest]) (*connect.Response[systemv1.TestStorageConnectionResponse], error) {
 	profile, err := s.resolveStorageTestProfile(ctx, req.Msg.GetProfile(), req.Msg.GetProfileId())
 	if err != nil {
 		return nil, err
@@ -88,7 +97,7 @@ func (s *SystemService) TestStorageConnection(ctx context.Context, req *connect.
 	return connect.NewResponse(&systemv1.TestStorageConnectionResponse{Ok: true}), nil
 }
 
-func (s *SystemService) resolveStorageTestProfile(ctx context.Context, input *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
+func (s *systemStorage) resolveStorageTestProfile(ctx context.Context, input *systemv1.ProfileInput, id string) (kitsettings.GenericProfile, error) {
 	cfg, err := s.settings.Storage(ctx)
 	if err != nil {
 		return kitsettings.GenericProfile{}, s.internal(ctx, "load storage settings", err)
@@ -119,7 +128,15 @@ func (s *SystemService) resolveStorageTestProfile(ctx context.Context, input *sy
 	return kitsettings.GenericProfile{}, connect.NewError(connect.CodeInvalidArgument, errors.New("provide a profile or profile_id to test"))
 }
 
-func (s *SystemService) toProtoStorage(cfg settings.Storage) *systemv1.StorageSettings {
+func (s *systemStorage) storageSnapshot(ctx context.Context) (*systemv1.StorageSettings, error) {
+	cfg, err := s.settings.Storage(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "load storage settings", err)
+	}
+	return s.toProtoStorage(cfg), nil
+}
+
+func (s *systemStorage) toProtoStorage(cfg settings.Storage) *systemv1.StorageSettings {
 	profiles := make([]*systemv1.Profile, len(cfg.Profiles))
 	for i, p := range cfg.Profiles {
 		profiles[i] = s.storageProfileToProto(p)
@@ -130,7 +147,7 @@ func (s *SystemService) toProtoStorage(cfg settings.Storage) *systemv1.StorageSe
 	}
 	return &systemv1.StorageSettings{Profiles: profiles, Bindings: bindings}
 }
-func (s *SystemService) DescribeStorageProviders(_ context.Context, _ *connect.Request[systemv1.DescribeStorageProvidersRequest]) (*connect.Response[systemv1.DescribeStorageProvidersResponse], error) {
+func (s *systemStorage) DescribeStorageProviders(_ context.Context, _ *connect.Request[systemv1.DescribeStorageProvidersRequest]) (*connect.Response[systemv1.DescribeStorageProvidersResponse], error) {
 	return connect.NewResponse(&systemv1.DescribeStorageProvidersResponse{Purposes: describePurposes(storage.Purposes), Providers: describeStorageProviders(s.storageRegistry)}), nil
 }
 func describeStorageProviders(registry storageint.Registry) []*systemv1.ProviderDescriptor {
@@ -141,7 +158,7 @@ func describeStorageProviders(registry storageint.Registry) []*systemv1.Provider
 	}
 	return out
 }
-func (s *SystemService) storageProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
+func (s *systemStorage) storageProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
 	view, valid := s.storageRegistry.ViewConfig(p.Provider, p.Config)
 	return &systemv1.Profile{Id: p.Id, Name: p.Name, Provider: p.Provider, Config: &systemv1.ConfigView{Values: toStruct(view.Values), SetSecretPaths: view.SetSecretPaths}, ConfigValid: valid}
 }
