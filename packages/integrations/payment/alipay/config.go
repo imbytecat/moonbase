@@ -12,41 +12,82 @@ import (
 
 var descriptor = pay.ProviderDescriptor{
 	Methods: []pay.PaymentMethodDescriptor{{Key: "alipay", Presentation: integration.Presentation{
-		Name: "支付宝", Description: "使用支付宝完成付款", Color: "#1677ff", IconRef: "antd:AlipayCircleOutlined",
+		Name:        "支付宝",
+		Description: "使用支付宝完成付款",
+		Color:       "#1677ff",
+		IconRef:     "antd:AlipayCircleOutlined",
 	}}},
 	Products: []pay.ProductDescriptor{
-		{ID: "precreate", Method: "alipay", Presentation: integration.Presentation{Name: "当面付二维码", Description: "由付款人扫码完成支付"}},
-		{ID: "page_pay", Method: "alipay", Presentation: integration.Presentation{Name: "电脑网站支付", Description: "跳转到电脑端支付页面"}},
-		{ID: "wap_pay", Method: "alipay", Presentation: integration.Presentation{Name: "手机网站支付", Description: "跳转到移动端支付页面"}},
-		{ID: "create", Method: "alipay", Presentation: integration.Presentation{Name: "小程序支付", Description: "在小程序内唤起支付"}, Input: form.Schema{Fields: []form.Field{{Key: "payer_id", Label: "买家标识", Type: form.String, Required: true, MaxLen: 128}}}},
-		{ID: "app_pay", Method: "alipay", Presentation: integration.Presentation{Name: "App 支付", Description: "在移动应用内唤起支付"}},
+		{
+			ID:           "precreate",
+			Method:       "alipay",
+			Presentation: integration.Presentation{Name: "当面付二维码", Description: "由付款人扫码完成支付"},
+		},
+		{
+			ID:           "page_pay",
+			Method:       "alipay",
+			Presentation: integration.Presentation{Name: "电脑网站支付", Description: "跳转到电脑端支付页面"},
+		},
+		{
+			ID:           "wap_pay",
+			Method:       "alipay",
+			Presentation: integration.Presentation{Name: "手机网站支付", Description: "跳转到移动端支付页面"},
+		},
+		{
+			ID:           "create",
+			Method:       "alipay",
+			Presentation: integration.Presentation{Name: "小程序支付", Description: "在小程序内唤起支付"},
+			Input: form.Schema{
+				Fields: []form.Field{
+					{
+						Key:      "payer_id",
+						Label:    "买家标识",
+						Type:     form.String,
+						Required: true,
+						MaxLen:   128,
+					},
+				},
+			},
+		},
+		{
+			ID:           "app_pay",
+			Method:       "alipay",
+			Presentation: integration.Presentation{Name: "App 支付", Description: "在移动应用内唤起支付"},
+		},
 	},
 }
 
 type providerConfig struct {
-	AppID            string   `json:"appId" jsonschema:"required,title=应用 ID,minLength=1,maxLength=32"`
-	AppPrivateKey    string   `json:"appPrivateKey" jsonschema:"required,title=应用私钥,minLength=1,maxLength=8192"`
-	AuthMethod       string   `json:"authMethod" jsonschema:"required,title=验签方式,minLength=1"`
-	AlipayPublicKey  string   `json:"alipayPublicKey,omitempty" jsonschema:"title=支付宝公钥,minLength=1,maxLength=8192"`
-	AppCert          string   `json:"appCert,omitempty" jsonschema:"title=应用公钥证书,minLength=1,maxLength=16384"`
-	AlipayRootCert   string   `json:"alipayRootCert,omitempty" jsonschema:"title=支付宝根证书,minLength=1,maxLength=16384"`
+	AppID            string   `json:"appId"                      jsonschema:"required,title=应用 ID,minLength=1,maxLength=32"`
+	AppPrivateKey    string   `json:"appPrivateKey"              jsonschema:"required,title=应用私钥,minLength=1,maxLength=8192"`
+	AuthMethod       string   `json:"authMethod"                 jsonschema:"required,title=验签方式,minLength=1"`
+	AlipayPublicKey  string   `json:"alipayPublicKey,omitempty"  jsonschema:"title=支付宝公钥,minLength=1,maxLength=8192"`
+	AppCert          string   `json:"appCert,omitempty"          jsonschema:"title=应用公钥证书,minLength=1,maxLength=16384"`
+	AlipayRootCert   string   `json:"alipayRootCert,omitempty"   jsonschema:"title=支付宝根证书,minLength=1,maxLength=16384"`
 	AlipayPublicCert string   `json:"alipayPublicCert,omitempty" jsonschema:"title=支付宝公钥证书,minLength=1,maxLength=16384"`
-	OpAppID          string   `json:"opAppId,omitempty" jsonschema:"title=小程序 APPID,maxLength=32"`
-	Products         []string `json:"products,omitempty" jsonschema:"title=已签约支付产品,uniqueItems=true"`
+	OpAppID          string   `json:"opAppId,omitempty"          jsonschema:"title=小程序 APPID,maxLength=32"`
+	Products         []string `json:"products,omitempty"         jsonschema:"title=已签约支付产品,uniqueItems=true"`
 }
 
 func (providerConfig) JSONSchemaExtend(schema *invopop.Schema) {
 	if authMethod, ok := schema.Properties.Get("authMethod"); ok {
-		authMethod.Enum = []any{pay.AuthPublicKey, pay.AuthCert}
+		authMethod.OneOf = []*invopop.Schema{
+			{Const: pay.AuthPublicKey, Title: "支付宝公钥模式"},
+			{Const: pay.AuthCert, Title: "证书模式"},
+		}
 	}
 	if products, ok := schema.Properties.Get("products"); ok && products.Items != nil {
+		products.Description = "留空表示已签约全部产品"
 		for _, product := range descriptor.Products {
-			products.Items.Enum = append(products.Items.Enum, product.ID)
+			products.Items.OneOf = append(products.Items.OneOf, &invopop.Schema{
+				Const: product.ID, Title: product.Presentation.Name,
+			})
 		}
 	}
 	schema.AllOf = append(schema.AllOf,
 		requiredWhen("authMethod", pay.AuthPublicKey, "alipayPublicKey"),
 		requiredWhen("authMethod", pay.AuthCert, "appCert", "alipayRootCert", "alipayPublicCert"),
+		requireOpAppIDWhenMiniProgramSigned(),
 	)
 }
 
@@ -56,12 +97,46 @@ func requiredWhen(field, value string, required ...string) *invopop.Schema {
 	}}, Then: &invopop.Schema{Required: required}}
 }
 
+// requireOpAppIDWhenMiniProgramSigned mirrors the runtime guard: empty products
+// means all are signed (descriptor.go), so absent/empty/contains-create all count.
+func requireOpAppIDWhenMiniProgramSigned() *invopop.Schema {
+	return &invopop.Schema{
+		If: &invopop.Schema{Extras: map[string]any{
+			"anyOf": []any{
+				map[string]any{"not": map[string]any{"required": []any{"products"}}},
+				map[string]any{
+					"required":   []any{"products"},
+					"properties": map[string]any{"products": map[string]any{"maxItems": 0}},
+				},
+				map[string]any{
+					"required": []any{"products"},
+					"properties": map[string]any{
+						"products": map[string]any{
+							"contains": map[string]any{"const": alipayMethodCreate},
+						},
+					},
+				},
+			},
+		}},
+		Then: &invopop.Schema{Required: []string{"opAppId"}},
+	}
+}
+
 func New() pay.Registration {
 	return pay.RegisterOperations(
 		"alipay",
-		integration.Presentation{Name: "支付宝", Description: "支付宝开放平台直连商户", Color: "#1677ff", IconRef: "antd:AlipayCircleOutlined"},
+		integration.Presentation{
+			Name:        "支付宝",
+			Description: "支付宝开放平台直连商户",
+			Color:       "#1677ff",
+			IconRef:     "antd:AlipayCircleOutlined",
+		},
 		config.MustContract[providerConfig](config.Policy{Secrets: []string{
-			"/appPrivateKey", "/alipayPublicKey", "/appCert", "/alipayRootCert", "/alipayPublicCert",
+			"/appPrivateKey",
+			"/alipayPublicKey",
+			"/appCert",
+			"/alipayRootCert",
+			"/alipayPublicCert",
 		}}),
 		descriptor,
 		pay.Operations[providerConfig]{
@@ -71,7 +146,9 @@ func New() pay.Registration {
 			Create: func(ctx context.Context, cfg providerConfig, request pay.CreateRequest) (pay.Action, error) {
 				return pay.CreateTyped(ctx, cfg, cfg.Products, descriptor, request, alipayCreate)
 			},
-			Query: alipayQuery, Refund: alipayRefund, QueryRefund: alipayQueryRefund,
+			Query:       alipayQuery,
+			Refund:      alipayRefund,
+			QueryRefund: alipayQueryRefund,
 			ParseNotify: alipayParseNotify,
 			RenderHostedFlow: func(product, payload string) ([]byte, error) {
 				return pay.RenderHostedFlowForProvider("alipay", product, payload)

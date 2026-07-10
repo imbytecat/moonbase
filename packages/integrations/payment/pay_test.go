@@ -38,7 +38,11 @@ func TestAlipayUsable(t *testing.T) {
 	registry := testRegistry()
 	base := kitsettings.GenericProfile{
 		Provider: "alipay",
-		Config:   map[string]any{"appId": "2021000000000000", "appPrivateKey": "key"},
+		Config: map[string]any{
+			"appId":         "2021000000000000",
+			"appPrivateKey": "key",
+			"products":      []any{"precreate"},
+		},
 	}
 
 	publicKey := base
@@ -76,6 +80,84 @@ func TestAlipayUsable(t *testing.T) {
 	if registry.ConfigUsable(cert.Provider, cert.Config) {
 		t.Error("cert profile missing a cert should not be usable")
 	}
+}
+
+func TestAlipayOpAppIDRequiredWhenMiniProgramSigned(t *testing.T) {
+	registry := testRegistry()
+	base := map[string]any{
+		"appId":           "2021000000000000",
+		"appPrivateKey":   "key",
+		"authMethod":      AuthPublicKey,
+		"alipayPublicKey": "pub",
+	}
+
+	signedOther := cloneConfig(base)
+	signedOther["products"] = []any{"precreate"}
+	if !registry.ConfigUsable("alipay", signedOther) {
+		t.Error("a profile without the mini-program product must not require opAppId")
+	}
+
+	signedMini := cloneConfig(base)
+	signedMini["products"] = []any{"create"}
+	if registry.ConfigUsable("alipay", signedMini) {
+		t.Error("mini-program signed without opAppId should not be usable")
+	}
+
+	signedMiniWithAppID := cloneConfig(signedMini)
+	signedMiniWithAppID["opAppId"] = "2021000000000001"
+	if !registry.ConfigUsable("alipay", signedMiniWithAppID) {
+		t.Error("mini-program signed with opAppId should be usable")
+	}
+
+	signedAll := cloneConfig(base)
+	if registry.ConfigUsable("alipay", signedAll) {
+		t.Error("empty products means all are signed, so opAppId is required")
+	}
+}
+
+func TestAlipayOptionsCarryLabels(t *testing.T) {
+	props, ok := alipayConfigSchema(t)["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("alipay config schema has no properties")
+	}
+	authMethod, _ := props["authMethod"].(map[string]any)
+	if got := optionTitle(authMethod, AuthPublicKey); got != "支付宝公钥模式" {
+		t.Errorf("authMethod %q label = %q, want 支付宝公钥模式", AuthPublicKey, got)
+	}
+	if got := optionTitle(authMethod, AuthCert); got != "证书模式" {
+		t.Errorf("authMethod %q label = %q, want 证书模式", AuthCert, got)
+	}
+	products, _ := props["products"].(map[string]any)
+	items, _ := products["items"].(map[string]any)
+	if got := optionTitle(items, "create"); got != "小程序支付" {
+		t.Errorf("products create label = %q, want 小程序支付", got)
+	}
+	if got := optionTitle(items, "precreate"); got != "当面付二维码" {
+		t.Errorf("products precreate label = %q, want 当面付二维码", got)
+	}
+}
+
+func alipayConfigSchema(t *testing.T) map[string]any {
+	t.Helper()
+	for _, descriptor := range testRegistry().Descriptors() {
+		if descriptor.Key == "alipay" {
+			return descriptor.ConfigSchema
+		}
+	}
+	t.Fatal("alipay descriptor not found")
+	return nil
+}
+
+func optionTitle(schema map[string]any, value string) string {
+	oneOf, _ := schema["oneOf"].([]any)
+	for _, raw := range oneOf {
+		entry, _ := raw.(map[string]any)
+		if entry["const"] == value {
+			title, _ := entry["title"].(string)
+			return title
+		}
+	}
+	return ""
 }
 
 func TestWechatUsable(t *testing.T) {
@@ -128,15 +210,21 @@ func TestDriverDescribeAndPlanOwnPaymentProducts(t *testing.T) {
 	if !ok {
 		t.Fatal("wechat driver descriptor not found")
 	}
-	if len(descriptor.Methods) != 1 || descriptor.Methods[0].Key != "wechat" || descriptor.Methods[0].Presentation.Name != "微信支付" {
+	if len(descriptor.Methods) != 1 || descriptor.Methods[0].Key != "wechat" ||
+		descriptor.Methods[0].Presentation.Name != "微信支付" {
 		t.Fatalf("methods = %+v, want payer-facing WeChat method", descriptor.Methods)
 	}
-	if len(descriptor.Products) != 4 || descriptor.Products[0].ID != "native" || descriptor.Products[0].Method != "wechat" {
+	if len(descriptor.Products) != 4 || descriptor.Products[0].ID != "native" ||
+		descriptor.Products[0].Method != "wechat" {
 		t.Fatalf("products = %+v, want driver-owned product catalog", descriptor.Products)
 	}
 	wantCapabilities := []string{"notify", "refund", "refund_query", "hosted_flow"}
 	if !slices.Equal(descriptor.Capabilities, wantCapabilities) {
-		t.Fatalf("capabilities = %v, want %v derived from driver interfaces", descriptor.Capabilities, wantCapabilities)
+		t.Fatalf(
+			"capabilities = %v, want %v derived from driver interfaces",
+			descriptor.Capabilities,
+			wantCapabilities,
+		)
 	}
 
 	profile := usableWechat("native", "h5", "jsapi")
@@ -190,9 +278,15 @@ func TestProfileProducts(t *testing.T) {
 		t.Errorf("empty products should offer the whole alipay catalog, got %v", all)
 	}
 
-	sub := registry.ConfiguredProducts("alipay", map[string]any{"products": []string{"wap_pay", "native", "precreate"}})
+	sub := registry.ConfiguredProducts(
+		"alipay",
+		map[string]any{"products": []string{"wap_pay", "native", "precreate"}},
+	)
 	if !slices.Equal(sub, []string{"precreate", "wap_pay"}) {
-		t.Errorf("ProfileProducts should keep signed ids in driver order and drop foreign ids, got %v", sub)
+		t.Errorf(
+			"ProfileProducts should keep signed ids in driver order and drop foreign ids, got %v",
+			sub,
+		)
 	}
 }
 
@@ -204,14 +298,20 @@ func TestProfileProducts(t *testing.T) {
 // The profile is usable because ProfileFor only ever hands Create a usable one.
 func TestCreateRejectsUnknownMethod(t *testing.T) {
 	profile := usableAlipay("precreate")
-	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "bogus"}); !errors.Is(err, ErrUnknownMethod) {
+	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "bogus"}); !errors.Is(
+		err,
+		ErrUnknownMethod,
+	) {
 		t.Errorf("Create with catalog-unknown method = %v, want ErrUnknownMethod", err)
 	}
 }
 
 func TestCreateRejectsUnofferedMethod(t *testing.T) {
 	profile := usableAlipay("precreate")
-	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "page_pay"}); !errors.Is(err, ErrMethodNotOffered) {
+	if _, err := testRegistry().Create(context.Background(), profile.Provider, profile.Config, CreateRequest{ProductID: "page_pay"}); !errors.Is(
+		err,
+		ErrMethodNotOffered,
+	) {
 		t.Errorf("Create with known-but-unoffered method = %v, want ErrMethodNotOffered", err)
 	}
 }
