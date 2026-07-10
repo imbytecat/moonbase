@@ -5,7 +5,7 @@ stack: 'frontend'
 language: 'typescript'
 dependsOn: ['proto']
 
-# Tasks run through pnpm (provided by proto) via package.json scripts.
+# Tasks run through pnpm (pinned and installed by mise) via package.json scripts.
 tasks:
   dev:
     command: 'pnpm'

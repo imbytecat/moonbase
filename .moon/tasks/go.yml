@@ -7,14 +7,11 @@ inheritedBy:
   language: 'go'
 
 tasks:
-  # Composite static gate (golangci-lint v2): linters + govet. Pinned and run
-  # via `go run` (no install, like sqlc/goose); reads root .golangci.yml. Note:
-  # v2 keeps formatting in a separate `golangci-lint fmt` command.
+  # Composite static gate (golangci-lint v2): linters + govet. The binary is
+  # pinned by mise; v2 keeps formatting in a separate `golangci-lint fmt` command.
   check:
-    command: 'go'
+    command: 'golangci-lint'
     args:
-      - 'run'
-      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
       - 'run'
       - '--allow-serial-runners'
     inputs:
@@ -27,10 +24,8 @@ tasks:
   # linter autofixes (run --fix). `moon run :fix` fixes the whole repo; the
   # pre-commit hook runs it on staged projects before the read-only gate.
   fix:
-    command: 'go'
+    command: 'golangci-lint'
     args:
-      - 'run'
-      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
       - 'run'
       - '--allow-serial-runners'
       - '--fix'
@@ -40,11 +35,8 @@ tasks:
       runInCI: false
 
   fmt:
-    command: 'go'
-    args:
-      - 'run'
-      - 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2'
-      - 'fmt'
+    command: 'golangci-lint'
+    args: ['fmt']
     options:
       cache: false
       runInCI: false

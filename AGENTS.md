@@ -1,6 +1,6 @@
 # AGENTS.md
 
-moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`moon run proto:generate` 同时重新生成 Go 服务端（`apps/server`）与 TS 客户端（`packages/api-client`），后者由 React 19 SPA（`apps/web`）消费。字段/RPC 错配是**编译错误**，不是运行时惊喜。工具链由 **proto** 锁定（`.prototools`：go/node/pnpm/moon），任务由 **moon** v2 编排，包管理器 **pnpm**。
+moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`moon run proto:generate` 同时重新生成 Go 服务端（`apps/server`）与 TS 客户端（`packages/api-client`），后者由 React 19 SPA（`apps/web`）消费。字段/RPC 错配是**编译错误**，不是运行时惊喜。完整工具链由 **mise** 锁定（`.mise.toml` + `mise.lock`），任务由 **moon** v2 编排，包管理器 **pnpm**。
 
 它作为一个管理系统**模板交付，而非框架**：下游项目复制本仓库、各自演化，并通过 `git remote add template` 把修复挑拣（cherry-pick）回来。由此带来的、会改变你工作方式的后果：保持 integration 子包不引入业务代码（保证 diff 可移植）；**不要**抽取共享 Go 库、拆分微服务，或添加 semver/向后兼容垫片——没有任何外部依赖此代码，所以 settings 结构体的变更可以合理地把旧行零读（zero-read）。驱动注册表是编译期扩展系统（`database/sql` 风格），不是运行时插件系统。
 
@@ -8,7 +8,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 ## 命令（在仓库根目录执行）
 
-- `proto install` —— 从 `.prototools` 安装 go/node/pnpm/moon；proto 激活会把它们放上 PATH（即使非交互式 shell 也是），无需 `export`。
+- 首次工具链引导见 README 快速开始。交互式 shell 应按 mise 官方方式激活；非交互环境用 `mise exec -- <command>`。`.mise.toml` 把 `PROTO_HOME` 隔离到 `.moon/cache/proto`，避免 moon 2 把用户机器上遗留的全局 proto shims 注入任务 PATH；勿删除。
 - `pnpm install` —— JS 依赖（工作区 `@moonbase/web`、`@moonbase/api-client`）。
 - `docker compose up -d` —— Postgres 18（与默认 DSN 匹配）+ 可选 SeaweedFS（S3 演示）+ mailpit（SMTP，收件箱 :8025）。Seed 仅在 users 表为空时运行——若集成测试报 "invalid credentials"，重置：`docker compose down && docker volume rm moonbase_pgdata && docker compose up -d`。
 - `moon run :dev` —— web :5173 + server :8080；迁移 + seed（`admin`/`admin123`）在启动时自动应用。
@@ -95,7 +95,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 
 - **校验用 protovalidate**（内联 `(buf.validate.field)…`，消息级 CEL），由服务端拦截器强制——别加 go-playground/validator，也别在 Go 里重复规则。
 - **托管模式覆盖（勿删）**：`buf.gen.yaml` 把模块 `buf.build/bufbuild/protovalidate` → `buf.build/gen/go/…/protocolbuffers/go`；没有它，生成的 Go 会 import 一个不存在的本地 `…/internal/gen/buf/validate`，构建中断。`go mod tidy` 解析出真实路径。
-- 插件以固定版本运行，无需安装：Go 经 `local: ['go','run','…@ver']`，TS 经 `local: ['pnpm','exec',…]`。**TS 插件的 devDeps（`@bufbuild/protoc-gen-es`、`@connectrpc/protoc-gen-connect-query`）放在根 `package.json`**，这样 `pnpm exec`（由 buf 从仓库根调用）能从根 `node_modules/.bin` 解析到它们。生成器↔运行时版本在 `pnpm-workspace.yaml` 里按 catalog 锁步固定（Buf 要求插件与运行时匹配）——两个 catalog 条目一起升，绝不只升一个。
+- 外部 Go 插件由 mise 固定版本并安装，Buf 直接调用 `protoc-gen-go` / `protoc-gen-connect-go`；TS 插件经 `local: ['pnpm','exec',…]` 运行。**TS 插件的 devDeps（`@bufbuild/protoc-gen-es`、`@connectrpc/protoc-gen-connect-query`）放在根 `package.json`**，这样 `pnpm exec`（由 buf 从仓库根调用）能从根 `node_modules/.bin` 解析到它们。生成器↔运行时版本在 `pnpm-workspace.yaml` 里按 catalog 锁步固定（Buf 要求插件与运行时匹配）——两个 catalog 条目一起升，绝不只升一个。仓库内的 `protoc-gen-permissions` 仍从当前源码运行。
 - 处理器挂在标准 `http.ServeMux` 上，规范路径 `/pkg.v1.Service/…`，经 `StripPrefix` 挂载在 `/api` 下。Connect 协议走 HTTP/1.1 + JSON（一元可 curl；无需 h2c）。
 
 ## 数据库与迁移
@@ -107,17 +107,17 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 ## moon v2 配置陷阱
 
 - 项目 `moon.yml` 用 `layer:` + `stack:`（**不是** `type:`/`platform:`/`toolchain:`——它们会报错）。工作区用 `vcs.client`（**不是** `vcs.manager`）。
-- v2 把 toolchain 文件改名为复数 `.moon/toolchains.yml`，但其 `$schema` 仍是**单数** `…/toolchain.json`。它不管理任何语言工具链（版本归 proto 管）；任务经 moon 的 `system` 工具链运行。
+- v2 把 toolchain 文件改名为复数 `.moon/toolchains.yml`，但其 `$schema` 仍是**单数** `…/toolchain.json`。它不管理任何语言工具链（版本归 mise 管）；任务经 moon 的 `system` 工具链运行。`.mise.toml` 与 `mise.lock` 是所有任务的隐式输入，工具升级会正确使 moon 缓存失效。
 - 官网的 JSON schema 落后于 2.3.5 二进制——相信 moon 实际的解析错误，而非官网。
 - 共享任务只定义一次，放在 `.moon/tasks/{go,typescript}.yml`（按 `language:` 匹配继承）；同名的项目任务会**合并**（追加 deps），如 server 的 `test`/`check` 加 `deps: ['proto:generate','~:generate']`。`proto` 不设 `language`，自定义它自己的任务。
 
 ## Lint 与 git 钩子
 
-- 每个项目的只读闸门是 `check`，写侧孪生是 `fix`。后端 = golangci-lint v2（`.golangci.yml`）经 `go run`；前端 = Biome（`biome.json`：2 空格、单引号、无分号、宽度 100；格式化 + linter + import 排序；自动跳过生成文件）。Proto = buf lint + format。
+- 每个项目的只读闸门是 `check`，写侧孪生是 `fix`。后端 = mise 安装的 golangci-lint v2（`.golangci.yml`）；前端 = Biome（`biome.json`：2 空格、单引号、无分号、宽度 100；格式化 + linter + import 排序；自动跳过生成文件）。Proto = buf lint + format。
 - **不要**单独运行 `go vet`、`go fmt`、`gofmt`、`goimports`——它们已是 golangci-lint v2 的子集（`default: standard` 含 govet；formatters 含 gofmt/goimports），裸跑既冗余又可能与 `.golangci.yml` 配置不一致。本地质量环路只有一条命令：`moon run :fix`。
 - **Pre-commit 钩子**（自动同步；用 `moon sync hooks` 安装一次）：`moon run :fix` → `git update-index --again`（重新暂存修复）→ `moon run :check`，全部 `--affected --status=staged`。只有不可修复的错误才拦截。
 - **Commit-msg 钩子**：`pnpm exec commitlint` 强制 Conventional Commits，要求**中文主题**（`subject-zh` 自定义规则）+ 一个 `scope-enum`（项目名 + `deps`/`ci`/`agents`），在 `commitlint.config.mjs` 里从 `.moon/workspace.yml` 的 `projects` 动态读取。
-- 仓库移动后 golangci-lint 报错文件路径不对 = 缓存过期：`go run …/golangci-lint/v2/cmd/golangci-lint@<v> cache clean`。
+- 仓库移动后 golangci-lint 报错文件路径不对 = 缓存过期：`golangci-lint cache clean`。
 
 ## 前端（apps/web）
 
@@ -141,15 +141,15 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 - 模块 `github.com/imbytecat/moonbase/server`，入口 `cmd/server`；跨语言类型对齐是 proto 的活。ConnectRPC 拥有自己的路径（无路由框架）。
 - 把**唯一**的 `internal/logging` slog logger 接入每个库（pgx/goose/DBOS）——绝不给某个库单独一个 logger。处理器返回有类型的 `connect.NewError`；内部失败经 slog 记录 + 返回通用 `CodeInternal`（不泄漏）；`pgx.ErrNoRows` → `CodeNotFound`。
 - **可观测性 = 日志 + 指标 + 链路追踪，各一个接缝。** 指标（`internal/metrics`，Prometheus）：一个放在**最外层**的 Connect 拦截器（这样它也统计 authz 拒绝）记录 `moonbase_rpc_*`（procedure/code 标签——有界），外加 pgxpool/Go-runtime/`build_info` 采集器，在**外层** mux 的 `/metrics` 提供（在 `/api` authn 之外——抓取端没有会话；在网络层限制）。链路追踪（`internal/tracing`，OpenTelemetry）默认**休眠**：没有 `otel.trace_endpoint` → 无 provider，且 otelconnect 拦截器 + `NewSlogHandler`（在有活跃 span 时注入 `trace_id`）是廉价的 no-op。两者仅在各自配置开关打开时才接线。构建/版本（`internal/buildinfo`）来自 `runtime/debug`（发布时用 ldflags `-X …/buildinfo.version` 覆盖），在 `/health` 和启动日志里呈现。
-- `CGO_ENABLED=0` 设在 `apps/server/moon.yml` 的 `env:`——保持服务器纯 Go（goose 用 modernc sqlite）。sqlc/goose/buf/air/golangci-lint 全部经固定版本的 `go run …@<ver>` 运行——在 `moon.yml` 里升版本，而非包管理器。
+- `CGO_ENABLED=0` 设在 `apps/server/moon.yml` 的 `env:`——保持服务器纯 Go（goose 用 modernc sqlite）。sqlc/goose/buf/air/golangci-lint/govulncheck 及 Go protoc 插件全部由 mise 安装并锁定版本；任务只调用裸命令，版本统一在 `.mise.toml` 升级。
 - **测试**：service 依赖 sqlc 的 `repository.Querier` 接口 → 单元测试用结构体嵌入的伪实现（无 DB、无 mock 框架）。集成测试构建真实栈，无 `MOONBASE_DATABASE_URL` 时跳过。
 - 热重载 `server:dev` = air（`.air.toml`），监视 `.go`+`.sql`，`pre_cmd` 重新生成 sqlc。经 `moon run server:dev` 运行，以继承 CGO/env。保留 `.air.toml` 的 `[build.windows]` `.exe` 块——air 只会给它的默认 cmd 自动加 `.exe`，所以删掉它会静默地破坏 Windows。
 
 ## CI、Docker、约定
 
-- `.gitea/workflows/ci.yml`：push 到 `main` + PR 时跑 `moon ci`（`moonrepo/setup-toolchain` + `pnpm install`）；checkout `fetch-depth: 0` 以做受影响 diff。PR 还会跑 `moon run proto:breaking` 对比 `origin/main`。一个专门的 `moon run server:vuln` 步骤跑 `govulncheck`（可达漏洞扫描；不在 `moon ci` 图里——依赖网络，`runInCI:false`）。一个 `postgres:18-alpine` 服务支撑集成测试（`MOONBASE_DATABASE_URL` 的 host = `postgres`，即服务 id）。
-- **依赖更新**——本地一次性，无需 CI：`proto outdated --update --latest`（工具链 go/node/pnpm/moon → `.prototools`）、`pnpm update -Lr`（所有工作区 JS），以及在 `apps/server` 里 `go get -u ./... && go mod tidy`（Go 模块）；然后 `moon run :check && moon run :test`。`go run <module>@<ver>` 的工具固定（在每个 `moon.yml`、`.moon/tasks/*.yml`、`buf.gen.yaml` 里）没有标准的本地更新器——某个漂移时手改字符串（少见）；`renovate.json`（自定义 go manager，datasource=go，需要 `'module@vX.Y.Z'` 单引号形状）在有 runner 时可自动化那些 + 其余一切。`go run @version` 保留（buf 从仓库根而非 app 模块运行插件，所以 go.mod 的 `tool` 指令不适用）。可达 CVE（可选）：`moon run server:vuln`（govulncheck）。
-- `Dockerfile`：proto → `.prototools` 工具链 → `moon run server:release` → distroless static（CGO 关）。`compose.yaml` 的 PG18 把卷挂在 `/var/lib/postgresql`（**不是** `…/data`——PG18 移动了数据目录）。
+- `.github/workflows/ci.yml`：push 到 `main` + PR 时跑 `moon ci`（`jdx/mise-action` 按 lockfile 安装/缓存工具链 + `pnpm install`）；checkout `fetch-depth: 0` 以做受影响 diff。PR 还会跑 `moon run proto:breaking` 对比 `origin/main`。一个专门的 `moon run server:vuln` 步骤跑 `govulncheck`（可达漏洞扫描；不在 `moon ci` 图里——依赖网络，`runInCI:false`）。一个 `postgres:18-alpine` 服务支撑集成测试。
+- **依赖更新**——本地一次性，无需 CI：`mise upgrade --bump && mise lock --platform linux-x64,macos-arm64,windows-x64`（完整工具链）、`pnpm update -Lr`（所有工作区 JS），以及在 `apps/server` 里 `go get -u ./... && go mod tidy`（Go 模块）；然后 `moon run :fix && moon run :test`。Renovate 原生识别 `.mise.toml` 与 `mise.lock`，无需为 CLI 版本维护自定义正则 manager。可达 CVE（可选）：`moon run server:vuln`（govulncheck）。
+- `Dockerfile`：固定版本的 mise → 信任 `.mise.toml` → 按 `mise.lock` 安装工具链 → `moon run server:release` → distroless static（CGO 关）。mise 在容器里不会自动信任复制进来的项目配置，`mise trust` 不可省；Node 官方 Linux 二进制在 Debian slim builder 上需要 `libatomic1`。`compose.yaml` 的 PG18 把卷挂在 `/var/lib/postgresql`（**不是** `…/data`——PG18 移动了数据目录）。
 - 提交：Conventional Commits，**中文主题**，scope = 一个项目名或 `deps`/`ci`/`agents`（由钩子强制）。远端是 Gitea，默认分支 `main`。
 - `.gitignore` 是混合的：根目录只放工作区全局规则；每个项目拥有自己的构建/生成忽略。新增忽略规则加到拥有它的项目。不要行内 `#` 注释（必须自成一行）。
 - **README vs AGENTS**：README 是给访客的推介（~90 行）；设计理据、不变量、坑、清单都放**这里**。绝不在两个文件里重复同一事实。

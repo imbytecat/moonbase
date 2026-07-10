@@ -1,7 +1,6 @@
 $schema: '../.moon/cache/schemas/project.json'
 
-# The proto contract project. buf is the toolchain here; it runs the same way as
-# every other pinned tool in this repo — `go run <pkg>@<ver>` (no install). buf's
+# The proto contract project. buf is version-pinned and installed by mise. Its
 # config (buf.yaml/buf.gen.yaml) lives at the workspace root, so every task runs
 # from there via runFromWorkspaceRoot. No `language:` is set on purpose, so this
 # project inherits neither the Go nor the TypeScript task presets.
@@ -12,8 +11,8 @@ tasks:
   # TS client -> packages/api-client/src/gen. Cacheable on proto/config inputs,
   # exactly like server:generate (sqlc). server/web build tasks depend on this.
   generate:
-    command: 'go'
-    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'generate']
+    command: 'buf'
+    args: ['generate']
     options:
       runFromWorkspaceRoot: true
     inputs:
@@ -28,8 +27,8 @@ tasks:
   # Read-only gate (composite): buf lint + format check. Named `check` so
   # `moon run :check` and `moon ci` pick it up like every other project.
   check:
-    command: 'go'
-    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'lint']
+    command: 'buf'
+    args: ['lint']
     deps: ['~:format-check']
     options:
       runFromWorkspaceRoot: true
@@ -38,8 +37,8 @@ tasks:
       - '/buf.yaml'
 
   format-check:
-    command: 'go'
-    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'format', '--diff', '--exit-code']
+    command: 'buf'
+    args: ['format', '--diff', '--exit-code']
     options:
       runFromWorkspaceRoot: true
     inputs:
@@ -47,8 +46,8 @@ tasks:
 
   # Convenience writer (not a CI gate): `moon run proto:format`.
   format:
-    command: 'go'
-    args: ['run', 'github.com/bufbuild/buf/cmd/buf@v1.71.0', 'format', '--write']
+    command: 'buf'
+    args: ['format', '--write']
     options:
       runFromWorkspaceRoot: true
       cache: false
@@ -65,10 +64,8 @@ tasks:
   # Breaking-change detection against the pushed baseline. origin/main (not
   # main) because CI clones have no local main branch. Runs on PRs in CI.
   breaking:
-    command: 'go'
+    command: 'buf'
     args:
-      - 'run'
-      - 'github.com/bufbuild/buf/cmd/buf@v1.71.0'
       - 'breaking'
       - '--against'
       - '.git#branch=origin/main'

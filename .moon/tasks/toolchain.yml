@@ -1,0 +1,7 @@
+$schema: '../cache/schemas/tasks.json'
+
+# mise owns executable versions while moon owns the task graph. Include both
+# manifests in every task hash so a tool upgrade cannot reuse stale outputs.
+implicitInputs:
+  - '/.mise.toml'
+  - '/mise.lock'

@@ -1,7 +1,7 @@
 # Hot reload for the Go API (apps/server). Canonical entry is `moon run
-# server:dev`, which launches air via `go run github.com/air-verse/air@<v>`
-# (pinned in moon.yml — like sqlc/goose, no installed binary). CGO_ENABLED=0 and
-# other env come from moon.yml's `env:`, inherited by air's child processes.
+# server:dev`, which launches the air binary pinned and installed by mise.
+# CGO_ENABLED=0 and other env come from moon.yml's `env:`, inherited by air's
+# child processes.
 #
 # Watches .go and .sql. Before each build, `pre_cmd` runs `moon run
 # server:generate` (sqlc): moon's cache makes it ~instant when SQL is unchanged

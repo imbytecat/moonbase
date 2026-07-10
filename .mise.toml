@@ -1,0 +1,19 @@
+[env]
+# moon still initializes proto internally and otherwise prepends the user's
+# global proto shims. Isolate that compatibility store so mise remains the only
+# executable source for this workspace.
+PROTO_HOME = "{{config_root}}/.moon/cache/proto"
+
+[tools]
+"aqua:moonrepo/moon" = "2.3.5"
+"aqua:pressly/goose" = "3.27.2"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.5.0"
+air = "1.65.3"
+buf = "1.71.0"
+go = "1.26.4"
+golangci-lint = "2.12.2"
+node = "26.4.0"
+pnpm = "11.9.0"
+protoc-gen-connect-go = "1.20.0"
+protoc-gen-go = "1.36.11"
+sqlc = "1.31.1"

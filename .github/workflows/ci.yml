@@ -25,17 +25,16 @@ jobs:
           --health-retries 5
     env:
       MOONBASE_DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/app?sslmode=disable'
+      MISE_LOCKED: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # full history so `moon ci` can diff affected projects
 
-      # Installs proto + the toolchain pinned in .prototools (go, node, pnpm, moon) and
-      # caches ~/.proto.
-      - uses: moonrepo/setup-toolchain@v0
+      # Installs and caches the complete toolchain pinned by .mise.toml + mise.lock.
+      - uses: jdx/mise-action@v3
         with:
-          auto-install: true
-          cache: false
+          version: 2026.7.0
 
       - run: pnpm install --frozen-lockfile
 

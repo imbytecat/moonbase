@@ -9,26 +9,26 @@
 - 持久化工作流（DBOS）：崩溃自动续跑，执行轨迹 DAG 可视化
 - 全站中文、亮暗主题、签名直传上传（S3 预签名 / 本地签名 URL），附一个数据报表仪表盘（真实系统数据聚合 + 图表）作为业务示例
 
-**架构**：`proto/`（Protobuf + Buf + ConnectRPC）是单一真源，一步生成 Go 服务端桩（`apps/server`）与 TS 客户端（`packages/api-client`），供 React SPA（`apps/web`）消费——契约错配是编译错误，不是运行时惊喜。工具链由 [proto](https://moonrepo.dev/proto) 锁定，任务由 [moon](https://moonrepo.dev) 编排。
+**架构**：`proto/`（Protobuf + Buf + ConnectRPC）是单一真源，一步生成 Go 服务端桩（`apps/server`）与 TS 客户端（`packages/api-client`），供 React SPA（`apps/web`）消费——契约错配是编译错误，不是运行时惊喜。工具链由 [mise](https://mise.jdx.dev) 锁定，任务由 [moon](https://moonrepo.dev) 编排。
 
 ## 快速开始
 
-需要 Docker（本地 PostgreSQL）。先安装一次 proto：
+需要 Docker（本地 PostgreSQL）。先安装一次 mise，并按[官方说明](https://mise.jdx.dev/getting-started.html#activate-mise)激活 shell：
 
 ```bash
 # macOS / Linux
-bash <(curl -fsSL https://moonrepo.dev/install/proto.sh)
-# Windows（PowerShell）
-irm https://moonrepo.dev/install/proto.ps1 | iex
+curl https://mise.run | sh
+# Windows
+winget install jdx.mise
 ```
 
 然后在仓库根目录：
 
 ```bash
-proto use              # 按 .prototools 安装 go / node / pnpm / moon
-pnpm install           # 安装 JS 依赖
-docker compose up -d   # PostgreSQL 18（默认连接开箱即用）
-moon run :dev          # 前端 :5173 + 后端 :8080
+mise trust && mise install --locked # 安装仓库锁定的完整工具链
+pnpm install                        # 安装 JS 依赖
+docker compose up -d                # PostgreSQL 18（默认连接开箱即用）
+moon run :dev                       # 前端 :5173 + 后端 :8080
 ```
 
 打开 http://localhost:5173，用 `admin` / `admin123` 登录。代码生成、数据库迁移、初始数据全部自动完成。

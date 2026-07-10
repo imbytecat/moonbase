@@ -20,13 +20,12 @@ managed:
       value: buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go
 
 plugins:
-  # --- Go (server) --- run via `go run <pkg>@<ver>`, pinned, no install —
-  # identical to how sqlc/goose/air/golangci-lint are run across this repo.
-  - local: ['go', 'run', 'google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11']
+  # --- Go (server) --- generators are version-pinned and installed by mise.
+  - local: ['protoc-gen-go']
     out: apps/server/internal/gen
     strategy: all
     opt: paths=source_relative
-  - local: ['go', 'run', 'connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0']
+  - local: ['protoc-gen-connect-go']
     out: apps/server/internal/gen
     strategy: all
     opt: paths=source_relative

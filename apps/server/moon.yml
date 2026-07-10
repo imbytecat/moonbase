@@ -16,24 +16,23 @@ env:
   GOOSE_DBSTRING: 'postgres://postgres:postgres@localhost:5432/app?sslmode=disable'
 
 tasks:
-  # sqlc is version-pinned and run via `go run` — no separate install needed.
+  # sqlc is version-pinned and installed by mise.
   generate:
-    command: 'go'
-    args: ['run', 'github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1', 'generate']
+    command: 'sqlc'
+    args: ['generate']
     inputs:
       - 'sqlc.yaml'
       - 'db/**/*.sql'
     outputs:
       - 'internal/repository'
 
-  # Hot reload via air, pinned + run via `go run` (like sqlc/goose — no install).
+  # Hot reload via air, version-pinned and installed by mise.
   # Config: apps/server/.air.toml. air watches .go and .sql; its pre_cmd re-runs
   # `server:generate` (sqlc, moon-cached) before each rebuild, so editing a query
   # or migration auto-updates the generated Go. CGO_ENABLED=0 (env: above) is
   # inherited by air's `go build` child. The ~:generate dep seeds the first build.
   dev:
-    command: 'go'
-    args: ['run', 'github.com/air-verse/air@v1.65.3']
+    command: 'air'
     deps: ['proto:generate', '~:generate']
     preset: 'server'
 
@@ -81,43 +80,43 @@ tasks:
 
   # Reachable-vulnerability scan (govulncheck): checks the module graph against
   # the Go vuln DB and reports only vulns actually reachable from this code.
-  # Pinned + run via `go run` like the other tools. Kept out of the `moon ci`
+  # Pinned and installed by mise. Kept out of the `moon ci`
   # gate (runInCI: false) because it's network-dependent and slower — CI runs it
   # as a dedicated step; `cache: false` since the vuln DB changes on its own.
   vuln:
-    command: 'go'
-    args: ['run', 'golang.org/x/vuln/cmd/govulncheck@v1.5.0', './...']
+    command: 'govulncheck'
+    args: ['./...']
     deps: ['proto:generate', '~:generate']
     options:
       cache: false
       runInCI: false
 
-  # goose is version-pinned and run via `go run`; reads $GOOSE_DRIVER + $GOOSE_DBSTRING.
+  # goose is version-pinned and installed by mise; reads $GOOSE_DRIVER + $GOOSE_DBSTRING.
   migrate-up:
-    command: 'go'
-    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'up']
+    command: 'goose'
+    args: ['-dir', 'db/migrations', 'up']
     options:
       cache: false
       runInCI: false
 
   migrate-down:
-    command: 'go'
-    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'down']
+    command: 'goose'
+    args: ['-dir', 'db/migrations', 'down']
     options:
       cache: false
       runInCI: false
 
   migrate-status:
-    command: 'go'
-    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'status']
+    command: 'goose'
+    args: ['-dir', 'db/migrations', 'status']
     options:
       cache: false
       runInCI: false
 
   # Usage: moon run server:migrate-new -- <name> sql
   migrate-new:
-    command: 'go'
-    args: ['run', 'github.com/pressly/goose/v3/cmd/goose@v3.27.2', '-dir', 'db/migrations', 'create']
+    command: 'goose'
+    args: ['-dir', 'db/migrations', 'create']
     options:
       cache: false
       runInCI: false

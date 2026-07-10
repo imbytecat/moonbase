@@ -19,9 +19,9 @@ vcs:
   #   rules live in commitlint.config.mjs, deps pinned in root package.json.
   hooks:
     pre-commit:
-      - 'moon run :fix --affected --status=staged'
+      - 'mise exec -- moon run :fix --affected --status=staged'
       - 'git update-index --again'
-      - 'moon run :check --affected --status=staged'
+      - 'mise exec -- moon run :check --affected --status=staged'
     commit-msg:
-      - 'pnpm exec commitlint --edit $ARG1'
+      - 'mise exec -- pnpm exec commitlint --edit $ARG1'
   sync: true
