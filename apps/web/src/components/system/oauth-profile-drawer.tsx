@@ -1,4 +1,3 @@
-import { ApiOutlined, WechatOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createOauthProfile,
@@ -8,7 +7,7 @@ import {
 } from '@moonbase/api-client'
 import { App, Typography } from 'antd'
 import { useState } from 'react'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
 import { ConfigForm } from '#components/system/config-form'
 import { humanizeError } from '#lib/errors'
 
@@ -27,7 +26,7 @@ export function OauthProfileDrawer({
   const [dirty, setDirty] = useState(false)
 
   const { data: describe } = useQuery(describeOauthProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createOauthProfile, {
     onSuccess: () => {
@@ -44,21 +43,6 @@ export function OauthProfileDrawer({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const providers: ProviderOption[] = [
-    {
-      value: 'oidc',
-      label: '通用 OIDC',
-      description: '通用 OpenID Connect，覆盖 Google、Keycloak、Authentik 等',
-      icon: <ApiOutlined className="text-xl text-(--ant-color-primary)" />,
-    },
-    {
-      value: 'wechat',
-      label: '微信扫码',
-      description: '微信开放平台网站应用扫码登录',
-      icon: <WechatOutlined className="text-xl text-(--ant-color-success)" />,
-    },
-  ]
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -68,7 +52,7 @@ export function OauthProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

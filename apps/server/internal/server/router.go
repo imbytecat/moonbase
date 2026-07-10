@@ -14,13 +14,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
 
-	"github.com/imbytecat/moonbase/integrations/captcha"
-	mail "github.com/imbytecat/moonbase/integrations/email"
-	"github.com/imbytecat/moonbase/integrations/llm"
-	"github.com/imbytecat/moonbase/integrations/oauth"
-	"github.com/imbytecat/moonbase/integrations/sms"
 	"github.com/imbytecat/moonbase/server/internal/audit"
 	"github.com/imbytecat/moonbase/server/internal/auth"
+	"github.com/imbytecat/moonbase/server/internal/captcha"
 	"github.com/imbytecat/moonbase/server/internal/config"
 	"github.com/imbytecat/moonbase/server/internal/gen/audit/v1/auditv1connect"
 	"github.com/imbytecat/moonbase/server/internal/gen/auth/v1/authv1connect"
@@ -34,12 +30,16 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/gen/user/v1/userv1connect"
 	"github.com/imbytecat/moonbase/server/internal/gen/workflow/v1/workflowv1connect"
 	"github.com/imbytecat/moonbase/server/internal/handler"
+	"github.com/imbytecat/moonbase/server/internal/llm"
+	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/metrics"
 	"github.com/imbytecat/moonbase/server/internal/notification"
+	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/pay"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/rpc"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 	"github.com/imbytecat/moonbase/server/internal/verify"
 	"github.com/imbytecat/moonbase/server/internal/web"
@@ -87,7 +87,9 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	storageSvc := rpc.NewStorageService(repo, s3, logger)
 	workflowSvc := rpc.NewWorkflowService(engine, logger)
 	auditSvc := rpc.NewAuditService(repo, logger)
-	paymentSvc := rpc.NewPaymentService(repo, payGateway, logger)
+	checkoutManager := pay.NewCheckoutIssuer(repo, settingsStore, cfg.Server.PublicURL)
+	paymentSvc := rpc.NewPaymentService(repo, payGateway, checkoutManager, logger)
+	paymentCheckoutSvc := rpc.NewPaymentCheckoutService(repo, payGateway, checkoutManager, logger)
 	notificationSvc := rpc.NewNotificationService(repo, logger)
 
 	// Interceptor order: metrics and tracing are outermost so they observe the
@@ -134,6 +136,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	// Payment async notifications are plain HTTP from the provider's servers;
 	// the driver's signature verification is the authentication.
 	api.HandleFunc("POST /payment/notify/{provider}/{profile}", paymentSvc.PaymentNotify)
+	api.HandleFunc("GET /payment/hosted-flow/{session}", paymentSvc.HostedFlow)
 	api.Handle(reportv1connect.NewReportServiceHandler(reportSvc, interceptors))
 	api.Handle(authv1connect.NewAuthServiceHandler(authSvc, interceptors))
 	api.Handle(userv1connect.NewUserServiceHandler(userSvc, interceptors))
@@ -144,6 +147,7 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, engine *workflow.Engine, 
 	api.Handle(workflowv1connect.NewWorkflowServiceHandler(workflowSvc, interceptors))
 	api.Handle(auditv1connect.NewAuditServiceHandler(auditSvc, interceptors))
 	api.Handle(paymentv1connect.NewPaymentServiceHandler(paymentSvc, interceptors))
+	api.Handle(paymentv1connect.NewPaymentCheckoutServiceHandler(paymentCheckoutSvc, interceptors))
 	api.Handle(notificationv1connect.NewNotificationServiceHandler(notificationSvc, interceptors))
 
 	// authn middleware wraps the API mux: it resolves the session cookie to an

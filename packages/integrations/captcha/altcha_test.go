@@ -34,7 +34,7 @@ func newAltchaTestClient(t *testing.T) *Client {
 			Provider: "altcha",
 			Config:   map[string]any{"difficulty": 1000},
 		}},
-		Bindings: map[string][]string{PurposeAuth: {"p1"}},
+		Bindings: map[string][]string{"auth": {"p1"}},
 	}
 	return NewClient(fakeStore{cfg: cfg, key: []byte("test-altcha-hmac-key")})
 }
@@ -72,11 +72,11 @@ func TestAltchaChallengeRoundTrip(t *testing.T) {
 	client := newAltchaTestClient(t)
 	token := solveAltchaChallenge(t, client)
 
-	if err := client.Verify(t.Context(), PurposeAuth, token, ""); err != nil {
+	if err := client.Verify(t.Context(), "auth", token, ""); err != nil {
 		t.Fatalf("Verify() = %v, want nil", err)
 	}
 
-	if err := client.Verify(t.Context(), PurposeAuth, token, ""); err == nil {
+	if err := client.Verify(t.Context(), "auth", token, ""); err == nil {
 		t.Fatal("replayed token must be rejected")
 	}
 }
@@ -91,7 +91,7 @@ func TestAltchaRejectsWrongSolution(t *testing.T) {
 	payload.Number++
 	tampered, _ := json.Marshal(payload)
 
-	err := client.Verify(t.Context(), PurposeAuth, base64.StdEncoding.EncodeToString(tampered), "")
+	err := client.Verify(t.Context(), "auth", base64.StdEncoding.EncodeToString(tampered), "")
 	if err == nil {
 		t.Fatal("tampered solution must be rejected")
 	}

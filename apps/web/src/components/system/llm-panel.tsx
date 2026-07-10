@@ -1,4 +1,3 @@
-import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   bindLlmPurpose,
@@ -12,21 +11,12 @@ import {
 } from '@moonbase/api-client'
 import { App, Button } from 'antd'
 import { useState } from 'react'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
-import { ProfileManager, ProviderTag } from '#components/profile-manager'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
+import { ProfileManager } from '#components/profile-manager'
 import { ConfigForm } from '#components/system/config-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
 import { useEditingTarget } from '#lib/use-editing-target'
-
-const PURPOSE_LABELS: Record<string, () => string> = {
-  chat: () => '通用对话',
-}
-
-const PROVIDER_NAMES: Record<string, () => string> = {
-  openai: () => 'OpenAI 兼容',
-  anthropic: () => 'Anthropic',
-}
 
 export function LlmPanel({
   llm,
@@ -39,6 +29,7 @@ export function LlmPanel({
   const profiles = llm?.profiles ?? []
   const bindings = llm?.bindings ?? []
   const drawer = useEditingTarget<Profile>()
+  const { data: describe } = useQuery(describeLlmProviders, {})
 
   const deleteMutation = useMutation(deleteLlmProfile, {
     onSuccess: () => {
@@ -56,16 +47,16 @@ export function LlmPanel({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const modelOf = (p: Profile) => String(p.config?.model ?? '')
-
   return (
     <>
       <ProfileManager
-        profiles={profiles.map((p) => ({ ...p, name: p.name || (modelOf(p) ?? '') }))}
+        profiles={profiles}
         bindings={bindings.map((b) => ({
           purpose: b.purpose,
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
+        purposes={describe?.purposes ?? []}
+        providers={describe?.providers ?? []}
         texts={{
           profilesTitle: '模型配置',
           profilesHint: '可添加多个模型配置，例如高性价比的快速模型和更强的推理模型',
@@ -73,16 +64,6 @@ export function LlmPanel({
           confirmDelete: '删除该存储配置？',
           bindingsHint: '为每个 AI 功能指定使用的模型配置，未绑定的功能将不可用',
         }}
-        purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
-        profileIcon={(p) =>
-          p.provider === 'anthropic' ? (
-            <RobotOutlined className="text-lg text-(--ant-color-warning)" />
-          ) : (
-            <ThunderboltOutlined className="text-lg text-(--ant-color-primary)" />
-          )
-        }
-        profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
-        profileDescription={(p) => modelOf(p) || '模型'}
         onAdd={drawer.add}
         onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
@@ -121,7 +102,7 @@ function LlmProfileDrawer({
   const [result, setResult] = useState<TestState>()
 
   const { data: describe } = useQuery(describeLlmProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createLlmProfile, {
     onSuccess: () => {
@@ -142,21 +123,6 @@ function LlmProfileDrawer({
     onError: (err) => setResult({ ok: false, message: humanizeError(err) }),
   })
 
-  const providers: ProviderOption[] = [
-    {
-      value: 'openai',
-      label: 'OpenAI 兼容',
-      description: '覆盖绝大多数模型服务：官方、DeepSeek、Qwen、自建等',
-      icon: <ThunderboltOutlined className="text-xl text-(--ant-color-primary)" />,
-    },
-    {
-      value: 'anthropic',
-      label: 'Anthropic',
-      description: 'Anthropic 原生接口',
-      icon: <RobotOutlined className="text-xl text-(--ant-color-warning)" />,
-    },
-  ]
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -166,7 +132,7 @@ function LlmProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

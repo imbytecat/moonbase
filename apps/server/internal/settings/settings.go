@@ -32,14 +32,15 @@ const (
 	// keyCaptchaAltchaKey holds the HMAC secret signing built-in ALTCHA
 	// captcha challenges; generated once on first use like the storage sign
 	// key.
-	keyCaptchaAltchaKey = "captchaAltchaKey"
-	keyCaptcha          = "captcha"
-	keyEmail            = "email"
-	keySms              = "sms"
-	keySite             = "site"
-	keyLlm              = "llm"
-	keyOauth            = "oauth"
-	keyPayment          = "payment"
+	keyCaptchaAltchaKey       = "captchaAltchaKey"
+	keyCaptcha                = "captcha"
+	keyEmail                  = "email"
+	keySms                    = "sms"
+	keySite                   = "site"
+	keyLlm                    = "llm"
+	keyOauth                  = "oauth"
+	keyPayment                = "payment"
+	keyPaymentCheckoutSignKey = "paymentCheckoutSignKey"
 )
 
 const (

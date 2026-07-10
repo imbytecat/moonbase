@@ -18,9 +18,9 @@ func TestClientAuthorizeURLUsesBoundUsableProfile(t *testing.T) {
 				Provider: "wechat",
 				Config:   map[string]any{"key": "wechat", "appId": "app-id", "appSecret": "app-secret"},
 			}},
-			Bindings: map[string][]string{PurposeLogin: {"wechat-login"}},
+			Bindings: map[string][]string{"login": {"wechat-login"}},
 		}, nil
-	})
+	}, "login")
 
 	url, secrets, err := client.AuthorizeURL(t.Context(), "wechat", "https://app.example.com/callback", "state-token")
 	if err != nil {
@@ -52,7 +52,7 @@ func TestClientAuthorizeURLRejectsUnboundProfile(t *testing.T) {
 			}},
 			Bindings: map[string][]string{},
 		}, nil
-	})
+	}, "login")
 
 	_, _, err := client.AuthorizeURL(t.Context(), "wechat", "https://app.example.com/callback", "state-token")
 	if !errors.Is(err, ErrNotConfigured) {

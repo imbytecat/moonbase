@@ -21,7 +21,7 @@ schema 驱动的 provider 表单（ADR-0006）把字段 `label`/`help` 的来源
 
 - 删除 Paraglide：`vite.config.ts` 插件、`project.inlang`、`apps/web/messages/`、`apps/web/src/paraglide/`、`package.json` 的 `gen:i18n` 脚本与 `@inlang/paraglide-js` 依赖。
 - 562 处 `m.xxx()` 就地替换为中文串（取自现有 `zh-CN.json`）。
-- driver schema 的 `Label`/`Help` 直接写中文；`core/schema` 校验报错中文。
+- driver schema 的 `Label`/`Help` 直接写中文；`core/form` / `core/config` 校验报错中文。
 - `<html lang="zh-CN">`，去掉语言切换 UI；README 去掉「中英双语」卖点。
 
 ## 考虑过的替代

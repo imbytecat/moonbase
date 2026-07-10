@@ -18,9 +18,9 @@ func (s *SystemService) storageOps() integrationOps[kitsettings.GenericProfile] 
 		save:     s.settings.SetStorage,
 		purposes: storage.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(storage.Schemas(), updated, stored)
+			return mergeProfile(storage.Registry, updated, stored)
 		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("storage", storage.Schemas(), p) },
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("storage", storage.Registry, p) },
 	}
 }
 
@@ -104,8 +104,8 @@ func toProtoStorage(cfg settings.Storage) *systemv1.StorageSettings {
 	bindings := make([]*systemv1.StorageBinding, len(storage.Purposes))
 	for i, purpose := range storage.Purposes {
 		bindings[i] = &systemv1.StorageBinding{
-			Purpose:   purpose,
-			ProfileId: firstID(cfg.Bindings[purpose]),
+			Purpose:   purpose.Key,
+			ProfileId: firstID(cfg.Bindings[purpose.Key]),
 		}
 	}
 	return &systemv1.StorageSettings{Profiles: profiles, Bindings: bindings}
@@ -115,9 +115,11 @@ func (s *SystemService) DescribeStorageProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeStorageProvidersRequest],
 ) (*connect.Response[systemv1.DescribeStorageProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribeStorageProvidersResponse{Providers: describeProviders(storage.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribeStorageProvidersResponse{
+		Purposes: describePurposes(storage.Purposes), Providers: describeProviders(storage.Registry),
+	}), nil
 }
 
 func storageProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, storage.Schemas()[p.Provider])
+	return profileToProto(p, storage.Registry)
 }

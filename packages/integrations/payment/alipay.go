@@ -13,10 +13,9 @@ import (
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
-// Alipay method ids are the official API-method names, matched by the driver's
-// per-method dispatch below; the generated catalog (paymentcatalog) owns each
-// method's credential shape and inputs, and alipayProduct* the sales
-// product_code it sends to the gateway.
+// Alipay product ids are the official API-method names. The driver descriptor
+// owns their presentation and input schema; the dispatch below owns the API
+// call and the product_code sent to the provider.
 const (
 	alipayMethodPreCreate = "precreate" // 当面付/订单码 扫码 · alipay.trade.precreate
 	alipayMethodPagePay   = "page_pay"  // 电脑网站支付 · alipay.trade.page.pay
@@ -56,12 +55,12 @@ func alipayClient(config map[string]any) (*alipay.Client, error) {
 	return client, nil
 }
 
-func alipayCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error) {
+func alipayCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (string, error) {
 	client, err := alipayClient(p.Config)
 	if err != nil {
 		return "", err
 	}
-	switch req.Method {
+	switch req.ProductID {
 	case alipayMethodPreCreate:
 		var param alipay.TradePreCreate
 		param.OutTradeNo = req.OutTradeNo
@@ -117,10 +116,11 @@ func alipayCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateR
 		param.NotifyURL = notifyURL
 		// buyer_id is the legacy 2088-prefixed numeric user id; anything else
 		// is the newer openid shape.
-		if strings.HasPrefix(req.PayerID, "2088") {
-			param.BuyerId = req.PayerID
+		payerID := inputString(req.Inputs, "payer_id")
+		if strings.HasPrefix(payerID, "2088") {
+			param.BuyerId = payerID
 		} else {
-			param.BuyerOpenId = req.PayerID
+			param.BuyerOpenId = payerID
 		}
 		rsp, err := client.TradeCreate(ctx, param)
 		if err != nil {
@@ -147,7 +147,7 @@ func alipayCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateR
 		}
 		return orderStr, nil
 	default:
-		return "", fmt.Errorf("alipay: unsupported method %q", req.Method)
+		return "", fmt.Errorf("alipay: unsupported product %q", req.ProductID)
 	}
 }
 
@@ -163,11 +163,12 @@ func alipayQuery(ctx context.Context, p kitsettings.GenericProfile, outTradeNo s
 	// ACQ.TRADE_NOT_EXIST means the buyer never scanned — still pending.
 	if rsp.IsFailure() {
 		if rsp.SubCode == "ACQ.TRADE_NOT_EXIST" {
-			return QueryResult{State: StatePending}, nil
+			return QueryResult{Exists: false, State: StatePending}, nil
 		}
 		return QueryResult{}, fmt.Errorf("alipay query: %s (%s)", rsp.SubMsg, rsp.SubCode)
 	}
 	return QueryResult{
+		Exists:          true,
 		State:           alipayState(rsp.TradeStatus),
 		ProviderTradeNo: rsp.TradeNo,
 		PayerID:         alipayPayer(rsp.BuyerOpenId, rsp.BuyerUserId),
@@ -217,6 +218,7 @@ func alipayParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *htt
 		OutTradeNo: n.OutTradeNo,
 		State:      state,
 		Query: QueryResult{
+			Exists:          true,
 			State:           state,
 			ProviderTradeNo: n.TradeNo,
 			PayerID:         alipayPayer(n.BuyerOpenId, n.BuyerId),

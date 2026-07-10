@@ -18,20 +18,20 @@ func (s *SystemService) paymentOps() integrationOps[kitsettings.GenericProfile] 
 		save:     s.settings.SetPayment,
 		purposes: pay.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(pay.Schemas(), updated, stored)
+			return mergeProfile(pay.Registry, updated, stored)
 		},
 		validate: paymentValidate,
 	}
 }
 
-// validatePaymentMethods rejects a profile whose signed products aren't in its
-// provider's catalog. It is the save-time guard for Profile.config.methods (an
+// paymentValidate rejects a profile whose signed products aren't in its
+// provider's catalog. It is the save-time guard for Profile.config.products (an
 // empty list is valid — "all products").
 func paymentValidate(p kitsettings.GenericProfile) error {
-	if err := validateProfile("payment", pay.Schemas(), p); err != nil {
+	if err := validateProfile("payment", pay.Registry, p); err != nil {
 		return err
 	}
-	return pay.ValidateMethods(p.Provider, pay.ProfileMethods(p))
+	return pay.ValidateProducts(p.Provider, pay.ProfileConfiguredProducts(p))
 }
 
 func (s *SystemService) CreatePaymentProfile(
@@ -93,8 +93,8 @@ func toProtoPayment(cfg settings.Payment) *systemv1.PaymentSettings {
 	bindings := make([]*systemv1.PaymentBinding, len(pay.Purposes))
 	for i, purpose := range pay.Purposes {
 		bindings[i] = &systemv1.PaymentBinding{
-			Purpose:    purpose,
-			ProfileIds: cfg.Bindings[purpose],
+			Purpose:    purpose.Key,
+			ProfileIds: cfg.Bindings[purpose.Key],
 		}
 	}
 	return &systemv1.PaymentSettings{Profiles: profiles, Bindings: bindings}
@@ -104,9 +104,37 @@ func (s *SystemService) DescribePaymentProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribePaymentProvidersRequest],
 ) (*connect.Response[systemv1.DescribePaymentProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribePaymentProvidersResponse{Providers: describeProviders(pay.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribePaymentProvidersResponse{
+		Purposes: describePurposes(pay.Purposes), Providers: describePaymentProviders(),
+	}), nil
+}
+
+func describePaymentProviders() []*systemv1.ProviderDescriptor {
+	providers := describeProviders(pay.Registry)
+	for _, provider := range providers {
+		descriptor, ok := pay.Describe(provider.GetKey())
+		if !ok {
+			continue
+		}
+		payment := &systemv1.PaymentProviderDescriptor{Capabilities: descriptor.Capabilities}
+		for _, method := range descriptor.Methods {
+			payment.Methods = append(payment.Methods, &systemv1.PaymentMethodDescriptor{
+				Key: method.Key, Presentation: presentationToProto(method.Presentation),
+			})
+		}
+		for _, product := range descriptor.Products {
+			js, ui := product.Input.JSONForm()
+			payment.Products = append(payment.Products, &systemv1.PaymentProductDescriptor{
+				Id: product.ID, PaymentMethod: product.Method,
+				Presentation: presentationToProto(product.Presentation),
+				Input:        &systemv1.ProviderForm{Schema: toStruct(js), UiSchema: toStruct(ui)},
+			})
+		}
+		provider.Payment = payment
+	}
+	return providers
 }
 
 func paymentProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, pay.Schemas()[p.Provider])
+	return profileToProto(p, pay.Registry)
 }

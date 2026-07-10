@@ -1,18 +1,21 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  BindingCardinality,
+  type ProviderDescriptor,
+  type PurposeDescriptor,
+} from '@moonbase/api-client'
 import { Button, Empty, Popconfirm, Select, Tag, Typography } from 'antd'
-import type { ReactNode } from 'react'
+import { ProviderIcon } from '#components/provider-icon'
 
 interface ProfileLike {
   id: string
   name: string
+  provider: string
 }
 
 interface BindingRow {
   purpose: string
   profileIds: string[]
-  // Multi-valued purposes (e.g. third-party login) render a multi-select;
-  // single-valued ones a clearable single select.
-  multiple?: boolean
 }
 
 export function ProviderTag({ name }: { name: string }) {
@@ -30,11 +33,9 @@ interface ProfileManagerTexts {
 interface ProfileManagerProps<T extends ProfileLike> {
   profiles: T[]
   bindings: BindingRow[]
+  purposes: PurposeDescriptor[]
+  providers: ProviderDescriptor[]
   texts: ProfileManagerTexts
-  purposeLabel: (purpose: string) => string
-  profileIcon: (profile: T) => ReactNode
-  profileTags?: (profile: T) => ReactNode
-  profileDescription: (profile: T) => ReactNode
   onAdd: () => void
   onEdit: (profile: T) => void
   onDelete: (profile: T) => void
@@ -48,11 +49,9 @@ interface ProfileManagerProps<T extends ProfileLike> {
 export function ProfileManager<T extends ProfileLike>({
   profiles,
   bindings,
+  purposes,
+  providers,
   texts,
-  purposeLabel,
-  profileIcon,
-  profileTags,
-  profileDescription,
   onAdd,
   onEdit,
   onDelete,
@@ -61,6 +60,9 @@ export function ProfileManager<T extends ProfileLike>({
   onBind,
   binding,
 }: ProfileManagerProps<T>) {
+  const purposeDescriptor = (key: string) => purposes.find((purpose) => purpose.key === key)
+  const providerDescriptor = (key: string) => providers.find((provider) => provider.key === key)
+  const purposeLabel = (key: string) => purposeDescriptor(key)?.presentation?.name || key
   const boundPurposes = (profileId: string) =>
     bindings.filter((b) => b.profileIds.includes(profileId)).map((b) => b.purpose)
 
@@ -84,14 +86,20 @@ export function ProfileManager<T extends ProfileLike>({
             {profiles.map((p) => {
               const bound = boundPurposes(p.id)
               const undeletable = bound.length > 0 || (deleteDisabled?.(p) ?? false)
+              const provider = providerDescriptor(p.provider)
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="flex min-w-0 flex-1 basis-52 items-start gap-3">
-                    <span className="shrink-0 pt-0.5">{profileIcon(p)}</span>
+                    <span className="shrink-0 pt-0.5">
+                      <ProviderIcon
+                        iconRef={provider?.presentation?.iconRef ?? ''}
+                        color={provider?.presentation?.color}
+                      />
+                    </span>
                     <div className="min-w-0">
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="whitespace-nowrap font-medium">{p.name}</span>
-                        {profileTags?.(p)}
+                        <ProviderTag name={provider?.presentation?.name || p.provider} />
                         {bound.map((purpose) => (
                           <Tag key={purpose} color="blue" className="!me-0">
                             {purposeLabel(purpose)}
@@ -104,7 +112,7 @@ export function ProfileManager<T extends ProfileLike>({
                         ) : null}
                       </span>
                       <div className="text-sm text-(--ant-color-text-tertiary)">
-                        {profileDescription(p)}
+                        {provider?.presentation?.description || p.provider}
                       </div>
                     </div>
                   </div>
@@ -137,35 +145,39 @@ export function ProfileManager<T extends ProfileLike>({
           <div className="text-xs text-(--ant-color-text-tertiary)">{texts.bindingsHint}</div>
         </div>
         <div className="space-y-3">
-          {bindings.map((b) => (
-            <div
-              key={b.purpose}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
-            >
-              <span className="text-sm">{purposeLabel(b.purpose)}</span>
-              {b.multiple ? (
-                <Select
-                  className="w-full min-w-0 sm:w-64"
-                  mode="multiple"
-                  value={b.profileIds}
-                  placeholder={'未绑定'}
-                  loading={binding}
-                  options={profiles.map((p) => ({ label: p.name, value: p.id }))}
-                  onChange={(ids) => onBind(b.purpose, ids)}
-                />
-              ) : (
-                <Select
-                  className="w-full min-w-0 sm:w-64"
-                  value={b.profileIds[0]}
-                  placeholder={'未绑定'}
-                  allowClear
-                  loading={binding}
-                  options={profiles.map((p) => ({ label: p.name, value: p.id }))}
-                  onChange={(id) => onBind(b.purpose, id ? [id] : [])}
-                />
-              )}
-            </div>
-          ))}
+          {bindings.map((b) => {
+            const multiple =
+              purposeDescriptor(b.purpose)?.cardinality === BindingCardinality.MULTIPLE
+            return (
+              <div
+                key={b.purpose}
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+              >
+                <span className="text-sm">{purposeLabel(b.purpose)}</span>
+                {multiple ? (
+                  <Select
+                    className="w-full min-w-0 sm:w-64"
+                    mode="multiple"
+                    value={b.profileIds}
+                    placeholder={'未绑定'}
+                    loading={binding}
+                    options={profiles.map((p) => ({ label: p.name, value: p.id }))}
+                    onChange={(ids) => onBind(b.purpose, ids)}
+                  />
+                ) : (
+                  <Select
+                    className="w-full min-w-0 sm:w-64"
+                    value={b.profileIds[0]}
+                    placeholder={'未绑定'}
+                    allowClear
+                    loading={binding}
+                    options={profiles.map((p) => ({ label: p.name, value: p.id }))}
+                    onChange={(id) => onBind(b.purpose, id ? [id] : [])}
+                  />
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

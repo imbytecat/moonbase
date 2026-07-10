@@ -9,8 +9,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
@@ -18,21 +16,8 @@ import (
 	openaioption "github.com/openai/openai-go/v3/option"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-// AI purposes are code, not data: each is a fixed slot the application calls
-// models through, and operators bind each one to a connection profile. Adding
-// a feature that talks to a model = adding a purpose here.
-const (
-	// PurposeChat is the general chat/completion slot used by application
-	// features that need a conversational model.
-	PurposeChat = "chat"
-)
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeChat}
 
 // ErrNotConfigured signals that the purpose is unbound or its profile is
 // incomplete; callers map it to a friendly "not configured" RPC error.
@@ -52,40 +37,27 @@ type Chatter interface {
 
 type completeFunc = func(ctx context.Context, config map[string]any, systemPrompt, userPrompt string) (string, error)
 
-type driver struct {
-	schema   schema.Schema
-	complete completeFunc
-}
-
-var drivers = map[string]driver{
-	"openai": {
-		schema:   openAISchema,
-		complete: completeOpenAI,
+var Registry = integration.MustRegistry([]integration.Entry[completeFunc]{
+	{
+		Key:          "openai",
+		Presentation: integration.Presentation{Name: "OpenAI 兼容模型", Description: "连接兼容 OpenAI 协议的对话模型", Color: "#10a37f", IconRef: "antd:OpenAIOutlined"},
+		Config:       openAISchema,
+		Ops:          completeOpenAI,
 	},
-	"anthropic": {
-		schema:   anthropicSchema,
-		complete: completeAnthropic,
+	{
+		Key:          "anthropic",
+		Presentation: integration.Presentation{Name: "Anthropic 模型", Description: "连接 Anthropic 消息协议的对话模型", Color: "#d97757", IconRef: "antd:RobotOutlined"},
+		Config:       anthropicSchema,
+		Ops:          completeAnthropic,
 	},
-}
+})
 
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
-
-// Providers lists registered driver names, sorted.
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
+func Providers() []string { return Registry.Names() }
 
 // ProfileUsable reports whether the profile's driver is fully configured —
 // the same gate CompleteWith enforces.
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }
 
 // Usable reports whether the purpose resolves to a usable profile.
@@ -117,11 +89,11 @@ func (c *Client) Complete(ctx context.Context, purpose, systemPrompt, userPrompt
 }
 
 func (c *Client) CompleteWith(ctx context.Context, profile kitsettings.GenericProfile, systemPrompt, userPrompt string) (string, error) {
-	d, ok := drivers[profile.Provider]
-	if !ok || !d.schema.Usable(profile.Config) {
+	complete, ok := Registry.OpsFor(profile.Provider, profile.Config)
+	if !ok {
 		return "", ErrNotConfigured
 	}
-	return d.complete(ctx, profile.Config, systemPrompt, userPrompt)
+	return complete(ctx, profile.Config, systemPrompt, userPrompt)
 }
 
 func completeOpenAI(ctx context.Context, config map[string]any, systemPrompt, userPrompt string) (string, error) {

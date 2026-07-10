@@ -1,14 +1,9 @@
 import { LeftOutlined } from '@ant-design/icons'
+import type { ProviderDescriptor } from '@moonbase/api-client'
 import { App, Button, Tag } from 'antd'
 import { type ReactNode, useState } from 'react'
 import { FormDrawer } from '#components/form-drawer'
-
-export interface ProviderOption {
-  value: string
-  label: string
-  description: string
-  icon: ReactNode
-}
+import { ProviderIcon } from '#components/provider-icon'
 
 // Two-step profile drawer (the Logto connector shape): creating first picks a
 // provider from descriptive cards, then fills only that provider's form.
@@ -27,13 +22,13 @@ export function ProfileFormDrawer({
   onClose: () => void
   dirty: boolean
   profileProvider: string | undefined
-  providers: ProviderOption[]
+  providers: ProviderDescriptor[]
   children: (provider: string) => ReactNode
 }) {
   const { modal } = App.useApp()
   const isNew = profileProvider === undefined
   const [picked, setPicked] = useState(profileProvider)
-  const active = providers.find((p) => p.value === picked)
+  const active = providers.find((provider) => provider.key === picked)
 
   const backToPicker = () => {
     const discard = () => setPicked(undefined)
@@ -62,8 +57,13 @@ export function ProfileFormDrawer({
         <>
           <div className="mb-4 flex items-center justify-between gap-2 rounded-lg bg-(--ant-color-fill-quaternary) px-3 py-2">
             <span className="flex min-w-0 items-center gap-2">
-              {active.icon}
-              <span className="truncate font-medium">{active.label}</span>
+              <ProviderIcon
+                iconRef={active.presentation?.iconRef ?? ''}
+                color={active.presentation?.color}
+              />
+              <span className="truncate font-medium">
+                {active.presentation?.name || active.key}
+              </span>
             </span>
             {isNew ? (
               <Button type="text" size="small" icon={<LeftOutlined />} onClick={backToPicker}>
@@ -73,25 +73,31 @@ export function ProfileFormDrawer({
               <Tag className="!me-0">{'创建后不可更改'}</Tag>
             )}
           </div>
-          {children(active.value)}
+          {children(active.key)}
         </>
       ) : (
         <div className="space-y-3">
           <div className="text-sm text-(--ant-color-text-secondary)">
             {'选择服务类型，创建后不可更改'}
           </div>
-          {providers.map((p) => (
+          {providers.map((provider) => (
             <button
-              key={p.value}
+              key={provider.key}
               type="button"
-              onClick={() => setPicked(p.value)}
+              onClick={() => setPicked(provider.key)}
               className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-solid border-(--ant-color-border) bg-transparent p-4 text-start transition-colors hover:border-(--ant-color-primary)"
             >
-              {p.icon}
+              <ProviderIcon
+                iconRef={provider.presentation?.iconRef ?? ''}
+                color={provider.presentation?.color}
+                className="text-xl"
+              />
               <span className="min-w-0">
-                <span className="block font-medium text-(--ant-color-text)">{p.label}</span>
+                <span className="block font-medium text-(--ant-color-text)">
+                  {provider.presentation?.name || provider.key}
+                </span>
                 <span className="block text-xs text-(--ant-color-text-tertiary)">
-                  {p.description}
+                  {provider.presentation?.description}
                 </span>
               </span>
             </button>

@@ -1,69 +1,173 @@
-// Package integration holds the two primitives every infrastructure
-// integration (storage, captcha, email, sms, llm, oauth, payment) is built
-// from: a code-defined purpose Catalog and a provider-keyed driver Registry.
-// Each integration package declares its purposes and drivers with these types
-// so the shared vocabulary (known purpose, usable profile, provider names) is
-// implemented exactly once — only the per-integration Ops shape differs.
+// Package integration contains the base-owned purpose catalog and the ordered,
+// self-describing provider registry shared by infrastructure integrations.
 package integration
 
 import (
-	"maps"
+	"fmt"
+	"reflect"
+	"regexp"
 	"slices"
+
+	"github.com/imbytecat/moonbase/integrations/core/config"
 )
 
-// Catalog is an integration's purpose list, served to the admin UI in display
-// order. Purposes are code, not data: each is a fixed slot the application
-// addresses the integration through, and operators bind each one to connection
-// profiles at runtime. Adding a feature that uses an integration = adding a
-// purpose to that integration's catalog.
-type Catalog []string
+type Cardinality string
 
-// Known reports whether key is in the catalog — binding writes validate
-// against it so a typo can't create a dangling binding.
+const (
+	Single   Cardinality = "single"
+	Multiple Cardinality = "multiple"
+)
+
+type Purpose struct {
+	Key         string
+	Name        string
+	Description string
+	Cardinality Cardinality
+}
+
+type Catalog []Purpose
+
 func (c Catalog) Known(key string) bool {
-	return slices.Contains(c, key)
+	return slices.ContainsFunc(c, func(purpose Purpose) bool { return purpose.Key == key })
 }
 
-// Provider names the driver a profile selects; every settings profile
-// implements it.
-type Provider interface {
-	ProviderName() string
+func (c Catalog) Keys() []string {
+	out := make([]string, len(c))
+	for i, purpose := range c {
+		out[i] = purpose.Key
+	}
+	return out
 }
 
-// Driver pairs a provider's usable-check with its integration-specific ops
-// (the send/verify/complete/... function or bundle). Ops signatures are
-// deliberately DIFFERENT per integration — only this wrapper shape is shared.
-type Driver[P Provider, Ops any] struct {
-	// Usable reports whether the profile carries everything the provider
-	// needs; every action gates on it.
-	Usable func(P) bool
-	Ops    Ops
+type Presentation struct {
+	Name        string
+	Description string
+	Color       string
+	IconRef     string
 }
 
-// Registry maps the wire value of a profile's provider field to its driver.
-// TestProviderRegistriesMatchContract (internal/rpc) keeps every registry
-// aligned with the proto `in:` constraint.
-type Registry[P Provider, Ops any] map[string]Driver[P, Ops]
-
-// Names lists registered driver names, sorted.
-func (r Registry[P, Ops]) Names() []string {
-	return slices.Sorted(maps.Keys(r))
+type Entry[Ops any] struct {
+	Key          string
+	Presentation Presentation
+	Config       config.Schema
+	Ops          Ops
 }
 
-// ProfileUsable reports whether the profile's driver is registered and fully
-// configured.
-func (r Registry[P, Ops]) ProfileUsable(p P) bool {
-	d, ok := r[p.ProviderName()]
-	return ok && d.Usable(p)
+type Descriptor struct {
+	Key          string
+	Presentation Presentation
+	Config       config.Schema
 }
 
-// Ops returns the driver ops for a usable profile; ok=false means the
-// provider is unregistered or not fully configured.
-func (r Registry[P, Ops]) OpsFor(p P) (Ops, bool) {
-	d, ok := r[p.ProviderName()]
-	if !ok || !d.Usable(p) {
+type Registry[Ops any] struct {
+	entries []Entry[Ops]
+	byKey   map[string]int
+}
+
+var iconRefPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9]*$`)
+
+func NewRegistry[Ops any](entries []Entry[Ops]) (Registry[Ops], error) {
+	registry := Registry[Ops]{entries: slices.Clone(entries), byKey: make(map[string]int, len(entries))}
+	for i, entry := range entries {
+		if entry.Key == "" {
+			return Registry[Ops]{}, fmt.Errorf("provider key 不能为空")
+		}
+		if _, exists := registry.byKey[entry.Key]; exists {
+			return Registry[Ops]{}, fmt.Errorf("provider key %q 重复", entry.Key)
+		}
+		if entry.Presentation.Name == "" {
+			return Registry[Ops]{}, fmt.Errorf("provider %q 缺少 presentation", entry.Key)
+		}
+		if entry.Presentation.IconRef != "" && !iconRefPattern.MatchString(entry.Presentation.IconRef) {
+			return Registry[Ops]{}, fmt.Errorf("provider %q 的 icon_ref 无效", entry.Key)
+		}
+		if err := entry.Config.ValidateDefinition(); err != nil {
+			return Registry[Ops]{}, fmt.Errorf("provider %q config 无效: %w", entry.Key, err)
+		}
+		if reflect.ValueOf(entry.Ops).IsZero() {
+			return Registry[Ops]{}, fmt.Errorf("provider %q 缺少 Ops", entry.Key)
+		}
+		registry.byKey[entry.Key] = i
+	}
+	return registry, nil
+}
+
+func MustRegistry[Ops any](entries []Entry[Ops]) Registry[Ops] {
+	registry, err := NewRegistry(entries)
+	if err != nil {
+		panic(err)
+	}
+	return registry
+}
+
+func (r Registry[Ops]) Entries() []Entry[Ops] { return slices.Clone(r.entries) }
+
+func (r Registry[Ops]) Names() []string {
+	out := make([]string, len(r.entries))
+	for i, entry := range r.entries {
+		out[i] = entry.Key
+	}
+	return out
+}
+
+func (r Registry[Ops]) Descriptors() []Descriptor {
+	out := make([]Descriptor, len(r.entries))
+	for i, entry := range r.entries {
+		out[i] = Descriptor{Key: entry.Key, Presentation: entry.Presentation, Config: entry.Config}
+	}
+	return out
+}
+
+func (r Registry[Ops]) entry(provider string) (Entry[Ops], bool) {
+	index, ok := r.byKey[provider]
+	if !ok {
+		var zero Entry[Ops]
+		return zero, false
+	}
+	return r.entries[index], true
+}
+
+func (r Registry[Ops]) EntryFor(provider string) (Entry[Ops], bool) { return r.entry(provider) }
+
+func (r Registry[Ops]) ConfigFor(provider string) (config.Schema, bool) {
+	entry, ok := r.entry(provider)
+	return entry.Config, ok
+}
+
+func (r Registry[Ops]) Mask(provider string, values map[string]any) (map[string]any, bool) {
+	entry, ok := r.entry(provider)
+	if !ok {
+		return nil, false
+	}
+	return entry.Config.Mask(values), true
+}
+
+func (r Registry[Ops]) Merge(provider string, incoming, stored map[string]any) (map[string]any, bool) {
+	entry, ok := r.entry(provider)
+	if !ok {
+		return nil, false
+	}
+	return entry.Config.Merge(incoming, stored), true
+}
+
+func (r Registry[Ops]) Validate(provider string, values map[string]any) error {
+	entry, ok := r.entry(provider)
+	if !ok {
+		return fmt.Errorf("未知 provider %q", provider)
+	}
+	return entry.Config.Validate(values)
+}
+
+func (r Registry[Ops]) ProfileUsable(provider string, values map[string]any) bool {
+	entry, ok := r.entry(provider)
+	return ok && entry.Config.Usable(values)
+}
+
+func (r Registry[Ops]) OpsFor(provider string, values map[string]any) (Ops, bool) {
+	entry, ok := r.entry(provider)
+	if !ok || !entry.Config.Usable(values) {
 		var zero Ops
 		return zero, false
 	}
-	return d.Ops, true
+	return entry.Ops, true
 }

@@ -7,13 +7,13 @@ import (
 
 	"connectrpc.com/connect"
 
-	mail "github.com/imbytecat/moonbase/integrations/email"
-	"github.com/imbytecat/moonbase/integrations/llm"
-	"github.com/imbytecat/moonbase/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/gen/system/v1/systemv1connect"
+	"github.com/imbytecat/moonbase/server/internal/llm"
+	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 	"github.com/imbytecat/moonbase/server/internal/storage"
 )
 

@@ -6,32 +6,18 @@ import (
 	"strings"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	payment "github.com/imbytecat/moonbase/integrations/payment"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
-const PurposeCheckout = payment.PurposeCheckout
+const PurposeCheckout = "checkout"
 
-var Purposes = integration.Catalog{PurposeCheckout}
+var Purposes = integration.Catalog{{
+	Key: PurposeCheckout, Name: "在线收款", Description: "业务订单使用的托管收银台", Cardinality: integration.Multiple,
+}}
 
-type CredentialKind = payment.CredentialKind
-
-const (
-	CredentialQR       = payment.CredentialQR
-	CredentialRedirect = payment.CredentialRedirect
-	CredentialParams   = payment.CredentialParams
-)
-
-type Input = payment.Input
-
-const (
-	InputPayerID   = payment.InputPayerID
-	InputReturnURL = payment.InputReturnURL
-)
-
-type Method = payment.Method
+var Registry = payment.Registry
 
 var (
 	ErrNotConfigured    = payment.ErrNotConfigured
@@ -49,48 +35,52 @@ const (
 	StateRefunded = payment.StateRefunded
 )
 
+type ClientContext = payment.ClientContext
+type PlanRequest = payment.PlanRequest
+type PlanResult = payment.PlanResult
+type ProviderDescriptor = payment.ProviderDescriptor
+type ProductDescriptor = payment.ProductDescriptor
 type CreateRequest = payment.CreateRequest
-type Credential = payment.Credential
+type Action = payment.Action
+type QRAction = payment.QRAction
+type RedirectAction = payment.RedirectAction
+type FormAction = payment.FormAction
+type WaitAction = payment.WaitAction
+type HostedFlowAction = payment.HostedFlowAction
 type QueryResult = payment.QueryResult
 type RefundRequest = payment.RefundRequest
 type RefundResult = payment.RefundResult
 type NotifyResult = payment.NotifyResult
-type Option = payment.Option
 
 type Gateway interface {
-	OptionsFor(ctx context.Context, purpose string) ([]Option, error)
-	ProfileFor(ctx context.Context, purpose, profileID string) (kitsettings.GenericProfile, error)
+	ProfilesFor(ctx context.Context, purpose string) ([]kitsettings.GenericProfile, error)
 	ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error)
-	Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest) (Credential, error)
-	Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
-	Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest) (RefundResult, error)
-	QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (settled bool, err error)
-	ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
+	Plan(ctx context.Context, profile kitsettings.GenericProfile, req PlanRequest) (PlanResult, error)
+	Create(ctx context.Context, profile kitsettings.GenericProfile, req CreateRequest) (Action, error)
+	Query(ctx context.Context, profile kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
+	Refund(ctx context.Context, profile kitsettings.GenericProfile, req RefundRequest) (RefundResult, error)
+	QueryRefund(ctx context.Context, profile kitsettings.GenericProfile, refundNo string) (settled bool, err error)
+	ParseNotify(ctx context.Context, profile kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
 }
-
-func Schemas() map[string]schema.Schema { return payment.Schemas() }
 
 func Providers() []string { return payment.Providers() }
-
-func ProfileUsable(p kitsettings.GenericProfile) bool { return payment.ProfileUsable(p) }
-
-func Catalog(provider string) []Method { return payment.Catalog(provider) }
-
-func Methods() []string { return payment.Methods() }
-
-func Offered(p kitsettings.GenericProfile) []string { return payment.Offered(p) }
-
-func ProfileMethods(p kitsettings.GenericProfile) []string { return payment.ProfileMethods(p) }
-
-func ValidateMethods(provider string, methods []string) error {
-	return payment.ValidateMethods(provider, methods)
+func ProfileUsable(profile kitsettings.GenericProfile) bool {
+	return payment.ProfileUsable(profile)
 }
-
-func KindOf(provider, method string) CredentialKind { return payment.KindOf(provider, method) }
-
-func InputsOf(provider, method string) []Input { return payment.InputsOf(provider, method) }
-
+func Describe(provider string) (ProviderDescriptor, bool) { return payment.Describe(provider) }
+func ProfileProducts(profile kitsettings.GenericProfile) []string {
+	return payment.ProfileProducts(profile)
+}
+func ProfileConfiguredProducts(profile kitsettings.GenericProfile) []string {
+	return payment.ProfileConfiguredProducts(profile)
+}
+func ValidateProducts(provider string, products []string) error {
+	return payment.ValidateProducts(provider, products)
+}
 func Currency(provider string) string { return payment.Currency(provider) }
+func RenderHostedFlow(provider, product, payload string) ([]byte, error) {
+	return payment.RenderHostedFlow(provider, product, payload)
+}
 
 type Client struct {
 	store     *settings.Store
@@ -103,36 +93,23 @@ func NewClient(store *settings.Store, publicURL string) *Client {
 
 var _ Gateway = (*Client)(nil)
 
-func (c *Client) notifyURL(p kitsettings.GenericProfile) string {
-	return c.publicURL + "/api/payment/notify/" + p.Provider + "/" + p.Id
+func (c *Client) notifyURL(profile kitsettings.GenericProfile) string {
+	return c.publicURL + "/api/payment/notify/" + profile.Provider + "/" + profile.Id
 }
 
-func (c *Client) OptionsFor(ctx context.Context, purpose string) ([]Option, error) {
+func (c *Client) ProfilesFor(ctx context.Context, purpose string) ([]kitsettings.GenericProfile, error) {
 	cfg, err := c.store.Payment(ctx)
 	if err != nil {
 		return nil, err
 	}
 	bound := cfg.ProfilesFor(purpose)
-	out := make([]Option, 0, len(bound))
-	for _, p := range bound {
-		if ProfileUsable(p) {
-			out = append(out, Option{ProfileID: p.Id, Name: p.Name, Provider: p.Provider, Methods: Offered(p)})
+	out := make([]kitsettings.GenericProfile, 0, len(bound))
+	for _, profile := range bound {
+		if ProfileUsable(profile) {
+			out = append(out, profile)
 		}
 	}
 	return out, nil
-}
-
-func (c *Client) ProfileFor(ctx context.Context, purpose, profileID string) (kitsettings.GenericProfile, error) {
-	cfg, err := c.store.Payment(ctx)
-	if err != nil {
-		return kitsettings.GenericProfile{}, err
-	}
-	for _, p := range cfg.ProfilesFor(purpose) {
-		if p.Id == profileID && ProfileUsable(p) {
-			return p, nil
-		}
-	}
-	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
 func (c *Client) ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error) {
@@ -140,28 +117,32 @@ func (c *Client) ProfileByID(ctx context.Context, profileID string) (kitsettings
 	if err != nil {
 		return kitsettings.GenericProfile{}, err
 	}
-	if p, ok := cfg.Profile(profileID); ok && ProfileUsable(p) {
-		return p, nil
+	if profile, ok := cfg.Profile(profileID); ok && ProfileUsable(profile) {
+		return profile, nil
 	}
 	return kitsettings.GenericProfile{}, ErrNotConfigured
 }
 
-func (c *Client) Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest) (Credential, error) {
-	return payment.Create(ctx, p, req, c.notifyURL(p))
+func (c *Client) Plan(ctx context.Context, profile kitsettings.GenericProfile, req PlanRequest) (PlanResult, error) {
+	return payment.Plan(ctx, profile, req)
 }
 
-func (c *Client) Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
-	return payment.Query(ctx, p, outTradeNo)
+func (c *Client) Create(ctx context.Context, profile kitsettings.GenericProfile, req CreateRequest) (Action, error) {
+	return payment.Create(ctx, profile, req, c.notifyURL(profile))
 }
 
-func (c *Client) Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest) (RefundResult, error) {
-	return payment.Refund(ctx, p, req, c.notifyURL(p))
+func (c *Client) Query(ctx context.Context, profile kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
+	return payment.Query(ctx, profile, outTradeNo)
 }
 
-func (c *Client) QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error) {
-	return payment.QueryRefund(ctx, p, refundNo)
+func (c *Client) Refund(ctx context.Context, profile kitsettings.GenericProfile, req RefundRequest) (RefundResult, error) {
+	return payment.Refund(ctx, profile, req, c.notifyURL(profile))
 }
 
-func (c *Client) ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
-	return payment.ParseNotify(ctx, p, r)
+func (c *Client) QueryRefund(ctx context.Context, profile kitsettings.GenericProfile, refundNo string) (bool, error) {
+	return payment.QueryRefund(ctx, profile, refundNo)
+}
+
+func (c *Client) ParseNotify(ctx context.Context, profile kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
+	return payment.ParseNotify(ctx, profile, r)
 }

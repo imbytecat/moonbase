@@ -22,7 +22,7 @@
 2. **proto = 单一 wire spec。** 跨端 RPC 信封、权限与枚举目录的唯一结构化真源；provider 配置形状由 ADR-0006 的 driver schema 声明。
 3. **无决策的机械目录 → build-time 生成；provider config → schema 运行时处理。** 权限/支付目录仍生成；密钥掩码、空密钥保留和不可变字段已改由 `integrationkit/schema` + `channelOps` 按 schema 处理。
 4. **反射不用于策略 / 目录表。** authz、权限目录、provider 派发保持**字面可 grep 的提交源**（如 `internal/server/authz.go` 的决策表），绝不改成启动时反射描述符建表。
-5. **跨语言镜像用 drift-gate。** 前端对后端目录的镜像（`apps/web/src/lib/payments.ts`、`permissions.ts`）必须有一个把漂移变成**构建失败**的确定性闸（锚 + verify，或直接从 proto 生成），而非无兜底、也非可糊弄的测试。
+5. **跨语言镜像用 drift-gate。** 必须镜像的目录（当前仅 `permissions.ts`）要有一个把漂移变成**构建失败**的确定性闸（锚 + verify，或直接从 proto 生成），而非无兜底、也非可糊弄的测试。Integration/provider/payment 目录不再镜像，由 driver descriptor 运行时下发。
 6. **每个横切关注点保留一个「完整布线的范例」** 作 agent 的主教材（本仓库每个 channel 即是）；`AGENTS.md` 散文是**薄导航**，非主信号。
 
 ## 现状符合度（审计锚点）

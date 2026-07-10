@@ -6,7 +6,10 @@ import "testing"
 // base's generic engine end to end: secrets masked, kept on empty update,
 // required + maxlen enforced — with zero masking code in this driver.
 func TestSchemaDrivesEngine(t *testing.T) {
-	s := Schemas()["aliyun"]
+	s, ok := Registry.ConfigFor("aliyun")
+	if !ok {
+		t.Fatal("aliyun provider not registered")
+	}
 
 	full := map[string]any{
 		"accessKeyId":     "AK123",

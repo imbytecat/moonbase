@@ -1,4 +1,3 @@
-import { RadarChartOutlined, SafetyOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   bindCaptchaPurpose,
@@ -11,21 +10,11 @@ import {
 } from '@moonbase/api-client'
 import { App } from 'antd'
 import { useState } from 'react'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
-import { ProfileManager, ProviderTag } from '#components/profile-manager'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
+import { ProfileManager } from '#components/profile-manager'
 import { ConfigForm } from '#components/system/config-form'
 import { humanizeError } from '#lib/errors'
 import { useEditingTarget } from '#lib/use-editing-target'
-
-const PURPOSE_LABELS: Record<string, () => string> = {
-  auth: () => '登录与注册',
-}
-
-const PROVIDER_NAMES: Record<string, () => string> = {
-  turnstile: () => 'Cloudflare Turnstile',
-  geetest: () => '极验 v4',
-  altcha: () => 'ALTCHA',
-}
 
 export function CaptchaPanel({
   captcha,
@@ -38,6 +27,7 @@ export function CaptchaPanel({
   const profiles = captcha?.profiles ?? []
   const bindings = captcha?.bindings ?? []
   const drawer = useEditingTarget<Profile>()
+  const { data: describe } = useQuery(describeCaptchaProviders, {})
 
   const deleteMutation = useMutation(deleteCaptchaProfile, {
     onSuccess: () => {
@@ -63,6 +53,8 @@ export function CaptchaPanel({
           purpose: b.purpose,
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
+        purposes={describe?.purposes ?? []}
+        providers={describe?.providers ?? []}
         texts={{
           profilesTitle: '验证配置',
           profilesHint: '可添加多个人机验证配置，按用途选择启用',
@@ -70,15 +62,6 @@ export function CaptchaPanel({
           confirmDelete: '删除该存储配置？',
           bindingsHint: '为每个场景指定使用的验证配置，未绑定的场景不启用人机验证',
         }}
-        purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
-        profileIcon={() => <SafetyOutlined className="text-lg text-(--ant-color-primary)" />}
-        profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider]?.() ?? p.provider} />}
-        profileDescription={(p) =>
-          p.provider === 'altcha'
-            ? '开源工作量证明验证，无需外部服务'
-            : String(p.provider === 'geetest' ? p.config?.captchaId : p.config?.siteKey) ||
-              '站点密钥'
-        }
         onAdd={drawer.add}
         onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}
@@ -116,7 +99,7 @@ function CaptchaProfileDrawer({
   const [dirty, setDirty] = useState(false)
 
   const { data: describe } = useQuery(describeCaptchaProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createCaptchaProfile, {
     onSuccess: () => {
@@ -133,27 +116,6 @@ function CaptchaProfileDrawer({
     onError: (err) => message.error(humanizeError(err)),
   })
 
-  const providers: ProviderOption[] = [
-    {
-      value: 'altcha',
-      label: 'ALTCHA',
-      description: '开源工作量证明验证，无需外部服务',
-      icon: <ThunderboltOutlined className="text-xl text-(--ant-color-success)" />,
-    },
-    {
-      value: 'turnstile',
-      label: 'Cloudflare Turnstile',
-      description: 'Cloudflare 提供的隐形人机验证',
-      icon: <SafetyOutlined className="text-xl text-(--ant-color-warning)" />,
-    },
-    {
-      value: 'geetest',
-      label: '极验 v4',
-      description: '极验第四代行为验证',
-      icon: <RadarChartOutlined className="text-xl text-(--ant-color-primary)" />,
-    },
-  ]
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -163,7 +125,7 @@ function CaptchaProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

@@ -6,8 +6,8 @@ import (
 	"connectrpc.com/connect"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	"github.com/imbytecat/moonbase/integrations/llm"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
+	"github.com/imbytecat/moonbase/server/internal/llm"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -18,9 +18,9 @@ func (s *SystemService) llmOps() integrationOps[kitsettings.GenericProfile] {
 		save:     s.settings.SetLlm,
 		purposes: llm.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(llm.Schemas(), updated, stored)
+			return mergeProfile(llm.Registry, updated, stored)
 		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("llm", llm.Schemas(), p) },
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("llm", llm.Registry, p) },
 	}
 }
 
@@ -110,8 +110,8 @@ func toProtoLlm(cfg settings.Llm) *systemv1.LlmSettings {
 	bindings := make([]*systemv1.LlmBinding, len(llm.Purposes))
 	for i, purpose := range llm.Purposes {
 		bindings[i] = &systemv1.LlmBinding{
-			Purpose:   purpose,
-			ProfileId: firstID(cfg.Bindings[purpose]),
+			Purpose:   purpose.Key,
+			ProfileId: firstID(cfg.Bindings[purpose.Key]),
 		}
 	}
 	return &systemv1.LlmSettings{Profiles: profiles, Bindings: bindings}
@@ -121,9 +121,11 @@ func (s *SystemService) DescribeLlmProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeLlmProvidersRequest],
 ) (*connect.Response[systemv1.DescribeLlmProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribeLlmProvidersResponse{Providers: describeProviders(llm.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribeLlmProvidersResponse{
+		Purposes: describePurposes(llm.Purposes), Providers: describeProviders(llm.Registry),
+	}), nil
 }
 
 func llmProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, llm.Schemas()[p.Provider])
+	return profileToProto(p, llm.Registry)
 }

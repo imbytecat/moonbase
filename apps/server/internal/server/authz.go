@@ -149,13 +149,15 @@ var authzRules = map[string]auth.Rule{
 	// audit interceptor, so one read permission is the whole surface.
 	auditv1connect.AuditServiceListAuditLogsProcedure: {Permission: "audit.read"},
 
-	// payment.v1 — the payment-order state machine. Options/create/get/sync
-	// serve the checkout surface (payment.write covers creating and driving
-	// an order); list/refund are back-office operations.
-	paymentv1connect.PaymentServiceListPaymentOptionsProcedure: {Permission: "payment.write"},
-	paymentv1connect.PaymentServiceCreatePaymentOrderProcedure: {Permission: "payment.write"},
-	paymentv1connect.PaymentServiceGetPaymentOrderProcedure:    {Permission: "payment.read"},
-	paymentv1connect.PaymentServiceSyncPaymentOrderProcedure:   {Permission: "payment.write"},
-	paymentv1connect.PaymentServiceListPaymentOrdersProcedure:  {Permission: "payment.read"},
-	paymentv1connect.PaymentServiceRefundPaymentOrderProcedure: {Permission: "payment.write"},
+	// payment.v1 — signed checkout sessions are public capabilities; management
+	// and the demo issuer remain permissioned back-office operations.
+	paymentv1connect.PaymentCheckoutServiceGetCheckoutSessionProcedure: {Public: true},
+	paymentv1connect.PaymentCheckoutServicePlanCheckoutProcedure:       {Public: true},
+	paymentv1connect.PaymentCheckoutServiceConfirmCheckoutProcedure:    {Public: true},
+	paymentv1connect.PaymentCheckoutServiceGetCheckoutOrderProcedure:   {Public: true},
+	paymentv1connect.PaymentServiceCreateDemoCheckoutProcedure:         {Permission: "payment.write"},
+	paymentv1connect.PaymentServiceGetPaymentOrderProcedure:            {Permission: "payment.read"},
+	paymentv1connect.PaymentServiceSyncPaymentOrderProcedure:           {Permission: "payment.write"},
+	paymentv1connect.PaymentServiceListPaymentOrdersProcedure:          {Permission: "payment.read"},
+	paymentv1connect.PaymentServiceRefundPaymentOrderProcedure:         {Permission: "payment.write"},
 }

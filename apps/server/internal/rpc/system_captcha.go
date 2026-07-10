@@ -5,8 +5,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/imbytecat/moonbase/integrations/captcha"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
+	"github.com/imbytecat/moonbase/server/internal/captcha"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
@@ -18,9 +18,9 @@ func (s *SystemService) captchaOps() integrationOps[kitsettings.GenericProfile] 
 		save:     s.settings.SetCaptcha,
 		purposes: captcha.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(captcha.Schemas(), updated, stored)
+			return mergeProfile(captcha.Registry, updated, stored)
 		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("captcha", captcha.Schemas(), p) },
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("captcha", captcha.Registry, p) },
 	}
 }
 
@@ -82,8 +82,8 @@ func toProtoCaptcha(cfg settings.Captcha) *systemv1.CaptchaSettings {
 	bindings := make([]*systemv1.CaptchaBinding, len(captcha.Purposes))
 	for i, purpose := range captcha.Purposes {
 		bindings[i] = &systemv1.CaptchaBinding{
-			Purpose:   purpose,
-			ProfileId: firstID(cfg.Bindings[purpose]),
+			Purpose:   purpose.Key,
+			ProfileId: firstID(cfg.Bindings[purpose.Key]),
 		}
 	}
 	return &systemv1.CaptchaSettings{Profiles: profiles, Bindings: bindings}
@@ -93,9 +93,11 @@ func (s *SystemService) DescribeCaptchaProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeCaptchaProvidersRequest],
 ) (*connect.Response[systemv1.DescribeCaptchaProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribeCaptchaProvidersResponse{Providers: describeProviders(captcha.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribeCaptchaProvidersResponse{
+		Purposes: describePurposes(captcha.Purposes), Providers: describeProviders(captcha.Registry),
+	}), nil
 }
 
 func captchaProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, captcha.Schemas()[p.Provider])
+	return profileToProto(p, captcha.Registry)
 }

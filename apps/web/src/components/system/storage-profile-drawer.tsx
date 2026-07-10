@@ -1,4 +1,3 @@
-import { CloudServerOutlined, HddOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createStorageProfile,
@@ -9,7 +8,7 @@ import {
 } from '@moonbase/api-client'
 import { App, Button } from 'antd'
 import { useState } from 'react'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
 import { ConfigForm } from '#components/system/config-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
@@ -30,7 +29,7 @@ export function StorageProfileDrawer({
   const [result, setResult] = useState<TestState>()
 
   const { data: describe } = useQuery(describeStorageProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createStorageProfile, {
     onSuccess: () => {
@@ -51,21 +50,6 @@ export function StorageProfileDrawer({
     onError: (err) => setResult({ ok: false, message: humanizeError(err) }),
   })
 
-  const providers: ProviderOption[] = [
-    {
-      value: 'local',
-      label: '本地存储',
-      description: '文件保存在服务器磁盘上，零外部依赖，适合单机部署',
-      icon: <HddOutlined className="text-xl text-(--ant-color-primary)" />,
-    },
-    {
-      value: 's3',
-      label: 'S3 兼容存储',
-      description: '任何 S3 兼容服务：AWS S3、MinIO、R2 等',
-      icon: <CloudServerOutlined className="text-xl text-(--ant-color-warning)" />,
-    },
-  ]
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -75,7 +59,7 @@ export function StorageProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

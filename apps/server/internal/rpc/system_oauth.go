@@ -8,8 +8,8 @@ import (
 	"connectrpc.com/connect"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	"github.com/imbytecat/moonbase/integrations/oauth"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
+	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -20,9 +20,9 @@ func (s *SystemService) oauthOps() integrationOps[kitsettings.GenericProfile] {
 		save:     s.settings.SetOauth,
 		purposes: oauth.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(oauth.Schemas(), updated, stored)
+			return mergeProfile(oauth.Registry, updated, stored)
 		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("oauth", oauth.Schemas(), p) },
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("oauth", oauth.Registry, p) },
 	}
 }
 
@@ -112,8 +112,8 @@ func toProtoOauth(cfg settings.OAuth) *systemv1.OauthSettings {
 	bindings := make([]*systemv1.OauthBinding, len(oauth.Purposes))
 	for i, purpose := range oauth.Purposes {
 		bindings[i] = &systemv1.OauthBinding{
-			Purpose:    purpose,
-			ProfileIds: cfg.Bindings[purpose],
+			Purpose:    purpose.Key,
+			ProfileIds: cfg.Bindings[purpose.Key],
 		}
 	}
 	return &systemv1.OauthSettings{Profiles: profiles, Bindings: bindings}
@@ -123,11 +123,13 @@ func (s *SystemService) DescribeOauthProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeOauthProvidersRequest],
 ) (*connect.Response[systemv1.DescribeOauthProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribeOauthProvidersResponse{Providers: describeProviders(oauth.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribeOauthProvidersResponse{
+		Purposes: describePurposes(oauth.Purposes), Providers: describeProviders(oauth.Registry),
+	}), nil
 }
 
 func oauthProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, oauth.Schemas()[p.Provider])
+	return profileToProto(p, oauth.Registry)
 }
 
 func profileConfigString(p kitsettings.GenericProfile, key string) string {

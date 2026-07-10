@@ -9,29 +9,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-// CAPTCHA purposes are code, not data: each is a fixed slot the application
-// challenges through, and operators bind each one to a connection profile.
-// Adding a feature that needs bot protection = adding a purpose here.
-const (
-	// PurposeAuth fronts the public auth flows: login, register and the
-	// public code-send RPCs.
-	PurposeAuth = "auth"
-)
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeAuth}
 
 type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
@@ -56,22 +41,21 @@ type captchaOps struct {
 	verify  func(c *Client, ctx context.Context, config map[string]any, token, remoteIP string) error
 }
 
-type driver struct {
-	schema schema.Schema
-	ops    captchaOps
-}
-
-var drivers = map[string]driver{
-	"turnstile": {
-		schema: turnstileSchema,
-		ops: captchaOps{
+var Registry = integration.MustRegistry([]integration.Entry[captchaOps]{
+	{
+		Key:          "turnstile",
+		Presentation: integration.Presentation{Name: "Cloudflare 人机验证", Description: "通过托管挑战识别自动化访问", Color: "#f6821f", IconRef: "antd:SafetyCertificateOutlined"},
+		Config:       turnstileSchema,
+		Ops: captchaOps{
 			siteKey: func(config map[string]any) string { return cfgStr(config, "siteKey") },
 			verify:  (*Client).verifyTurnstile,
 		},
 	},
-	"geetest": {
-		schema: geetestSchema,
-		ops: captchaOps{
+	{
+		Key:          "geetest",
+		Presentation: integration.Presentation{Name: "极验行为验证", Description: "通过行为挑战识别自动化访问", Color: "#3b82f6", IconRef: "antd:SafetyOutlined"},
+		Config:       geetestSchema,
+		Ops: captchaOps{
 			siteKey: func(config map[string]any) string { return cfgStr(config, "captchaId") },
 			verify:  (*Client).verifyGeetest,
 		},
@@ -79,32 +63,22 @@ var drivers = map[string]driver{
 	// The built-in ALTCHA driver needs no keys: the widget fetches its
 	// challenge from /api/captcha/altcha/challenge, so siteKey is empty on
 	// purpose.
-	"altcha": {
-		schema: altchaSchema,
-		ops: captchaOps{
+	{
+		Key:          "altcha",
+		Presentation: integration.Presentation{Name: "内置工作量验证", Description: "由本站签发并校验无外部依赖的计算挑战", Color: "#52c41a", IconRef: "antd:ThunderboltOutlined"},
+		Config:       altchaSchema,
+		Ops: captchaOps{
 			siteKey: func(map[string]any) string { return "" },
 			verify:  (*Client).verifyAltcha,
 		},
 	},
-}
+})
 
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
-
-// Providers lists registered driver names, sorted.
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
+func Providers() []string { return Registry.Names() }
 
 // ProfileUsable reports whether the profile's driver is fully configured.
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }
 
 // Widget returns the provider name and public site key the login page needs
@@ -114,11 +88,11 @@ func Widget(cfg Config, purpose string) (provider, siteKey string, ok bool) {
 	if !found {
 		return "", "", false
 	}
-	d, ok := drivers[p.Provider]
-	if !ok || !d.schema.Usable(p.Config) {
+	ops, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return "", "", false
 	}
-	return p.Provider, d.ops.siteKey(p.Config), true
+	return p.Provider, ops.siteKey(p.Config), true
 }
 
 type Client struct {
@@ -155,14 +129,14 @@ func (c *Client) Verify(ctx context.Context, purpose, token, remoteIP string) er
 	if !found {
 		return nil
 	}
-	d, ok := drivers[p.Provider]
-	if !ok || !d.schema.Usable(p.Config) {
+	ops, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return nil
 	}
 	if token == "" {
 		return fmt.Errorf("captcha token required")
 	}
-	return d.ops.verify(c, ctx, p.Config, token, remoteIP)
+	return ops.verify(c, ctx, p.Config, token, remoteIP)
 }
 
 // https://developers.cloudflare.com/turnstile/get-started/server-side-validation/

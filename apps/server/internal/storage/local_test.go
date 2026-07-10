@@ -38,6 +38,14 @@ func (m *memQuerier) UpsertSetting(_ context.Context, arg repository.UpsertSetti
 	return nil
 }
 
+func (m *memQuerier) GetOrCreateSetting(_ context.Context, arg repository.GetOrCreateSettingParams) (repository.Setting, error) {
+	if raw, ok := m.rows[arg.Key]; ok {
+		return repository.Setting{Key: arg.Key, Value: raw}, nil
+	}
+	m.rows[arg.Key] = arg.Value
+	return repository.Setting{Key: arg.Key, Value: arg.Value}, nil
+}
+
 func newLocalFixture(t *testing.T) (*settings.Store, *Client) {
 	t.Helper()
 	store := settings.NewStore(&memQuerier{rows: map[string][]byte{}})

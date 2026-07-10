@@ -8,17 +8,10 @@ export * from './gen/audit/v1/audit-AuditService_connectquery'
 export * from './gen/auth/v1/auth_pb'
 export * from './gen/auth/v1/auth-AuthService_connectquery'
 export * from './gen/auth/v1/permission_pb'
-// buf.validate.field extension, re-exported (aliased off its generic name) so a
-// client can read wire constraints from the contract — e.g. a drift-gate proving
-// the hand-written payment-method catalog still equals the proto `in:` list.
-export { field as fieldRulesExtension } from './gen/buf/validate/validate_pb'
 export * from './gen/notification/v1/notification_pb'
 export * from './gen/notification/v1/notification-NotificationService_connectquery'
-// Generated payment method catalog (protoc-gen-paymentcatalog): PROVIDER_METHODS
-// / METHOD_INPUTS, the structured half of the frontend catalog. Label + desc
-// text stays in the web Chinese copy catalog (apps/web src/lib/payments.ts).
-export * from './gen/payment/v1/method_catalog_pb'
 export * from './gen/payment/v1/payment_pb'
+export * from './gen/payment/v1/payment-PaymentCheckoutService_connectquery'
 export * from './gen/payment/v1/payment-PaymentService_connectquery'
 export * from './gen/report/v1/report_pb'
 export * from './gen/report/v1/report-ReportService_connectquery'

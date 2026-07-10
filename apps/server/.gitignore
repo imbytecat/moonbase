@@ -2,16 +2,13 @@
 /bin/
 /tmp/
 /protoc-gen-permissions
-/protoc-gen-paymentcatalog
 
 # Generated code (regenerate, never commit):
 #   internal/gen        -> buf/protoc (moon run proto:generate) — connect-go stubs
 #   internal/authcatalog -> protoc-gen-permissions (moon run proto:generate) — permission catalog
-#   internal/paymentcatalog -> protoc-gen-paymentcatalog (moon run proto:generate) — payment method catalog
 #   internal/repository -> sqlc (moon run server:generate)
 #   internal/web/dist   -> web:build SPA, embedded via -tags embed (lands in server tree)
 /internal/gen/
 /internal/authcatalog/
-/internal/paymentcatalog/
 /internal/repository/
 /internal/web/dist/

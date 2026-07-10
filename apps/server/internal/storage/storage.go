@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 	storageint "github.com/imbytecat/moonbase/integrations/storage"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -33,7 +32,10 @@ const (
 )
 
 // Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeAvatars, PurposeSiteAssets}
+var Purposes = integration.Catalog{
+	{Key: PurposeAvatars, Name: "用户头像", Description: "用户资料与列表展示的公开头像", Cardinality: integration.Single},
+	{Key: PurposeSiteAssets, Name: "站点资源", Description: "登录页与站点导航使用的公开品牌资源", Cardinality: integration.Single},
+}
 
 // Visibility is a static property of a purpose (public / private), fixed in
 // code — never stored on file rows nor editable by admins. Public means reads
@@ -85,13 +87,7 @@ type ConnectionTester interface {
 	TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error
 }
 
-// storageOps is the per-provider seam: each backend implements the three
-// storage verbs against its own schema-described config shape. purpose
-// rides along because the local driver embeds it in signed URLs (the HTTP
-// handler re-resolves purpose → profile → directory at request time, so
-// rebinding a purpose never leaves stale URLs pointing at the wrong
-// directory).
-func Schemas() map[string]schema.Schema { return storageint.Schemas() }
+var Registry = storageint.Registry
 
 // Providers lists the registered driver names, sorted.
 func Providers() []string {
@@ -149,7 +145,7 @@ func (c *Client) Delete(ctx context.Context, purpose, key string) error {
 
 func (c *Client) TestConnection(ctx context.Context, cfg kitsettings.GenericProfile) error {
 	d, ok := storageint.DriverFor(cfg.Provider)
-	if !ok || !d.Schema.Usable(cfg.Config) {
+	if !ok || !d.Config.Usable(cfg.Config) {
 		return ErrNotConfigured
 	}
 	return d.Ops.Test(c, ctx, cfg)
@@ -165,7 +161,7 @@ func (c *Client) opsFor(ctx context.Context, purpose string) (storageint.Ops, ki
 		return storageint.Ops{}, cfg, ErrNotConfigured
 	}
 	d, ok := storageint.DriverFor(cfg.Provider)
-	if !ok || !d.Schema.Usable(cfg.Config) {
+	if !ok || !d.Config.Usable(cfg.Config) {
 		return storageint.Ops{}, cfg, ErrNotConfigured
 	}
 	return d.Ops, cfg, nil

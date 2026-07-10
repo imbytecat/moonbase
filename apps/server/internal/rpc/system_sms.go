@@ -7,55 +7,80 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/imbytecat/moonbase/integrations/core/schema"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	"github.com/imbytecat/moonbase/integrations/sms"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
 	"github.com/imbytecat/moonbase/server/internal/phone"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 )
 
 func (s *SystemService) smsOps() integrationOps[kitsettings.GenericProfile] {
 	return integrationOps[kitsettings.GenericProfile]{
-		name:        "sms",
-		load:        s.settings.Sms,
-		save:        s.settings.SetSms,
-		purposes:    sms.Purposes,
-		keepSecrets: smsMerge,
-		validate:    smsValidate,
+		name:     "sms",
+		load:     s.settings.Sms,
+		save:     s.settings.SetSms,
+		purposes: sms.Purposes,
+		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+			return mergeProfile(sms.Registry, updated, stored)
+		},
+		validate: func(profile kitsettings.GenericProfile) error {
+			return validateProfile("sms", sms.Registry, profile)
+		},
 	}
 }
 
-func smsMerge(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-	return mergeProfile(sms.Schemas(), updated, stored)
-}
-
-func smsValidate(p kitsettings.GenericProfile) error {
-	return validateProfile("sms", sms.Schemas(), p)
-}
-
-func mergeProfile(schemas map[string]schema.Schema, updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-	if sch, ok := schemas[updated.Provider]; ok {
-		updated.Config = sch.Merge(updated.Config, stored.Config)
+func mergeProfile[Ops any](registry integration.Registry[Ops], updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
+	if merged, ok := registry.Merge(updated.Provider, updated.Config, stored.Config); ok {
+		updated.Config = merged
 	}
 	return updated
 }
 
-func validateProfile(name string, schemas map[string]schema.Schema, p kitsettings.GenericProfile) error {
-	sch, ok := schemas[p.Provider]
-	if !ok {
-		return fmt.Errorf("unknown %s provider %q", name, p.Provider)
+func validateProfile[Ops any](name string, registry integration.Registry[Ops], profile kitsettings.GenericProfile) error {
+	if err := registry.Validate(profile.Provider, profile.Config); err != nil {
+		return fmt.Errorf("invalid %s profile: %w", name, err)
 	}
-	return sch.Validate(p.Config)
+	return nil
 }
 
-func describeProviders(schemas map[string]schema.Schema) map[string]*systemv1.ProviderForm {
-	providers := make(map[string]*systemv1.ProviderForm, len(schemas))
-	for name, sch := range schemas {
-		js, ui := sch.JSONForm()
-		providers[name] = &systemv1.ProviderForm{Schema: toStruct(js), UiSchema: toStruct(ui)}
+func describeProviders[Ops any](registry integration.Registry[Ops]) []*systemv1.ProviderDescriptor {
+	descriptors := registry.Descriptors()
+	providers := make([]*systemv1.ProviderDescriptor, len(descriptors))
+	for i, descriptor := range descriptors {
+		js, ui := descriptor.Config.JSONForm()
+		providers[i] = &systemv1.ProviderDescriptor{
+			Key:          descriptor.Key,
+			Presentation: presentationToProto(descriptor.Presentation),
+			Config:       &systemv1.ProviderForm{Schema: toStruct(js), UiSchema: toStruct(ui)},
+		}
 	}
 	return providers
+}
+
+func describePurposes(catalog integration.Catalog) []*systemv1.PurposeDescriptor {
+	out := make([]*systemv1.PurposeDescriptor, len(catalog))
+	for i, purpose := range catalog {
+		cardinality := systemv1.BindingCardinality_BINDING_CARDINALITY_SINGLE
+		if purpose.Cardinality == integration.Multiple {
+			cardinality = systemv1.BindingCardinality_BINDING_CARDINALITY_MULTIPLE
+		}
+		out[i] = &systemv1.PurposeDescriptor{
+			Key: purpose.Key,
+			Presentation: &systemv1.Presentation{
+				Name: purpose.Name, Description: purpose.Description,
+			},
+			Cardinality: cardinality,
+		}
+	}
+	return out
+}
+
+func presentationToProto(presentation integration.Presentation) *systemv1.Presentation {
+	return &systemv1.Presentation{
+		Name: presentation.Name, Description: presentation.Description,
+		Color: presentation.Color, IconRef: presentation.IconRef,
+	}
 }
 
 func (s *SystemService) CreateSmsProfile(
@@ -137,8 +162,10 @@ func (s *SystemService) DescribeSmsProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeSmsProvidersRequest],
 ) (*connect.Response[systemv1.DescribeSmsProvidersResponse], error) {
-	schemas := sms.Schemas()
-	return connect.NewResponse(&systemv1.DescribeSmsProvidersResponse{Providers: describeProviders(schemas)}), nil
+	return connect.NewResponse(&systemv1.DescribeSmsProvidersResponse{
+		Purposes:  describePurposes(sms.Purposes),
+		Providers: describeProviders(sms.Registry),
+	}), nil
 }
 
 func profileFromProto(p *systemv1.Profile) kitsettings.GenericProfile {
@@ -155,14 +182,15 @@ func profileFromProto(p *systemv1.Profile) kitsettings.GenericProfile {
 }
 
 func smsProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, sms.Schemas()[p.Provider])
+	return profileToProto(p, sms.Registry)
 }
 
 // profileToProto masks the config via the provider's schema — secrets never
 // leave the server — then encodes it as a Struct. The masked map holds only
 // strings and *_set bools, so structpb encoding cannot fail.
-func profileToProto(p kitsettings.GenericProfile, sch schema.Schema) *systemv1.Profile {
-	cfg, err := structpb.NewStruct(sch.Mask(p.Config))
+func profileToProto[Ops any](p kitsettings.GenericProfile, registry integration.Registry[Ops]) *systemv1.Profile {
+	masked, _ := registry.Mask(p.Provider, p.Config)
+	cfg, err := structpb.NewStruct(masked)
 	if err != nil {
 		cfg = &structpb.Struct{}
 	}
@@ -188,8 +216,8 @@ func toProtoSms(cfg settings.Sms) *systemv1.SmsSettings {
 	bindings := make([]*systemv1.SmsBinding, len(sms.Purposes))
 	for i, purpose := range sms.Purposes {
 		bindings[i] = &systemv1.SmsBinding{
-			Purpose:   purpose,
-			ProfileId: firstID(cfg.Bindings[purpose]),
+			Purpose:   purpose.Key,
+			ProfileId: firstID(cfg.Bindings[purpose.Key]),
 		}
 	}
 	return &systemv1.SmsSettings{Profiles: profiles, Bindings: bindings}

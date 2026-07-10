@@ -8,6 +8,13 @@ VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE
 SET value = excluded.value, updated_at = now();
 
+-- name: GetOrCreateSetting :one
+INSERT INTO settings (key, value)
+VALUES ($1, $2)
+ON CONFLICT (key) DO UPDATE
+SET value = settings.value
+RETURNING *;
+
 -- name: SetSiteWithAssets :exec
 -- Save the site settings JSONB and move the logo/favicon attachments to the
 -- referenced files in one atomic statement (ADR-0003): each brand slot's old

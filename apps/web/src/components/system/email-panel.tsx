@@ -1,25 +1,16 @@
-import { MailOutlined } from '@ant-design/icons'
-import { useMutation } from '@connectrpc/connect-query'
+import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   bindEmailPurpose,
   deleteEmailProfile,
+  describeEmailProviders,
   type EmailSettings,
   type Profile,
 } from '@moonbase/api-client'
 import { App } from 'antd'
-import { ProfileManager, ProviderTag } from '#components/profile-manager'
+import { ProfileManager } from '#components/profile-manager'
 import { EmailProfileDrawer } from '#components/system/email-profile-drawer'
 import { humanizeError } from '#lib/errors'
 import { useEditingTarget } from '#lib/use-editing-target'
-
-const PURPOSE_LABELS: Record<string, () => string> = {
-  auth: () => '账号验证邮件',
-}
-
-const PROVIDER_NAMES: Record<string, string> = {
-  smtp: 'SMTP',
-  cloudflare: 'Cloudflare',
-}
 
 export function EmailPanel({
   email,
@@ -32,6 +23,7 @@ export function EmailPanel({
   const profiles = email?.profiles ?? []
   const bindings = email?.bindings ?? []
   const drawer = useEditingTarget<Profile>()
+  const { data: describe } = useQuery(describeEmailProviders, {})
 
   const deleteMutation = useMutation(deleteEmailProfile, {
     onSuccess: () => {
@@ -52,14 +44,13 @@ export function EmailPanel({
   return (
     <>
       <ProfileManager
-        profiles={profiles.map((p) => ({
-          ...p,
-          name: p.name || String(p.config?.fromAddress ?? ''),
-        }))}
+        profiles={profiles}
         bindings={bindings.map((b) => ({
           purpose: b.purpose,
           profileIds: b.profileId ? [b.profileId] : [],
         }))}
+        purposes={describe?.purposes ?? []}
+        providers={describe?.providers ?? []}
         texts={{
           profilesTitle: '邮件配置',
           profilesHint: '可添加多个发信配置，例如验证码专用通道和通知通道',
@@ -67,10 +58,6 @@ export function EmailPanel({
           confirmDelete: '删除该存储配置？',
           bindingsHint: '为每类邮件指定使用的发信配置，未绑定的功能将不可用',
         }}
-        purposeLabel={(purpose) => PURPOSE_LABELS[purpose]?.() ?? purpose}
-        profileIcon={() => <MailOutlined className="text-lg text-(--ant-color-primary)" />}
-        profileTags={(p) => <ProviderTag name={PROVIDER_NAMES[p.provider] ?? p.provider} />}
-        profileDescription={(p) => String(p.config?.fromAddress || '发件地址')}
         onAdd={drawer.add}
         onEdit={drawer.edit}
         onDelete={(p) => deleteMutation.mutate({ id: p.id })}

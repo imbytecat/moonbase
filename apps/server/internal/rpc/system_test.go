@@ -12,11 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	"github.com/imbytecat/moonbase/integrations/llm"
-	"github.com/imbytecat/moonbase/integrations/oauth"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
+	"github.com/imbytecat/moonbase/server/internal/llm"
+	"github.com/imbytecat/moonbase/server/internal/oauth"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/settings"
+	"github.com/imbytecat/moonbase/server/internal/sms"
 	stg "github.com/imbytecat/moonbase/server/internal/storage"
 )
 
@@ -258,8 +259,8 @@ func TestSnapshotEmitsBindingsInCatalogOrder(t *testing.T) {
 		t.Fatalf("bindings = %d, want one per purpose (%d)", len(bindings), len(stg.Purposes))
 	}
 	for i, p := range stg.Purposes {
-		if bindings[i].GetPurpose() != p {
-			t.Fatalf("bindings[%d] = %q, want %q", i, bindings[i].GetPurpose(), p)
+		if bindings[i].GetPurpose() != p.Key {
+			t.Fatalf("bindings[%d] = %q, want %q", i, bindings[i].GetPurpose(), p.Key)
 		}
 	}
 	llmBindings := resp.Msg.GetLlm().GetBindings()
@@ -267,9 +268,28 @@ func TestSnapshotEmitsBindingsInCatalogOrder(t *testing.T) {
 		t.Fatalf("llm bindings = %d, want one per purpose (%d)", len(llmBindings), len(llm.Purposes))
 	}
 	for i, p := range llm.Purposes {
-		if llmBindings[i].GetPurpose() != p {
-			t.Fatalf("llm bindings[%d] = %q, want %q", i, llmBindings[i].GetPurpose(), p)
+		if llmBindings[i].GetPurpose() != p.Key {
+			t.Fatalf("llm bindings[%d] = %q, want %q", i, llmBindings[i].GetPurpose(), p.Key)
 		}
+	}
+}
+
+func TestDescribeSmsProvidersReturnsOrderedSelfDescriptions(t *testing.T) {
+	svc, _ := newSystemService(newMemSettingsQuerier())
+	resp, err := svc.DescribeSmsProviders(t.Context(), connect.NewRequest(&systemv1.DescribeSmsProvidersRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	purposes := resp.Msg.GetPurposes()
+	if len(purposes) != 1 || purposes[0].GetKey() != sms.PurposeVerification || purposes[0].GetPresentation().GetName() != "短信验证码" {
+		t.Fatalf("purposes = %+v, want verification descriptor", purposes)
+	}
+	providers := resp.Msg.GetProviders()
+	if len(providers) != 2 || providers[0].GetKey() != "aliyun" || providers[1].GetKey() != "tencent" {
+		t.Fatalf("providers = %+v, want registry declaration order", providers)
+	}
+	if providers[0].GetPresentation().GetName() != "阿里云短信" || providers[0].GetConfig().GetSchema() == nil {
+		t.Fatalf("aliyun descriptor incomplete: %+v", providers[0])
 	}
 }
 

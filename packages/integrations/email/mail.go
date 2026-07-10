@@ -12,29 +12,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
-	"slices"
 	"time"
 
 	gomail "github.com/wneessen/go-mail"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-// Email purposes are code, not data: each is a fixed slot the application
-// sends through, and operators bind each one to a connection profile. Adding
-// a feature that sends email = adding a purpose here.
-const (
-	// PurposeAuth carries authentication mail: verification codes and links,
-	// password resets.
-	PurposeAuth = "auth"
-)
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeAuth}
 
 var ErrNotConfigured = fmt.Errorf("email is not configured")
 
@@ -51,40 +36,27 @@ type Sender interface {
 
 type sendFunc = func(c *Client, ctx context.Context, config map[string]any, to, subject, textBody string) error
 
-type driver struct {
-	schema schema.Schema
-	send   sendFunc
-}
-
-var drivers = map[string]driver{
-	"smtp": {
-		schema: smtpSchema,
-		send:   (*Client).sendSmtp,
+var Registry = integration.MustRegistry([]integration.Entry[sendFunc]{
+	{
+		Key:          "smtp",
+		Presentation: integration.Presentation{Name: "SMTP 邮件", Description: "通过标准 SMTP 服务器发送邮件", Color: "#1677ff", IconRef: "antd:MailOutlined"},
+		Config:       smtpSchema,
+		Ops:          (*Client).sendSmtp,
 	},
-	"cloudflare": {
-		schema: cloudflareSchema,
-		send:   (*Client).sendCloudflare,
+	{
+		Key:          "cloudflare",
+		Presentation: integration.Presentation{Name: "Cloudflare 邮件", Description: "通过托管邮件发送接口投递邮件", Color: "#f6821f", IconRef: "antd:CloudOutlined"},
+		Config:       cloudflareSchema,
+		Ops:          (*Client).sendCloudflare,
 	},
-}
+})
 
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
-
-// Providers lists registered driver names, sorted.
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
+func Providers() []string { return Registry.Names() }
 
 // ProfileUsable reports whether the profile's driver is fully configured —
 // the same gate SendWith enforces.
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }
 
 // Usable reports whether the purpose resolves to a usable profile — shared
@@ -118,10 +90,11 @@ func (c *Client) Send(ctx context.Context, purpose, to, subject, textBody string
 }
 
 func (c *Client) SendWith(ctx context.Context, profile kitsettings.GenericProfile, to, subject, textBody string) error {
-	if !ProfileUsable(profile) {
+	send, ok := Registry.OpsFor(profile.Provider, profile.Config)
+	if !ok {
 		return ErrNotConfigured
 	}
-	return drivers[profile.Provider].send(c, ctx, profile.Config, to, subject, textBody)
+	return send(c, ctx, profile.Config, to, subject, textBody)
 }
 
 func (c *Client) sendSmtp(ctx context.Context, config map[string]any, to, subject, textBody string) error {

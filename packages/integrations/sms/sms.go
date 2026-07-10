@@ -10,8 +10,6 @@ package sms
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 
 	openapiutil "github.com/alibabacloud-go/darabonba-openapi/v2/utils"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v5/client"
@@ -21,21 +19,8 @@ import (
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
 	"github.com/imbytecat/moonbase/integrations/core/phone"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-// SMS purposes are code, not data: each is a fixed slot the application
-// sends through, and operators bind each one to a connection profile. Adding
-// a feature that sends SMS = adding a purpose here.
-const (
-	// PurposeVerification carries verification codes: login, phone binding,
-	// phone-verified signup.
-	PurposeVerification = "verification"
-)
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeVerification}
 
 var ErrNotConfigured = fmt.Errorf("sms is not configured")
 
@@ -45,7 +30,7 @@ type Loader func(ctx context.Context) (Config, error)
 
 // Sender delivers a verification code to an E.164 phone number, addressed by
 // purpose. Provider + opaque config select the driver; base has already
-// masked, merged and validated the config against the driver's schema.
+// masked, merged and validated the config against the driver's config.
 // SendTemplateWith delivers arbitrary template content (cloud SMS only accepts
 // pre-approved templates, so the caller names one whose single variable
 // receives the content).
@@ -57,30 +42,12 @@ type Sender interface {
 
 type sendFunc = func(ctx context.Context, config map[string]any, templateCode, e164, content string) error
 
-type driver struct {
-	schema schema.Schema
-	send   sendFunc
-}
+var Registry = integration.MustRegistry([]integration.Entry[sendFunc]{
+	{Key: "aliyun", Presentation: integration.Presentation{Name: "阿里云短信", Description: "通过云短信服务发送验证码与通知", Color: "#ff6a00", IconRef: "antd:MessageOutlined"}, Config: aliyunSchema, Ops: sendAliyun},
+	{Key: "tencent", Presentation: integration.Presentation{Name: "腾讯云短信", Description: "通过云短信服务发送验证码与通知", Color: "#0052d9", IconRef: "antd:MessageOutlined"}, Config: tencentSchema, Ops: sendTencent},
+})
 
-var drivers = map[string]driver{
-	"aliyun":  {schema: aliyunSchema, send: sendAliyun},
-	"tencent": {schema: tencentSchema, send: sendTencent},
-}
-
-// Schemas advertises each provider's config schema, derived from the driver
-// registry — the one source base and the admin UI read.
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
-
-// Providers lists registered driver names, sorted.
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
+func Providers() []string { return Registry.Names() }
 
 // Usable reports whether the purpose resolves to a profile whose driver is
 // registered and fully configured — shared with GetAuthConfig capability flags.
@@ -89,8 +56,7 @@ func Usable(cfg Config, purpose string) bool {
 	if !ok {
 		return false
 	}
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }
 
 type Client struct {
@@ -120,11 +86,11 @@ func (c *Client) SendCodeWith(ctx context.Context, provider string, config map[s
 }
 
 func (c *Client) SendTemplateWith(ctx context.Context, provider string, config map[string]any, templateCode, e164, content string) error {
-	d, ok := drivers[provider]
-	if !ok || !d.schema.Usable(config) {
+	send, ok := Registry.OpsFor(provider, config)
+	if !ok {
 		return ErrNotConfigured
 	}
-	return d.send(ctx, config, templateCode, e164, content)
+	return send(ctx, config, templateCode, e164, content)
 }
 
 func cfgStr(config map[string]any, key string) string {

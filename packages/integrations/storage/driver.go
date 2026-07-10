@@ -3,11 +3,9 @@ package storage
 import (
 	"context"
 	"errors"
-	"maps"
-	"slices"
 	"time"
 
-	"github.com/imbytecat/moonbase/integrations/core/schema"
+	"github.com/imbytecat/moonbase/integrations/core/integration"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
@@ -20,14 +18,11 @@ type Ops struct {
 	Test       func(rt LocalRuntime, ctx context.Context, cfg kitsettings.GenericProfile) error
 }
 
-type Driver struct {
-	Schema schema.Schema
-	Ops    Ops
-}
-
-var drivers = map[string]Driver{
-	"s3": {
-		Schema: s3Schema,
+var Registry = integration.MustRegistry([]integration.Entry[Ops]{
+	{
+		Key:          "s3",
+		Presentation: integration.Presentation{Name: "S3 兼容存储", Description: "连接兼容 S3 协议的对象存储服务", Color: "#1677ff", IconRef: "antd:CloudServerOutlined"},
+		Config:       s3Schema,
 		Ops: Ops{
 			PresignPut: s3PresignPut,
 			ResolveURL: s3ResolveURL,
@@ -35,8 +30,10 @@ var drivers = map[string]Driver{
 			Test:       s3Test,
 		},
 	},
-	"local": {
-		Schema: localSchema,
+	{
+		Key:          "local",
+		Presentation: integration.Presentation{Name: "本地文件存储", Description: "把文件保存在服务器本地目录", Color: "#52c41a", IconRef: "antd:HddOutlined"},
+		Config:       localSchema,
 		Ops: Ops{
 			PresignPut: localPresignPut,
 			ResolveURL: localResolveURL,
@@ -44,26 +41,12 @@ var drivers = map[string]Driver{
 			Test:       localTest,
 		},
 	},
-}
+})
 
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.Schema
-	}
-	return out
-}
+func Providers() []string { return Registry.Names() }
 
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
-
-func DriverFor(provider string) (Driver, bool) {
-	d, ok := drivers[provider]
-	return d, ok
-}
+func DriverFor(provider string) (integration.Entry[Ops], bool) { return Registry.EntryFor(provider) }
 
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.Schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }

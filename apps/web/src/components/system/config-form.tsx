@@ -73,7 +73,7 @@ function OptionSelectWidget({
       allowClear
       placeholder={placeholder as string | undefined}
       optionLabelProp="title"
-      optionFilterProp="title"
+      showSearch={{ optionFilterProp: 'title' }}
       maxTagCount={isMultiple ? 'responsive' : undefined}
       value={value}
       onChange={(next) => onChange(next)}
@@ -224,6 +224,36 @@ export function ConfigForm({
           {actions?.(toInput(formData))}
         </div>
       </div>
+    </Form>
+  )
+}
+
+export function SchemaForm({
+  form,
+  saving,
+  submitText = '继续支付',
+  onSubmit,
+}: {
+  form: ProviderForm
+  saving: boolean
+  submitText?: string
+  onSubmit: (data: JsonObject) => void
+}) {
+  const [formData, setFormData] = useState<JsonObject>({})
+  return (
+    <Form
+      schema={(form.schema ?? {}) as RJSFSchema}
+      uiSchema={(form.uiSchema ?? {}) as UiSchema}
+      formData={formData}
+      validator={validator}
+      widgets={widgets}
+      showErrorList={false}
+      onChange={(event) => setFormData((event.formData ?? {}) as JsonObject)}
+      onSubmit={(event) => onSubmit((event.formData ?? {}) as JsonObject)}
+    >
+      <Button type="primary" htmlType="submit" loading={saving} block>
+        {submitText}
+      </Button>
     </Form>
   )
 }

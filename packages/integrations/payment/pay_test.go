@@ -122,6 +122,63 @@ func TestUnknownProviderNotUsable(t *testing.T) {
 	}
 }
 
+func TestDriverDescribeAndPlanOwnPaymentProducts(t *testing.T) {
+	descriptor, ok := Describe("wechat")
+	if !ok {
+		t.Fatal("wechat driver descriptor not found")
+	}
+	if len(descriptor.Methods) != 1 || descriptor.Methods[0].Key != "wechat" || descriptor.Methods[0].Presentation.Name != "微信支付" {
+		t.Fatalf("methods = %+v, want payer-facing WeChat method", descriptor.Methods)
+	}
+	if len(descriptor.Products) != 4 || descriptor.Products[0].ID != "native" || descriptor.Products[0].Method != "wechat" {
+		t.Fatalf("products = %+v, want driver-owned product catalog", descriptor.Products)
+	}
+	wantCapabilities := []string{"notify", "refund", "refund_query", "hosted_flow"}
+	if !slices.Equal(descriptor.Capabilities, wantCapabilities) {
+		t.Fatalf("capabilities = %v, want %v derived from driver interfaces", descriptor.Capabilities, wantCapabilities)
+	}
+
+	profile := usableWechat("native", "h5", "jsapi")
+	cases := []struct {
+		name      string
+		userAgent string
+		want      string
+	}{
+		{name: "desktop", userAgent: "Mozilla/5.0 (X11; Linux x86_64)", want: "native"},
+		{name: "mobile browser", userAgent: "Mozilla/5.0 (Linux; Android 15) Mobile", want: "h5"},
+		{name: "wechat browser", userAgent: "Mozilla/5.0 MicroMessenger/8.0 Mobile", want: "jsapi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, err := Plan(t.Context(), profile, PlanRequest{
+				PaymentMethod: "wechat",
+				Client:        ClientContext{UserAgent: tc.userAgent},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.ProductID != tc.want {
+				t.Fatalf("product = %q, want %q", plan.ProductID, tc.want)
+			}
+		})
+	}
+}
+
+func usableWechat(products ...string) kitsettings.GenericProfile {
+	return kitsettings.GenericProfile{
+		Provider: "wechat",
+		Config: map[string]any{
+			"mchId":           "1900000000",
+			"appId":           "wx0000000000000000",
+			"mchCertSerialNo": "SN",
+			"mchPrivateKey":   "key",
+			"apiV3Key":        "0123456789abcdef0123456789abcdef",
+			"authMethod":      AuthPlatformCert,
+			"products":        products,
+		},
+	}
+}
+
 func TestAlipayStateMapping(t *testing.T) {
 	cases := []struct {
 		in   alipay.TradeStatus
@@ -174,8 +231,8 @@ func TestAlipayTimeParsesBeijingTime(t *testing.T) {
 	}
 }
 
-func TestOffered(t *testing.T) {
-	all := Offered(kitsettings.GenericProfile{Provider: "alipay", Config: map[string]any{}})
+func TestProfileProducts(t *testing.T) {
+	all := ProfileProducts(kitsettings.GenericProfile{Provider: "alipay", Config: map[string]any{}})
 	want := []string{
 		alipayMethodPreCreate,
 		alipayMethodPagePay,
@@ -184,15 +241,15 @@ func TestOffered(t *testing.T) {
 		alipayMethodAppPay,
 	}
 	if !slices.Equal(all, want) {
-		t.Errorf("empty methods should offer the whole alipay catalog, got %v", all)
+		t.Errorf("empty products should offer the whole alipay catalog, got %v", all)
 	}
 
-	sub := Offered(kitsettings.GenericProfile{
+	sub := ProfileProducts(kitsettings.GenericProfile{
 		Provider: "alipay",
-		Config:   map[string]any{"methods": []string{alipayMethodWapPay, "native", alipayMethodPreCreate}},
+		Config:   map[string]any{"products": []string{alipayMethodWapPay, "native", alipayMethodPreCreate}},
 	})
 	if !slices.Equal(sub, []string{alipayMethodPreCreate, alipayMethodWapPay}) {
-		t.Errorf("Offered should keep signed alipay ids in catalog order and drop foreign ids, got %v", sub)
+		t.Errorf("ProfileProducts should keep signed ids in driver order and drop foreign ids, got %v", sub)
 	}
 }
 
@@ -203,13 +260,13 @@ func TestOffered(t *testing.T) {
 // codes the removed `in:` rule and the Offered check used to produce separately.
 // The profile is usable because ProfileFor only ever hands Create a usable one.
 func TestCreateRejectsUnknownMethod(t *testing.T) {
-	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{Method: "bogus"}, "http://x"); !errors.Is(err, ErrUnknownMethod) {
+	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{ProductID: "bogus"}, "http://x"); !errors.Is(err, ErrUnknownMethod) {
 		t.Errorf("Create with catalog-unknown method = %v, want ErrUnknownMethod", err)
 	}
 }
 
 func TestCreateRejectsUnofferedMethod(t *testing.T) {
-	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{Method: "page_pay"}, "http://x"); !errors.Is(err, ErrMethodNotOffered) {
+	if _, err := Create(context.Background(), usableAlipay("precreate"), CreateRequest{ProductID: "page_pay"}, "http://x"); !errors.Is(err, ErrMethodNotOffered) {
 		t.Errorf("Create with known-but-unoffered method = %v, want ErrMethodNotOffered", err)
 	}
 }
@@ -222,7 +279,7 @@ func usableAlipay(methods ...string) kitsettings.GenericProfile {
 			"appPrivateKey":   "key",
 			"authMethod":      AuthPublicKey,
 			"alipayPublicKey": "pub",
-			"methods":         methods,
+			"products":        methods,
 		},
 	}
 }
@@ -231,65 +288,4 @@ func cloneConfig(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	maps.Copy(out, in)
 	return out
-}
-
-// TestCatalog is the behavioral spec for the whole method catalog: each
-// provider's products in display order with their credential kind and inputs,
-// plus the sorted id union. The catalog is generated from the proto
-// PaymentMethod enum (protoc-gen-paymentcatalog); this pins the generated data
-// to the established set so drivers, Offered/KindOf/InputsOf, and the checkout
-// keep behaving identically.
-func TestCatalog(t *testing.T) {
-	alipay := []Method{
-		{ID: "precreate", Kind: CredentialQR},
-		{ID: "page_pay", Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
-		{ID: "wap_pay", Kind: CredentialRedirect, Inputs: []Input{InputReturnURL}},
-		{ID: "create", Kind: CredentialParams, Inputs: []Input{InputPayerID}},
-		{ID: "app_pay", Kind: CredentialParams},
-	}
-	assertCatalog(t, "alipay", alipay)
-
-	wechat := []Method{
-		{ID: "native", Kind: CredentialQR},
-		{ID: "h5", Kind: CredentialRedirect},
-		{ID: "jsapi", Kind: CredentialParams, Inputs: []Input{InputPayerID}},
-		{ID: "app", Kind: CredentialParams},
-	}
-	assertCatalog(t, "wechat", wechat)
-
-	wantMethods := []string{"app", "app_pay", "create", "h5", "jsapi", "native", "page_pay", "precreate", "wap_pay"}
-	if !slices.Equal(Methods(), wantMethods) {
-		t.Errorf("Methods() = %v, want sorted union %v", Methods(), wantMethods)
-	}
-}
-
-func assertCatalog(t *testing.T, provider string, want []Method) {
-	t.Helper()
-	got := Catalog(provider)
-	if len(got) != len(want) {
-		t.Fatalf("%s catalog has %d methods, want %d: %+v", provider, len(got), len(want), got)
-	}
-	for i, w := range want {
-		if got[i].ID != w.ID || got[i].Kind != w.Kind || !slices.Equal(got[i].Inputs, w.Inputs) {
-			t.Errorf("%s catalog[%d] = %+v, want %+v", provider, i, got[i], w)
-		}
-	}
-}
-
-func TestKindAndInputs(t *testing.T) {
-	if KindOf("alipay", alipayMethodPreCreate) != CredentialQR {
-		t.Error("precreate should be a QR credential")
-	}
-	if KindOf("alipay", alipayMethodPagePay) != CredentialRedirect {
-		t.Error("page_pay should be a redirect credential")
-	}
-	if KindOf("alipay", alipayMethodAppPay) != CredentialParams {
-		t.Error("app_pay should be a params credential")
-	}
-	if !slices.Contains(InputsOf("alipay", alipayMethodCreate), InputPayerID) {
-		t.Error("alipay create should collect payer_id")
-	}
-	if !slices.Contains(InputsOf("alipay", alipayMethodWapPay), InputReturnURL) {
-		t.Error("alipay wap_pay should collect return_url")
-	}
 }

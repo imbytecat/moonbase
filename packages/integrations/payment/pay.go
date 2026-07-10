@@ -1,19 +1,6 @@
-// Package pay processes payments through gateway connection profiles
-// configured in system settings. Each provider is a driver behind the
-// Gateway seam (Alipay V3 OpenAPI, WeChat Pay APIv3); the caller passes
-// semantic inputs (integer-cent amounts, merchant order numbers, a payment
-// METHOD picked per order) and drivers own provider-specific quirks —
-// amount formatting, per-method API dialects, trade-state mapping and
-// notification signature schemes. A METHOD is one official provider product
-// (Alipay API method / WeChat trade_type); each driver declares its product
-// CATALOG — every product's credential KIND (qr / redirect / params) and the
-// extra INPUTS it collects — and a profile signs for a subset (settings.Methods
-// → Offered). The method is a per-ORDER choice constrained to that signed set
-// and validated locally (ErrMethodNotOffered / ErrMissingInput) before a
-// provider round-trip. Payment purposes are multi-valued: every bound profile
-// is a selectable payment option and the payer picks one, so calls are
-// profile-addressed after an OptionsFor listing. Clients are built per call so
-// config changes apply without a restart.
+// Package pay contains self-describing payment drivers. Base chooses a
+// payer-facing method, the driver plans one provider product from the client
+// environment, and Create returns a provider-independent typed action.
 package pay
 
 import (
@@ -25,49 +12,8 @@ import (
 	"time"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
-
-// PurposeCheckout is the demo checkout slot. Adding a feature that charges =
-// adding a purpose here.
-const PurposeCheckout = "checkout"
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeCheckout}
-
-// CredentialKind tells the checkout how to consume a created payment.
-type CredentialKind string
-
-const (
-	// CredentialQR renders the value as a QR code the payer scans.
-	CredentialQR CredentialKind = "qr"
-	// CredentialRedirect opens the value as a URL — the provider's cashier.
-	CredentialRedirect CredentialKind = "redirect"
-	// CredentialParams hands the JSON value to a provider SDK (in-app /
-	// mini-program invocation) the admin demo can only display.
-	CredentialParams CredentialKind = "params"
-)
-
-// Input names a per-order field a product needs beyond the common ones.
-type Input string
-
-const (
-	// InputPayerID is the provider-side payer identity, required by params-kind
-	// products (WeChat / Alipay JSAPI) whose invocation is payer-bound.
-	InputPayerID Input = "payer_id"
-	// InputReturnURL is where a redirect product returns the payer; optional.
-	InputReturnURL Input = "return_url"
-)
-
-// Method is one official provider product: ID is the provider's official API
-// method (Alipay) or trade_type (WeChat), Kind drives client rendering, and
-// Inputs are the extra per-order fields it collects.
-type Method struct {
-	ID     string
-	Kind   CredentialKind
-	Inputs []Input
-}
 
 var (
 	ErrNotConfigured    = errors.New("payment is not configured")
@@ -95,24 +41,52 @@ type CreateRequest struct {
 	OutTradeNo string
 	Subject    string
 	// Integer cents.
-	Amount int64
-	Method string
-	// Provider-side payer identifier (WeChat openid / Alipay buyer id);
-	// required by params-kind products (JSAPI).
-	PayerID string
-	// Where the provider returns the payer after paying; redirect products
-	// (page_pay / wap_pay / h5) only, optional.
+	Amount    int64
+	ProductID string
+	Inputs    map[string]any
+	// ReturnURL is server-selected from the checkout session's validated
+	// same-origin return path; clients cannot override it.
 	ReturnURL string
-	// The payer's client IP; WeChat h5 requires it.
-	ClientIP string
+	// NotifyURL is selected by base from the configured public origin.
+	NotifyURL string
+	Client    ClientContext
 }
 
-// Credential is what the checkout client renders, shaped by the method's
-// CredentialKind: qr = QR-code content, redirect = a URL to open, params = the
-// provider's signed invocation parameters serialized as JSON.
-type Credential = string
+type Action struct {
+	QR         *QRAction         `json:"qr,omitempty"`
+	Redirect   *RedirectAction   `json:"redirect,omitempty"`
+	Form       *FormAction       `json:"form,omitempty"`
+	Wait       *WaitAction       `json:"wait,omitempty"`
+	HostedFlow *HostedFlowAction `json:"hosted_flow,omitempty"`
+}
+
+type QRAction struct {
+	Data      string    `json:"data"`
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
+}
+
+type RedirectAction struct {
+	URL string `json:"url"`
+}
+
+type FormAction struct {
+	URL    string            `json:"url"`
+	Method string            `json:"method"`
+	Fields map[string]string `json:"fields"`
+}
+
+type WaitAction struct {
+	PollAfterMS int32 `json:"poll_after_ms"`
+}
+
+// Payload is stored server-side and served only through the signed hosted-flow
+// HTTP seam. It is never returned directly to the business page.
+type HostedFlowAction struct {
+	Payload string `json:"payload"`
+}
 
 type QueryResult struct {
+	Exists          bool
 	State           State
 	ProviderTradeNo string
 	PayerID         string
@@ -125,7 +99,8 @@ type RefundRequest struct {
 	RefundNo   string
 	Reason     string
 	// Integer cents; full refund.
-	Amount int64
+	Amount    int64
+	NotifyURL string
 }
 
 type RefundResult struct {
@@ -142,116 +117,232 @@ type NotifyResult struct {
 	Ack func(w http.ResponseWriter)
 }
 
-type Option struct {
-	ProfileID string
-	Name      string
-	Provider  string
-	Methods   []string
+// Driver is the mandatory payment provider seam. Optional operations are
+// discovered through the capability interfaces below.
+type Driver interface {
+	Describe() ProviderDescriptor
+	Plan(context.Context, kitsettings.GenericProfile, PlanRequest) (PlanResult, error)
+	Create(context.Context, kitsettings.GenericProfile, CreateRequest) (Action, error)
+	Query(context.Context, kitsettings.GenericProfile, string) (QueryResult, error)
 }
 
-// Gateway abstracts the provider round-trip for handlers. Orders address a
-// concrete profile (picked from OptionsFor) because payment purposes are
-// multi-valued.
-type Gateway interface {
-	OptionsFor(ctx context.Context, purpose string) ([]Option, error)
-	ProfileFor(ctx context.Context, purpose, profileID string) (kitsettings.GenericProfile, error)
-	ProfileByID(ctx context.Context, profileID string) (kitsettings.GenericProfile, error)
-	Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest) (Credential, error)
-	Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
-	Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest) (RefundResult, error)
-	QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (settled bool, err error)
-	ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
+type NotifyDriver interface {
+	ParseNotify(context.Context, kitsettings.GenericProfile, *http.Request) (NotifyResult, error)
 }
 
-type payOps struct {
-	catalog     []Method
-	currency    string
-	create      func(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error)
-	query       func(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error)
-	refund      func(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest, notifyURL string) (RefundResult, error)
-	queryRefund func(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error)
-	parseNotify func(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error)
+type RefundDriver interface {
+	Refund(context.Context, kitsettings.GenericProfile, RefundRequest) (RefundResult, error)
 }
 
-type driver struct {
-	schema schema.Schema
-	ops    payOps
+type RefundQueryDriver interface {
+	QueryRefund(context.Context, kitsettings.GenericProfile, string) (bool, error)
 }
 
-var drivers = map[string]driver{
-	"alipay": {
-		schema: alipaySchema,
-		ops: payOps{
-			catalog:     methodCatalog("alipay"),
-			currency:    "CNY",
-			create:      alipayCreate,
-			query:       alipayQuery,
+type HostedFlowDriver interface {
+	RenderHostedFlow(product, payload string) ([]byte, error)
+}
+
+type ActionRecoveryDriver interface {
+	RecoverAction(context.Context, kitsettings.GenericProfile, string) (Action, error)
+}
+
+type coreDriver struct {
+	descriptor ProviderDescriptor
+	create     func(context.Context, kitsettings.GenericProfile, CreateRequest, string) (string, error)
+	query      func(context.Context, kitsettings.GenericProfile, string) (QueryResult, error)
+}
+
+func (d coreDriver) Describe() ProviderDescriptor { return d.descriptor }
+
+func (d coreDriver) Plan(_ context.Context, profile kitsettings.GenericProfile, req PlanRequest) (PlanResult, error) {
+	return plan(d.descriptor, profile, req)
+}
+
+func (d coreDriver) Create(ctx context.Context, profile kitsettings.GenericProfile, req CreateRequest) (Action, error) {
+	product := productByID(d.descriptor.Products, req.ProductID)
+	if product == nil {
+		return Action{}, fmt.Errorf("%w: %q", ErrUnknownMethod, req.ProductID)
+	}
+	if !slices.Contains(ProfileProducts(profile), req.ProductID) {
+		return Action{}, fmt.Errorf("%w: %q", ErrMethodNotOffered, req.ProductID)
+	}
+	if len(product.Input.Fields) > 0 {
+		if err := product.Input.Validate(req.Inputs); err != nil {
+			return Action{}, fmt.Errorf("%w: %w", ErrMissingInput, err)
+		}
+	}
+	payload, err := d.create(ctx, profile, req, req.NotifyURL)
+	if err != nil {
+		return Action{}, err
+	}
+	return actionFor(req.ProductID, payload), nil
+}
+
+func (d coreDriver) Query(ctx context.Context, profile kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
+	return d.query(ctx, profile, outTradeNo)
+}
+
+type providerDriver struct {
+	coreDriver
+	provider    string
+	refund      func(context.Context, kitsettings.GenericProfile, RefundRequest, string) (RefundResult, error)
+	queryRefund func(context.Context, kitsettings.GenericProfile, string) (bool, error)
+	parseNotify func(context.Context, kitsettings.GenericProfile, *http.Request) (NotifyResult, error)
+}
+
+func (d providerDriver) Refund(ctx context.Context, profile kitsettings.GenericProfile, req RefundRequest) (RefundResult, error) {
+	return d.refund(ctx, profile, req, req.NotifyURL)
+}
+
+func (d providerDriver) QueryRefund(ctx context.Context, profile kitsettings.GenericProfile, refundNo string) (bool, error) {
+	return d.queryRefund(ctx, profile, refundNo)
+}
+
+func (d providerDriver) ParseNotify(ctx context.Context, profile kitsettings.GenericProfile, request *http.Request) (NotifyResult, error) {
+	return d.parseNotify(ctx, profile, request)
+}
+
+func (d providerDriver) RenderHostedFlow(product, payload string) ([]byte, error) {
+	return renderHostedFlow(d.provider, product, payload)
+}
+
+var Registry = integration.MustRegistry([]integration.Entry[Driver]{
+	{
+		Key:          "alipay",
+		Presentation: integration.Presentation{Name: "支付宝", Description: "支付宝开放平台直连商户", Color: "#1677ff", IconRef: "antd:AlipayCircleOutlined"},
+		Config:       alipaySchema,
+		Ops: providerDriver{
+			provider:    "alipay",
+			coreDriver:  coreDriver{descriptor: alipayDescriptor, create: alipayCreate, query: alipayQuery},
 			refund:      alipayRefund,
 			queryRefund: alipayQueryRefund,
 			parseNotify: alipayParseNotify,
 		},
 	},
-	"wechat": {
-		schema: wechatSchema,
-		ops: payOps{
-			catalog:     methodCatalog("wechat"),
-			currency:    "CNY",
-			create:      wechatCreate,
-			query:       wechatQuery,
+	{
+		Key:          "wechat",
+		Presentation: integration.Presentation{Name: "微信支付", Description: "微信支付直连商户", Color: "#07c160", IconRef: "antd:WechatOutlined"},
+		Config:       wechatSchema,
+		Ops: providerDriver{
+			provider:    "wechat",
+			coreDriver:  coreDriver{descriptor: wechatDescriptor, create: wechatCreate, query: wechatQuery},
 			refund:      wechatRefund,
 			queryRefund: wechatQueryRefund,
 			parseNotify: wechatParseNotify,
 		},
 	},
+})
+
+var (
+	_ Driver            = providerDriver{}
+	_ NotifyDriver      = providerDriver{}
+	_ RefundDriver      = providerDriver{}
+	_ RefundQueryDriver = providerDriver{}
+	_ HostedFlowDriver  = providerDriver{}
+)
+
+func driverCapabilities(driver Driver) []string {
+	var capabilities []string
+	if _, ok := driver.(NotifyDriver); ok {
+		capabilities = append(capabilities, "notify")
+	}
+	if _, ok := driver.(RefundDriver); ok {
+		capabilities = append(capabilities, "refund")
+	}
+	if _, ok := driver.(RefundQueryDriver); ok {
+		capabilities = append(capabilities, "refund_query")
+	}
+	if _, ok := driver.(HostedFlowDriver); ok {
+		capabilities = append(capabilities, "hosted_flow")
+	}
+	if _, ok := driver.(ActionRecoveryDriver); ok {
+		capabilities = append(capabilities, "action_recovery")
+	}
+	return capabilities
 }
 
-func Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error) {
-	d, ok := drivers[p.Provider]
-	if !ok || !ProfileUsable(p) {
-		return "", ErrNotConfigured
+func Create(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Action, error) {
+	driver, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
+		return Action{}, ErrNotConfigured
 	}
-	if !slices.Contains(Methods(), req.Method) {
-		return "", fmt.Errorf("%w: %q", ErrUnknownMethod, req.Method)
+	req.NotifyURL = notifyURL
+	return driver.Create(ctx, p, req)
+}
+
+func actionFor(productID, payload string) Action {
+	switch productID {
+	case "precreate", "native":
+		return Action{QR: &QRAction{Data: payload, ExpiresAt: time.Now().Add(15 * time.Minute)}}
+	case "page_pay", "wap_pay", "h5":
+		return Action{Redirect: &RedirectAction{URL: payload}}
+	case "create", "app_pay", "jsapi", "app":
+		return Action{HostedFlow: &HostedFlowAction{Payload: payload}}
+	default:
+		return Action{Wait: &WaitAction{PollAfterMS: 2000}}
 	}
-	if !slices.Contains(Offered(p), req.Method) {
-		return "", fmt.Errorf("%w: %q", ErrMethodNotOffered, req.Method)
-	}
-	if slices.Contains(InputsOf(p.Provider, req.Method), InputPayerID) && req.PayerID == "" {
-		return "", fmt.Errorf("%w: payer_id for %q", ErrMissingInput, req.Method)
-	}
-	return d.ops.create(ctx, p, req, notifyURL)
+}
+
+func inputString(inputs map[string]any, key string) string {
+	value, _ := inputs[key].(string)
+	return value
 }
 
 func Query(ctx context.Context, p kitsettings.GenericProfile, outTradeNo string) (QueryResult, error) {
-	d, ok := drivers[p.Provider]
-	if !ok || !ProfileUsable(p) {
+	driver, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return QueryResult{}, ErrNotConfigured
 	}
-	return d.ops.query(ctx, p, outTradeNo)
+	return driver.Query(ctx, p, outTradeNo)
 }
 
 func Refund(ctx context.Context, p kitsettings.GenericProfile, req RefundRequest, notifyURL string) (RefundResult, error) {
-	d, ok := drivers[p.Provider]
-	if !ok || !ProfileUsable(p) {
+	driver, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return RefundResult{}, ErrNotConfigured
 	}
-	return d.ops.refund(ctx, p, req, notifyURL)
+	refunder, ok := driver.(RefundDriver)
+	if !ok {
+		return RefundResult{}, ErrNotConfigured
+	}
+	req.NotifyURL = notifyURL
+	return refunder.Refund(ctx, p, req)
 }
 
 func QueryRefund(ctx context.Context, p kitsettings.GenericProfile, refundNo string) (bool, error) {
-	d, ok := drivers[p.Provider]
-	if !ok || !ProfileUsable(p) {
+	driver, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return false, ErrNotConfigured
 	}
-	return d.ops.queryRefund(ctx, p, refundNo)
+	querier, ok := driver.(RefundQueryDriver)
+	if !ok {
+		return false, ErrNotConfigured
+	}
+	return querier.QueryRefund(ctx, p, refundNo)
 }
 
 func ParseNotify(ctx context.Context, p kitsettings.GenericProfile, r *http.Request) (NotifyResult, error) {
-	d, ok := drivers[p.Provider]
-	if !ok || !ProfileUsable(p) {
+	driver, ok := Registry.OpsFor(p.Provider, p.Config)
+	if !ok {
 		return NotifyResult{}, ErrNotConfigured
 	}
-	return d.ops.parseNotify(ctx, p, r)
+	notifier, ok := driver.(NotifyDriver)
+	if !ok {
+		return NotifyResult{}, ErrNotConfigured
+	}
+	return notifier.ParseNotify(ctx, p, r)
+}
+
+func RenderHostedFlow(provider, product, payload string) ([]byte, error) {
+	entry, ok := Registry.EntryFor(provider)
+	if !ok {
+		return nil, ErrNotConfigured
+	}
+	renderer, ok := entry.Ops.(HostedFlowDriver)
+	if !ok {
+		return nil, ErrNotConfigured
+	}
+	return renderer.RenderHostedFlow(product, payload)
 }
 
 func cfgStr(config map[string]any, key string) string {

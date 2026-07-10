@@ -17,6 +17,7 @@ import (
 	"github.com/imbytecat/moonbase/server/internal/config"
 	"github.com/imbytecat/moonbase/server/internal/database"
 	"github.com/imbytecat/moonbase/server/internal/logging"
+	"github.com/imbytecat/moonbase/server/internal/pay"
 	"github.com/imbytecat/moonbase/server/internal/repository"
 	"github.com/imbytecat/moonbase/server/internal/server"
 	"github.com/imbytecat/moonbase/server/internal/settings"
@@ -85,6 +86,7 @@ func run() error {
 
 	auth.StartSessionJanitor(ctx, repository.New(pool), logger, time.Hour)
 	audit.StartRetentionJanitor(ctx, repository.New(pool), logger, time.Hour, cfg.Audit.Retention())
+	pay.NewSettlementDispatcher(repository.New(pool), nil, logger).Start(ctx, time.Second)
 
 	// Durable workflows: DBOS checkpoints into the "dbos" schema of the same
 	// Postgres. The engine recovers interrupted runs on startup and runs the

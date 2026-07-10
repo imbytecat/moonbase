@@ -11,23 +11,13 @@ package oauth
 import (
 	"context"
 	"fmt"
-	"maps"
 	"net/url"
-	"slices"
 
 	"github.com/imbytecat/moonbase/integrations/core/integration"
-	"github.com/imbytecat/moonbase/integrations/core/schema"
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
 var ErrNotConfigured = fmt.Errorf("oauth provider is not configured")
-
-// PurposeLogin is the sign-in page slot; it is multi-valued — every bound
-// profile is offered simultaneously.
-const PurposeLogin = "login"
-
-// Purposes is the catalog served to the admin UI, in display order.
-var Purposes = integration.Catalog{PurposeLogin}
 
 type Config = kitsettings.Integration[kitsettings.GenericProfile]
 
@@ -71,45 +61,32 @@ type oauthOps struct {
 	exchange func(ctx context.Context, config map[string]any, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error)
 }
 
-type driver struct {
-	schema schema.Schema
-	ops    oauthOps
-}
-
-var drivers = map[string]driver{
-	"oidc": {
-		schema: oidcSchema,
-		ops: oauthOps{
+var Registry = integration.MustRegistry([]integration.Entry[oauthOps]{
+	{
+		Key:          "oidc",
+		Presentation: integration.Presentation{Name: "OpenID Connect", Description: "连接支持发现、ID Token 校验与 PKCE 的身份提供方", Color: "#1677ff", IconRef: "antd:IdcardOutlined"},
+		Config:       oidcSchema,
+		Ops: oauthOps{
 			authorizeURL: oidcAuthorizeURL,
 			exchange:     oidcExchange,
 		},
 	},
-	"wechat": {
-		schema: wechatSchema,
-		ops: oauthOps{
+	{
+		Key:          "wechat",
+		Presentation: integration.Presentation{Name: "微信开放平台", Description: "使用网站应用扫码登录", Color: "#07c160", IconRef: "antd:WechatOutlined"},
+		Config:       wechatSchema,
+		Ops: oauthOps{
 			authorizeURL: wechatAuthorizeURL,
 			exchange:     wechatExchange,
 		},
 	},
-}
+})
 
-func Schemas() map[string]schema.Schema {
-	out := make(map[string]schema.Schema, len(drivers))
-	for name, d := range drivers {
-		out[name] = d.schema
-	}
-	return out
-}
-
-// Providers lists registered driver names, sorted.
-func Providers() []string {
-	return slices.Sorted(maps.Keys(drivers))
-}
+func Providers() []string { return Registry.Names() }
 
 // ProfileUsable reports whether the profile's driver is fully configured.
 func ProfileUsable(p kitsettings.GenericProfile) bool {
-	d, ok := drivers[p.Provider]
-	return ok && d.schema.Usable(p.Config)
+	return Registry.ProfileUsable(p.Provider, p.Config)
 }
 
 // ProviderOption is one login-page entry.
@@ -121,8 +98,8 @@ type ProviderOption struct {
 
 // UsableProviders lists login options ready to offer: the profiles bound to
 // the login purpose, in binding order, filtered to fully-configured drivers.
-func UsableProviders(cfg Config) []ProviderOption {
-	bound := cfg.ProfilesFor(PurposeLogin)
+func UsableProviders(cfg Config, purpose string) []ProviderOption {
+	bound := cfg.ProfilesFor(purpose)
 	out := make([]ProviderOption, 0, len(bound))
 	for _, p := range bound {
 		if ProfileUsable(p) {
@@ -133,11 +110,12 @@ func UsableProviders(cfg Config) []ProviderOption {
 }
 
 type Client struct {
-	load Loader
+	load    Loader
+	purpose string
 }
 
-func NewClient(load Loader) *Client {
-	return &Client{load: load}
+func NewClient(load Loader, purpose string) *Client {
+	return &Client{load: load, purpose: purpose}
 }
 
 var _ Flow = (*Client)(nil)
@@ -150,7 +128,7 @@ func (c *Client) profileFor(ctx context.Context, key string) (kitsettings.Generi
 	if err != nil {
 		return kitsettings.GenericProfile{}, err
 	}
-	for _, p := range cfg.ProfilesFor(PurposeLogin) {
+	for _, p := range cfg.ProfilesFor(c.purpose) {
 		if cfgStr(p.Config, "key") == key && ProfileUsable(p) {
 			return p, nil
 		}
@@ -163,7 +141,8 @@ func (c *Client) AuthorizeURL(ctx context.Context, key, redirectURI, state strin
 	if err != nil {
 		return "", FlowSecrets{}, err
 	}
-	return drivers[p.Provider].ops.authorizeURL(ctx, p.Config, redirectURI, state)
+	ops, _ := Registry.OpsFor(p.Provider, p.Config)
+	return ops.authorizeURL(ctx, p.Config, redirectURI, state)
 }
 
 func (c *Client) Exchange(ctx context.Context, key, code, redirectURI string, secrets FlowSecrets) (ExternalIdentity, error) {
@@ -171,7 +150,8 @@ func (c *Client) Exchange(ctx context.Context, key, code, redirectURI string, se
 	if err != nil {
 		return ExternalIdentity{}, err
 	}
-	external, err := drivers[p.Provider].ops.exchange(ctx, p.Config, code, redirectURI, secrets)
+	ops, _ := Registry.OpsFor(p.Provider, p.Config)
+	external, err := ops.exchange(ctx, p.Config, code, redirectURI, secrets)
 	if err != nil {
 		return ExternalIdentity{}, err
 	}

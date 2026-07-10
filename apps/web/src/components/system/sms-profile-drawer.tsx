@@ -1,4 +1,3 @@
-import { CloudOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createSmsProfile,
@@ -10,19 +9,10 @@ import {
 import { App, Button } from 'antd'
 import { useState } from 'react'
 import { PhoneInput } from '#components/phone-input'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
 import { ConfigForm } from '#components/system/config-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
-
-const PROVIDER_LABELS: Record<string, () => string> = {
-  aliyun: () => '阿里云短信',
-  tencent: () => '腾讯云短信',
-}
-const PROVIDER_DESCS: Record<string, () => string> = {
-  aliyun: () => '阿里云短信服务',
-  tencent: () => '腾讯云短信服务',
-}
 
 export function SmsProfileDrawer({
   profile,
@@ -41,7 +31,7 @@ export function SmsProfileDrawer({
   const [testPhone, setTestPhone] = useState('')
 
   const { data: describe } = useQuery(describeSmsProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createSmsProfile, {
     onSuccess: () => {
@@ -62,13 +52,6 @@ export function SmsProfileDrawer({
     onError: (err) => setResult({ ok: false, message: humanizeError(err) }),
   })
 
-  const providers: ProviderOption[] = Object.keys(forms).map((key) => ({
-    value: key,
-    label: PROVIDER_LABELS[key]?.() ?? key,
-    description: PROVIDER_DESCS[key]?.() ?? '',
-    icon: <CloudOutlined className="text-xl text-(--ant-color-primary)" />,
-  }))
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -78,7 +61,7 @@ export function SmsProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

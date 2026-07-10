@@ -6,8 +6,8 @@ import (
 	"connectrpc.com/connect"
 
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
-	mail "github.com/imbytecat/moonbase/integrations/email"
 	systemv1 "github.com/imbytecat/moonbase/server/internal/gen/system/v1"
+	mail "github.com/imbytecat/moonbase/server/internal/mail"
 	"github.com/imbytecat/moonbase/server/internal/settings"
 )
 
@@ -18,9 +18,9 @@ func (s *SystemService) emailOps() integrationOps[kitsettings.GenericProfile] {
 		save:     s.settings.SetEmail,
 		purposes: mail.Purposes,
 		keepSecrets: func(updated, stored kitsettings.GenericProfile) kitsettings.GenericProfile {
-			return mergeProfile(mail.Schemas(), updated, stored)
+			return mergeProfile(mail.Registry, updated, stored)
 		},
-		validate: func(p kitsettings.GenericProfile) error { return validateProfile("email", mail.Schemas(), p) },
+		validate: func(p kitsettings.GenericProfile) error { return validateProfile("email", mail.Registry, p) },
 	}
 }
 
@@ -106,8 +106,8 @@ func toProtoEmail(cfg settings.Email) *systemv1.EmailSettings {
 	bindings := make([]*systemv1.EmailBinding, len(mail.Purposes))
 	for i, purpose := range mail.Purposes {
 		bindings[i] = &systemv1.EmailBinding{
-			Purpose:   purpose,
-			ProfileId: firstID(cfg.Bindings[purpose]),
+			Purpose:   purpose.Key,
+			ProfileId: firstID(cfg.Bindings[purpose.Key]),
 		}
 	}
 	return &systemv1.EmailSettings{Profiles: profiles, Bindings: bindings}
@@ -117,9 +117,11 @@ func (s *SystemService) DescribeEmailProviders(
 	_ context.Context,
 	_ *connect.Request[systemv1.DescribeEmailProvidersRequest],
 ) (*connect.Response[systemv1.DescribeEmailProvidersResponse], error) {
-	return connect.NewResponse(&systemv1.DescribeEmailProvidersResponse{Providers: describeProviders(mail.Schemas())}), nil
+	return connect.NewResponse(&systemv1.DescribeEmailProvidersResponse{
+		Purposes: describePurposes(mail.Purposes), Providers: describeProviders(mail.Registry),
+	}), nil
 }
 
 func emailProfileToProto(p kitsettings.GenericProfile) *systemv1.Profile {
-	return profileToProto(p, mail.Schemas()[p.Provider])
+	return profileToProto(p, mail.Registry)
 }

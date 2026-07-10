@@ -1,4 +1,3 @@
-import { CloudOutlined, MailOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   createEmailProfile,
@@ -9,7 +8,7 @@ import {
 } from '@moonbase/api-client'
 import { App, Button, Input } from 'antd'
 import { useState } from 'react'
-import { ProfileFormDrawer, type ProviderOption } from '#components/profile-form-drawer'
+import { ProfileFormDrawer } from '#components/profile-form-drawer'
 import { ConfigForm } from '#components/system/config-form'
 import { TestAlert, type TestState } from '#components/system/test-alert'
 import { humanizeError } from '#lib/errors'
@@ -31,7 +30,7 @@ export function EmailProfileDrawer({
   const [testTo, setTestTo] = useState('')
 
   const { data: describe } = useQuery(describeEmailProviders, {})
-  const forms = describe?.providers ?? {}
+  const providers = describe?.providers ?? []
 
   const createMutation = useMutation(createEmailProfile, {
     onSuccess: () => {
@@ -52,21 +51,6 @@ export function EmailProfileDrawer({
     onError: (err) => setResult({ ok: false, message: humanizeError(err) }),
   })
 
-  const providers: ProviderOption[] = [
-    {
-      value: 'smtp',
-      label: 'SMTP',
-      description: '通用邮件发送协议，适配任何邮件服务商',
-      icon: <MailOutlined className="text-xl text-(--ant-color-primary)" />,
-    },
-    {
-      value: 'cloudflare',
-      label: 'Cloudflare',
-      description: 'Cloudflare 邮件发送接口',
-      icon: <CloudOutlined className="text-xl text-(--ant-color-warning)" />,
-    },
-  ]
-
   return (
     <ProfileFormDrawer
       open={open}
@@ -76,7 +60,7 @@ export function EmailProfileDrawer({
       providers={providers}
     >
       {(provider) => {
-        const providerForm = forms[provider]
+        const providerForm = providers.find((item) => item.key === provider)?.config
         if (!providerForm) return null
         return (
           <ConfigForm

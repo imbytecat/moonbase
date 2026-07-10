@@ -12,7 +12,7 @@ ADR-0006 把每个 integration 定为独立 Go module（`github.com/imbytecat/mo
 
 integrations 收敛为**单一模块** `github.com/imbytecat/moonbase/integrations`（磁盘 `packages/integrations/`，路径丢 `packages/`，对齐既有约定 `apps/server → .../moonbase/server`）。
 
-- 内部按 integration 分**子包**：`core/schema`（引擎）、`sms/`、`email/`、`llm/`、`oauth/`、`captcha/`、`storage/`、`payment/`。
+- 内部按 integration 分**子包**：`core/form`（中立表单）、`core/config`（设置配置语义）、`core/integration`（注册表与 purpose catalog）、`sms/`、`email/`、`llm/`、`oauth/`、`captcha/`、`storage/`、`payment/`。
 - 每家用**统一模板形状**：一个 seam 接口（`Sender`/`Flow`/`Gateway`/`Verifier`/`Chatter`/`ObjectStore`）+ `drivers` 注册表 + `Schemas()` + 每 provider 一个 driver 文件。**加 provider = 复制一个 driver 文件**；加 integration（罕见）= 复制一个子包骨架。
 - 编译期依赖方向仍锁死：integrations 与 server 分属两模块，back-edge（integration import server）不可能——这是当初 `systemcodec` 成环病的根治，单模块照样拿得到。
 - `apps/server` 通过 `require` + `go.work` 引用；跑 `go mod tidy` 让 go.mod 自洽（`GOWORK=off` 亦可构建）。

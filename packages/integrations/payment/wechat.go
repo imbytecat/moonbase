@@ -24,9 +24,9 @@ import (
 	kitsettings "github.com/imbytecat/moonbase/integrations/core/settings"
 )
 
-// WeChat method ids are the official APIv3 trade types, matched by the driver's
-// per-method dispatch below; the generated catalog (paymentcatalog) owns each
-// method's credential shape.
+// WeChat product ids are the official APIv3 trade types. The driver descriptor
+// owns their presentation and input schema; the dispatch below owns the API
+// call and maps its result to a provider-independent payment action.
 const (
 	wechatMethodNative = "native" // Native 扫码支付
 	wechatMethodH5     = "h5"     // H5 支付
@@ -82,14 +82,14 @@ func wechatNotifyHandler(ctx context.Context, p kitsettings.GenericProfile) (*no
 	return notify.NewRSANotifyHandler(apiV3Key, verifiers.NewSHA256WithRSAPubkeyVerifier(cfgStr(config, "publicKeyId"), *wxPub))
 }
 
-func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (Credential, error) {
+func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateRequest, notifyURL string) (string, error) {
 	client, err := wechatClient(ctx, p.Config)
 	if err != nil {
 		return "", err
 	}
 	appID := cfgStr(p.Config, "appId")
 	mchID := cfgStr(p.Config, "mchId")
-	switch req.Method {
+	switch req.ProductID {
 	case wechatMethodNative:
 		svc := native.NativeApiService{Client: client}
 		rsp, _, err := svc.Prepay(ctx, native.PrepayRequest{
@@ -117,7 +117,7 @@ func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateR
 			NotifyUrl:   core.String(notifyURL),
 			Amount:      &h5.Amount{Total: core.Int64(req.Amount)},
 			SceneInfo: &h5.SceneInfo{
-				PayerClientIp: core.String(req.ClientIP),
+				PayerClientIp: core.String(req.Client.IP),
 				H5Info:        &h5.H5Info{Type: core.String("Wap")},
 			},
 		})
@@ -137,7 +137,7 @@ func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateR
 			OutTradeNo:  core.String(req.OutTradeNo),
 			NotifyUrl:   core.String(notifyURL),
 			Amount:      &jsapi.Amount{Total: core.Int64(req.Amount)},
-			Payer:       &jsapi.Payer{Openid: core.String(req.PayerID)},
+			Payer:       &jsapi.Payer{Openid: core.String(inputString(req.Inputs, "payer_id"))},
 		})
 		if err != nil {
 			return "", fmt.Errorf("wechat jsapi prepay: %w", err)
@@ -166,7 +166,7 @@ func wechatCreate(ctx context.Context, p kitsettings.GenericProfile, req CreateR
 		}
 		return string(raw), nil
 	default:
-		return "", fmt.Errorf("wechat: unsupported method %q", req.Method)
+		return "", fmt.Errorf("wechat: unsupported product %q", req.ProductID)
 	}
 }
 
@@ -181,6 +181,9 @@ func wechatQuery(ctx context.Context, p kitsettings.GenericProfile, outTradeNo s
 		Mchid:      core.String(cfgStr(p.Config, "mchId")),
 	})
 	if err != nil {
+		if core.IsAPIError(err, "ORDER_NOT_EXIST") {
+			return QueryResult{Exists: false, State: StatePending}, nil
+		}
 		return QueryResult{}, fmt.Errorf("wechat query: %w", err)
 	}
 	return wechatTransactionResult(tx), nil
@@ -290,6 +293,7 @@ func wechatTransactionResult(tx *payments.Transaction) QueryResult {
 	if tx == nil || tx.TradeState == nil {
 		return out
 	}
+	out.Exists = true
 	out.State = wechatTradeState(*tx.TradeState)
 	if tx.TransactionId != nil {
 		out.ProviderTradeNo = *tx.TransactionId
