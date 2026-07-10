@@ -1,6 +1,6 @@
 # Go provider config：强类型解码、JSON Schema 与领域元数据
 
-> 第二轮调研日期：2026-07-10  
+> 第二轮调研日期：2026-07-10
 > 目的：复核 `google/jsonschema-go` 与 `kaptinlin/jsonschema`，并为 provider 私有强类型配置给出唯一选型。Greenfield 结论已由 ADR-0014 接受。
 
 ## 结论先行
