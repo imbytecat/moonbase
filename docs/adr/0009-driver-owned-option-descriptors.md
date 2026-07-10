@@ -1,6 +1,6 @@
 # 选项显示含义归 driver：`FieldDescriptor.options` 升级为结构化 `OptionDescriptor`
 
-> **状态**：accepted。**扩展 ADR-0006**（config 形状归 driver、前端薄渲染器、加 provider 零前端），**延续 ADR-0008**（driver 的 `label`/`help` 直接写中文，选项文案同理）。
+> **状态**：accepted，wire 与渲染机制已被 ADR-0010 超越。选项显示含义仍归 driver，且继续延续 ADR-0008（driver 的 `label`/`help` 直接写中文，选项文案同理）；但 `FieldDescriptor` / `OptionDescriptor` 已删除，当前由 Go `schema.Field` 生成 JSON Schema，并由 rjsf 的 `ProviderForm` 渲染。
 
 ## 背景
 

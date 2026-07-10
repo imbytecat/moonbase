@@ -48,7 +48,7 @@ moonrepo monorepo。`proto/`（Protobuf + Buf + ConnectRPC）是单一真源：`
 1. 在该 integration 子包里新增 provider schema（通常是 `schema.go`）：用 `integrations/core/schema` 描述字段、密钥、不可变字段、必填、枚举/数组选项和 UI 文案。**不要改 `proto/system/v1/system.proto` 来加 provider 专属消息**；wire 上只有通用 `system.v1.Profile.config`。
 2. 在 integration 子包的驱动注册表加一条驱动条目，注册 provider key + schema + driver factory。驱动从 `kitsettings.GenericProfile.Config` 解码自己的配置结构；只有接缝方法（Send/Verify/Complete/...）共享，字段形状归 provider 自己所有。
 3. 密钥保留、掩码和不可变字段由 `integrationOps` 按 schema 统一处理：读侧在 `Profile.config` 中返回掩码占位，更新时空密钥保留已存值，不可变字段（如 OAuth `key`）保持旧值。
-4. Web：通用 `SchemaProfileForm` 消费 `Describe*Providers` 返回的 schema 渲染表单。只有新增字段类型或特殊交互时才扩展 `schema-profile-form.tsx`；普通 provider 只需要 Go schema + 必要的用户文案。
+4. Web：通用 `ProfileFormDrawer` 把 `Describe*Providers` 返回的 `ProviderForm`（JSON Schema + UI Schema）交给 rjsf 渲染。只有新增字段类型或特殊交互时才扩展 `config-form.tsx`；普通 provider 只需要 Go schema + 必要的用户文案。
 
 若改为新增一个用途（PURPOSE）= 一个常量 + integration 子包里的 `Purposes` 目录条目 + 一个 `PURPOSE_LABELS` 条目 + web 文案。
 
